@@ -2,7 +2,7 @@
 layout: post
 title: "HTTP Request Smuggling (CL.TE desync) 블랙박스 분석 — Incognito Review Desk"
 date: 2026-07-01
-category:CTF/Wargame
+category: CTF/Wargame
 author: yejunkim2000
 tags: [HTTP, RequestSmuggling, CLTE, desync, 프록시, 블랙박스, 웹해킹, Dreamhack, RFC7230]
 excerpt: "공개된 API 명세만으로 프록시-백엔드 구조를 추론하고, Content-Length와 Transfer-Encoding의 해석 차이(CL.TE)로 프론트엔드의 경로 필터를 우회해 내부 전용 워크플로에 도달하기까지 — 블랙박스 취약점 분석 절차를 단계별로 기록한다."
