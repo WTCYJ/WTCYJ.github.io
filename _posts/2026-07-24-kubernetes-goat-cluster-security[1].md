@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Kubernetes Goat로 배우는 쿠버네티스 클러스터 보안 — 10가지 공격 시나리오 실습"
+title: "Kubernetes Goat로 배우는 쿠버네티스 클러스터 보안"
 date: 2026-07-24
 category: CTF/Wargame
 author: yejunkim2000
@@ -31,7 +31,7 @@ excerpt: "의도적 취약 클러스터 Kubernetes Goat를 kind로 직접 구축
 - **Part 1 (2~3장)** — 실습을 이해하는 데 필요한 Docker/Kubernetes 핵심 개념 심화.
 - **Part 2 (5~8장)** — Kubernetes Goat 10개 시나리오를 실제로 익스플로잇하고, 각 취약점의 근본 원인과 수정 방법을 매니페스트 수준에서 분석.
 
-> ### ⚠️ 실습 윤리 & 안전
+> ###  실습 윤리 & 안전
 > 모든 공격은 **로컬 `kind` 클러스터(개인 PC)**에서만 수행했습니다. Kubernetes Goat는 학습용으로 설계된 *의도적 취약* 환경이며, 실제 운영 클러스터나 타인의 시스템에 동일 기법을 적용하는 것은 **불법**입니다. DoS 시나리오(S9)는 호스트 안정성을 위해 **구조적 취약성 증명까지만** 수행하고 실제 자원 폭탄은 실행하지 않았습니다. 문서에 등장하는 모든 시크릿/키는 Goat가 배포한 **더미 값**입니다.
 
 ### TL;DR
@@ -85,7 +85,7 @@ Docker 이미지는 **읽기 전용 레이어의 스택**이며, OverlayFS 같�
 
 `/var/run/docker.sock`은 Docker 데몬의 제어 소켓입니다. 이 소켓에 접근할 수 있으면 **`--privileged`에 호스트 `/`를 마운트한 새 컨테이너를 띄워** 즉시 호스트를 장악할 수 있습니다. "컨테이너 안에서 도커를 쓰겠다(DinD/CI)"는 편의가 곧 탈출 통로가 됩니다.
 
-> 💡 본 실습 클러스터는 `kind`(containerd 기반)라 Docker 소켓 시나리오는 플레이스홀더로 존재하지만, 동일한 원리의 **실제 노드 탈출은 S3에서 hostPath로 완전히 재현**했습니다.
+>  본 실습 클러스터는 `kind`(containerd 기반)라 Docker 소켓 시나리오는 플레이스홀더로 존재하지만, 동일한 원리의 **실제 노드 탈출은 S3에서 hostPath로 완전히 재현**했습니다.
 
 ---
 
@@ -248,7 +248,7 @@ secure-middleware   cache-store-deployment-...            1/1     Running
 | Lateral Movement | Use Alternate Auth Material (T1550) | S3·S8 |
 | Impact | Resource Hijacking / Endpoint DoS (T1496/T1499) | S9 |
 
-**심각도 레전드** — 🔴 `CRITICAL` 클러스터/노드 장악 · 🟠 `HIGH` RCE·시크릿 대량유출 · 🟡 `MEDIUM` 민감정보 노출 · 🔵 `LOW` 정보수집·표면확대
+**심각도 높음** — 🔴 `CRITICAL` 클러스터/노드 장악 · 🟠 `HIGH` RCE·시크릿 대량유출 · 🟡 `MEDIUM` 민감정보 노출 · 🔵 `LOW` 정보수집·표면확대
 
 ---
 
@@ -704,7 +704,7 @@ $ kubectl get limitrange,resourcequota -n big-monolith
 No resources found                   # 네임스페이스 상한도 없음
 ```
 
-> ⚠️ **안전 조치** — 호스트(개인 PC) 안정성을 위해 실제 메모리 폭탄(`stress-ng` 등)은 실행하지 않고, **상한 부재라는 구조적 취약성 증명까지만** 수행했습니다.
+>  **안전 조치** — 호스트(개인 PC) 안정성을 위해 실제 메모리 폭탄(`stress-ng` 등)은 실행하지 않고, **상한 부재라는 구조적 취약성 증명까지만** 수행했습니다.
 
 ### 대응
 
@@ -822,7 +822,7 @@ spec:
           - X(hostPath): "null"
 ```
 
-> ### 🎯 한 줄 결론
+> ###  한 줄 결론
 > 이번에 성공한 **모든 공격은 결국 위험한 기본값을 방치했기 때문**입니다.
 > **① non-root 실행 · ② privileged/hostPath 금지 · ③ 최소권한 RBAC · ④ 기본 거부 NetworkPolicy** — 이 네 가지만 강제해도
 > CRITICAL 체인(S3)과 대부분의 시크릿 유출이 끊깁니다. 방어의 핵심은 이를 **배포 파이프라인의 정책(Policy as Code)**으로 옮겨
