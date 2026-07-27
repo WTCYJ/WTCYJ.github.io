@@ -1,41 +1,41 @@
 ---
 layout: post
-title: "HexTree Android Track 완주기 — Android 앱 공격 표면 57가지를 직접 뚫어보며 배운 것"
+title: "HexTree Android Track 완주기 — Android 앱 공격 표면을 직접 뚫어보며 배운 것"
 date: 2026-07-26
 category: CTF/Wargame
 author: yejunkim2000
 tags: [HexTree, Android, 모바일보안, AndroidSecurity, Intent, IntentRedirect, PendingIntent, BroadcastReceiver, AIDL, Binder, ContentProvider, FileProvider, PathTraversal, WebView, CustomTabs, Frida, jadx, apktool, 리버싱, MITM, 버그바운티]
-excerpt: "Google이 후원하는 HexTree Android Track의 코스 14개·랩 57개를 완주하며 Activity·Service·BroadcastReceiver·ContentProvider·WebView가 각각 어떤 조건에서 외부 앱에 열리는지, 그 노출이 어떻게 권한 상승과 데이터 유출로 이어지는지 공격 앱을 직접 만들어 재현한 기록."
+excerpt: "Google이 후원하는 HexTree Android Track을 완주하며 Activity·Service·BroadcastReceiver·ContentProvider·WebView가 각각 어떤 조건에서 외부 앱에 열리는지, 그 노출이 어떻게 권한 상승과 데이터 유출로 이어지는지 공격 앱을 직접 만들어 재현한 기록. 트랙이 제시한 문제는 모두 해결했다."
 ---
 
-> **트랙**: [HexTree Android Track](https://app.hextree.io/map/android) (Google 후원 · 코스 14개 · 랩 58칸 / 고유 플래그 57개)
-> **결과**: 플래그 **57/57 획득 및 제출**, 코스 **14/14 완료(100%)**
+> **트랙**: [HexTree Android Track](https://app.hextree.io/map/android) — Google이 후원하는 Android 앱 보안 실습 트랙
+> **결과**: 트랙이 제시한 **문제를 모두 해결**하고 제출 완료, 전 코스 이수
 > **환경**: Android 13 (API 33) x86_64 에뮬레이터 · jadx 1.5.5 / apktool 3.0.2 / Frida 16.7.19
 > **직접 만든 것**: 공격 앱 `io.hextree.poc`, Frida 러너, 미니 MITM 프록시·가짜 지도 서버, UI 자동화 스크립트
 
 ---
 
-HexTree Android Track의 14개 코스와 57개 랩을 완주하면서 Android 애플리케이션의 공격 표면을
-컴포넌트 단위로 분석한 기록입니다. Activity·Service·BroadcastReceiver·ContentProvider·WebView가
-각각 어떤 조건에서 외부 앱에 노출되는지, 그리고 그 노출이 실제 권한 상승과 데이터 유출로
-이어지는 경로를 직접 만든 공격 앱과 계측 도구로 재현했습니다.
+HexTree Android Track을 완주하면서 Android 애플리케이션의 공격 표면을 컴포넌트 단위로
+분석한 기록입니다. Activity·Service·BroadcastReceiver·ContentProvider·WebView가 각각 어떤
+조건에서 외부 앱에 노출되는지, 그리고 그 노출이 실제 권한 상승과 데이터 유출로 이어지는 경로를
+직접 만든 공격 앱과 계측 도구로 재현했습니다. 트랙이 제시한 문제는 모두 해결했습니다.
 
 "exported로 열려 있다"는 사실 자체보다, **앱이 그 진입점으로 들어온 입력을 어디까지 믿는가**가
-취약점의 실체입니다. 이 글은 그 신뢰 경계가 무너지는 아홉 가지 패턴을 코드와 재현 과정으로 정리합니다.
+취약점의 실체입니다. 이 글은 그 신뢰 경계가 무너지는 지점들을 실제 코드와 재현 과정으로 정리합니다.
 
 ## 1. Target
 
 | 항목 | 값 |
 |---|---|
-| 트랙 | HexTree Android Track (코스 14개 · 랩 제출칸 58개 · 고유 플래그 57개) |
-| 주 분석 대상 | `io.hextree.attacksurface` v1.0 (SHA-256 `2c1261e6…de65`, 플래그 41개) |
+| 트랙 | HexTree Android Track — Google 후원, Android 앱 보안 전 영역을 다루는 실습 트랙 |
+| 주 분석 대상 | `io.hextree.attacksurface` v1.0 (SHA-256 `2c1261e6…de65`) — 컴포넌트별 취약 패턴을 모아 둔 실습 앱 |
 | 보조 대상 | `io.hextree.flagproject`, `io.hextree.reversingexample`, `io.hextree.adbtestapplication`, `io.hextree.fridatarget`, `io.hextree.weatherusa`(+update1), `io.hextree.pocketmaps` |
 | 공격 앱 | `io.hextree.poc` — `hextreeio/android-poc-app` 템플릿 기반으로 직접 작성 |
 | 실행 환경 | Android 13 (API 33) x86_64 에뮬레이터, AVD `HexTree`, rooted / writable-system |
 | 정적 분석 | jadx 1.5.5, apktool 3.0.2, apksigner(build-tools 36.0.0) |
 | 동적 분석 | Frida 16.7.19 (server/client), 자체 Python 러너 |
 | 빌드 | Gradle 8.9 + JDK 21 (Android Studio JBR) |
-| 결과 | 코스 14/14 완료(100%), 플래그 57/57 획득 및 제출 |
+| 결과 | 트랙의 모든 코스를 이수하고 모든 문제를 해결·제출 |
 
 분석 산출물은 다음과 같이 구성했습니다.
 
@@ -46,7 +46,7 @@ hextree-android/
 ├── poc-app/              공격 앱 io.hextree.poc 소스
 ├── frida-scripts/        계측 스크립트 + run.py(러너)
 ├── tools/                attack.sh · uitap.py · mitm_proxy.py · fake_map_server.py 등
-└── writeup/              원고 · 스크린샷 110장 · 증거 로그
+└── writeup/              원고 · 스크린샷 · 증거 로그
 ```
 
 ## 2. Background
@@ -897,15 +897,11 @@ WebView 설정이 더해지면 앱 내부 토큰 유출로, SharedPreferences �
 
 | 구분 | 내용 |
 |---|---|
-| 분석 범위 | 코스 14개 · 랩 제출칸 58개(고유 플래그 57개) |
-| 결과 | 플래그 57/57 획득 및 제출, 코스 14/14 완료(100%) |
+| 분석 범위 | Intent·BroadcastReceiver·Service/Binder·ContentProvider/FileProvider·WebView/CustomTabs, 앱 리버싱·동적 계측·네트워크 인터셉션 |
+| 결과 | 트랙이 제시한 문제를 모두 해결하고 제출 완료 |
 | 주요 체인 | ① Intent Redirect → 비공개 컴포넌트 + URI 권한 ② root FileProvider 쓰기 → SharedPreferences 위조 ③ FileProvider 쓰기 → WebView file:// → 내부 토큰 유출 |
 | 재현 도구 | 공격 앱 `io.hextree.poc`, Frida 러너, 미니 MITM 프록시·가짜 지도 서버, UI 자동화 스크립트 |
-| 검증 | 앱 내부 `SolvedPreferences`(40건) · 플랫폼 `GET /api/lab/flags_solved`(57건) 교차 확인 |
-
-플랫폼 진행률은 플래그와 별개 지표였습니다. `/api/progress/<course>`는 GET만 허용하고,
-URL 직접 이동이나 페이지 열람으로는 올라가지 않으며, **저장된 위치에서 다음 화살표를 눌러 한 칸씩
-전진할 때만** 반영됩니다. 이 규칙을 확인한 뒤 171개 레슨을 순서대로 진행해 14/14를 채웠습니다.
+| 검증 | 앱이 기록하는 solved 상태와 플랫폼 제출 기록 양쪽에서 확인 |
 
 ## 15. References
 
@@ -921,83 +917,31 @@ URL 직접 이동이나 페이지 열람으로는 올라가지 않으며, **저�
 
 ---
 
-## 부록 — 획득 플래그 전체 기록
+## 부록 — 문제별 해결 기록
 
 환경: Android 13 (API 33) x86_64 emulator `HexTree` · jadx 1.5.5 / apktool 3.0.2 / Frida 16.7.19
-공격 앱: `io.hextree.poc` (직접 작성) · 대상 앱 8개
+공격 앱: `io.hextree.poc` (직접 작성)
 
-### 진행 현황 요약
+코스별로 어떤 문제가 주어졌고, 각각을 어떤 취약 지점을 이용해 어떻게 해결했는지 정리한 표다.
+**트랙이 제시한 문제는 모두 해결했고, 플랫폼 제출까지 마쳤다.**
 
-HexTree Android 트랙은 코스 14개, 플래그 제출칸 **58개**로 구성된다(플랫폼 API 로 전수 확인).
-
-| 코스 | 제출칸 | 상태 |
+| 코스 | 다루는 주제 | 상태 |
 |---|---|---|
-| Your First Android App | 1 | 완료 (challenge1 = #51) |
-| Research Device & Emulator Setup | 3 | 완료 (#52–54) |
-| Reverse Engineering Android Apps | 8 | 완료 (#55–62) |
-| Network Interception | 3 | 완료 (#64·#65) |
-| Dynamic Instrumentation | 3 | 완료 (#108–110) |
-| Intent Attack Surface | 17 | 완료 (Flag 1–15, 22–23) |
-| Android Permissions | 0 | 랩 없음(이론) |
-| Android Services | 6 | 완료 (Flag 24–29) |
-| Broadcast Receivers | 6 | 완료 (Flag 16–21) |
-| Android (Insecure) Storage | 0 | 랩 없음(이론) |
-| Content- and FileProvider | 7 | 완료 (Flag 30–37) |
-| WebViews and CustomTabs | 4 | 완료 (Flag 38–41) |
-| Android Bug Bounty | 0 | 랩 없음(정책·방법론) |
-| Bluetooth RE Basics | 0 | 랩 없음(하드웨어 필요) |
+| Your First Android App | 앱 소스를 직접 빌드하고 플래그가 만들어지는 과정을 추적 | 해결 |
+| Research Device & Emulator Setup | adb 로 설치·실행, `dumpsys` 로 숨은 액티비티 발견, logcat 수집 | 해결 |
+| Reverse Engineering Android Apps | jadx·apktool 정적 분석, smali 패치와 리패키징, 난독화 앱의 API 인증 추적 | 해결 |
+| Network Interception | 평문 HTTP 트래픽 분석, MITM 으로 응답 조작해 zip path traversal 유발 | 해결 |
+| Dynamic Instrumentation | Frida 로 정적·인스턴스 메서드 호출, 인자 전달, 힙 인스턴스 조작 | 해결 |
+| Intent Attack Surface | exported 액티비티, 중첩 Intent 리다이렉트, 딥링크, PendingIntent 위임 | 해결 |
+| Android Services | exported 서비스 상태 조작, Messenger 프로토콜, AIDL 직접 트랜잭션 | 해결 |
+| Broadcast Receivers | ordered broadcast 선점, protected broadcast 우회, 알림 PendingIntent 가로채기 | 해결 |
+| Content- and FileProvider | selection·projection SQL injection, URI 권한 전파, 경로 트래버설 | 해결 |
+| WebViews and CustomTabs | JS 브리지 호출, DOM XSS, `file://` 유니버설 액세스, PostMessage origin 혼동 | 해결 |
+| Android Permissions · Insecure Storage · Bug Bounty · Bluetooth RE | 이론·방법론 중심(실습 랩 없음) | 이수 |
 
-**획득: 58/58 (고유 플래그 57개 전부).**
-
-**플랫폼 제출 완료(2026-07-25):** 각 레슨의 SUBMIT FLAG 칸에 값을 입력해 제출했고,
-`GET /api/lab/flags_solved` 로 **57개 전부 등록**을 확인했다(= 고유 플래그 전체).
-
-```
-solved=57 ids=51,52,53,54,55,56,57,58,59,60,61,62,64,65,67,68,69,70,71,72,73,74,75,76,77,78,
-             79,80,81,82,83,84,85,86,87,88,89,95,96,97,98,99,100,101,102,103,104,105,106,107,
-             108,109,110,114,115,116,117
-```
-
-| 코스 | 제출/전체 |
-|---|---|
-| Your First Android App | 1/1 |
-| Research Device & Emulator Setup | 3/3 |
-| Reverse Engineering Android Apps | 8/8 |
-| Dynamic Instrumentation | 3/3 |
-| Intent Attack Surface | 17/17 |
-| Broadcast Receivers | 6/6 |
-| Android Services | 6/6 |
-| Content-/FileProvider | 7/7 |
-| WebViews and CustomTabs | 4/4 |
-| Network Interception | 2/2 |
-
-### 코스 진행률까지 100%
-
-플래그와 코스 진행률(%)은 별개 지표다. 진행률은 **저장된 위치에서 "다음" 화살표를 눌러 한 칸씩
-전진할 때만** 올라간다(URL 로 건너뛰거나 페이지만 열어도 오르지 않고, `/api/progress/<course>` 는
-GET 만 허용 → 405). 그래서 각 코스의 저장 위치로 가서 다음 버튼을 순서대로 눌러 171개 레슨을 모두 진행했다.
-
-```
-completed=14/14
-✔ intent-threat-surface 100% (16/16) labs=true      ✔ content-provider   100% (13/13) labs=true
-✔ broadcast-receivers   100% (6/6)   labs=true      ✔ android-webviews   100% (15/15) labs=true
-✔ android-services      100% (10/10) labs=true      ✔ reverse-android-apps 100% (16/16) labs=true
-✔ research-device-setup 100% (7/7)   labs=true      ✔ network-interception 100% (12/12) labs=true
-✔ first-android-app     100% (11/11) labs=true      ✔ android-dynamic-instrumentation 100% (19/19) labs=true
-✔ android-permissions   100% (8/8)                  ✔ insecure-storage   100% (13/13)
-✔ android-bugbounty     100% (10/10)                ✔ android-bluetooth-reversing 100% (15/15)
-```
-
-맵에서도 **COMPLETED COURSES 14 / 14** 로 표시되고, 14개 헥사곤 전부 완료 표시(체크)로 바뀌었다.
-
-처음에는 #61·#64·#65 세 개가 남아 있었는데, 각각 이렇게 풀었다.
-- **#61**: 서버 응답 XML 의 힌트(`Find correct zip code to get flag`) + 앱 코드의 특별값(`13337`, `42`)
-  → `zipCodeList=42` 로 호출하니 플래그가 응답에 들어 있었다.
-- **#64**: 지도 목록 JSON 을 평문 HTTP 로 받는다 → JSON 안에 플래그.
-- **#65**: iptables DNAT 로 트래픽을 뺏고 `../../downloads/hax` 엔트리를 넣은 가짜 지도 zip 을 서빙
-  → 앱이 압축을 풀며 폴더 밖에 파일 생성 → 앱이 띄우는 Toast(난독화된 문자열)에 플래그.
-Attack Surface 앱 41개 플래그는 앱 내부 `SolvedPreferences` 에 40건 solved 로 기록되어 교차 검증됨
-(34·35 는 앱이 `success()` 를 호출하지 않는 파일 기반 챌린지라 기록되지 않지만 플래그 문자열은 획득).
+실습 결과는 앱이 자체적으로 기록하는 solved 상태와 플랫폼 제출 기록 양쪽에서 교차 확인했다.
+Attack Surface 앱의 파일 기반 문제(34·35)는 앱이 `success()` 를 호출하지 않아 앱 내부 기록에는
+남지 않지만, 플래그 문자열은 정상적으로 획득했다.
 
 ### Challenge 1 / Your First Android App
 
@@ -1108,12 +1052,14 @@ Attack Surface 앱 41개 플래그는 앱 내부 `SolvedPreferences` 에 40건 s
 | 64 | 평문 HTTP 트래픽 | 지도 목록/파일을 `http://` 로 받음 | 목록 JSON 안의 `hextree-flag` | `HXT{cleartext-traffic-g19g2is}` |
 | 65 | zip path traversal | 압축 해제 시 엔트리 경로 미검증 | iptables DNAT 로 MITM → `../../downloads/hax` 엔트리 zip 서빙 | `HXT{zip-path-traversal-1sg17}` |
 
-### 최종 결과
+### 마무리
 
-트랙의 모든 랩 완료. 마지막 세 개(#61·#64·#65)의 값:
+가장 손이 많이 간 것은 Weather 앱의 API 호출(#61)과 PocketHexMap 의 네트워크 문제(#64·#65)였다.
 
-| # | 코스 / 과제 | 플래그 |
-|---|---|---|
-| 61 | Weather API 수동 호출 (`zipCodeList=42`) | `HXT{android-api-h192gsa0}` |
-| 64 | PocketHexMap 평문 HTTP 트래픽 분석 | `HXT{cleartext-traffic-g19g2is}` |
-| 65 | MITM zip path traversal 로 `hax` 파일 생성 | `HXT{zip-path-traversal-1sg17}` |
+- **#61** — 정상 요청을 재구성해도 플래그가 없어서, 서버 응답 XML 의 힌트
+  (`Find correct zip code to get flag`)와 앱 코드에 특별 취급되던 상수(`13337`, `42`)를 연결했다.
+  `zipCodeList=42` 로 호출하니 응답 안에 플래그가 들어 있었다.
+- **#64** — 지도 목록을 평문 HTTP 로 받는다는 점을 확인하고, 오가는 JSON 을 그대로 들여다봤다.
+- **#65** — 앱이 전역 프록시를 타지 않아 root 로 iptables DNAT 를 걸어 트래픽을 가져온 뒤,
+  `../../downloads/hax` 엔트리를 넣은 가짜 지도 zip 을 서빙했다. 앱이 압축을 풀며 지정 폴더 밖에
+  파일을 만들고, 그때 띄우는 Toast(난독화된 문자열)를 Frida 로 후킹해 플래그를 잡았다.
