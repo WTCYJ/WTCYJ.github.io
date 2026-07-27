@@ -959,6 +959,10 @@ Flag 35 → 36 → 40이 실제로 그 경로였습니다.
 | 재현 도구 | 공격 앱 `io.hextree.poc`, Frida 러너, 미니 MITM 프록시·가짜 지도 서버, UI 자동화 스크립트 |
 | 검증 | 앱이 기록하는 solved 상태와 플랫폼 제출 기록 양쪽에서 확인 |
 
+<p align="center"><img src="/assets/img/hextree-android-track/platform_map_complete.png" alt="HexTree Android 트랙 완료 화면" width="720" style="max-width:100%;height:auto;margin:0 4px"></p>
+
+<p align="center"><em>트랙을 마친 시점의 헥스맵 — 코스 헥사곤이 전부 완료 표시로 바뀌었습니다</em></p>
+
 트랙을 마치고 나니 앞으로 앱을 볼 때 매니페스트에서 무엇을 먼저 찾아야 할지, 어떤 코드 패턴에서
 손이 멈춰야 할지가 훨씬 분명해졌습니다. 실제 버그바운티 대상 앱에도 그대로 적용해 볼 생각입니다.
 
