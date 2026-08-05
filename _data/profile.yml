@@ -44,7 +44,7 @@ now:
 timeline:
   - period: "2026 하계"
     title: "청소년 IT 학술대회 및 대학생 IT 논문 경진대회 심사위원"
-    org: ""            # 주최 기관을 적을 수 있습니다
+    org: "KITPA"
     desc: ""           # 무엇을 했는지 한두 줄 (비워두면 표시 안 됨)
   - period: "2026.06 —"
     title: "화이트햇스쿨 4기"
