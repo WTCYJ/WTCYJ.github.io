@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#05070d">
   <title>{% if page.title %}{{ page.title }} | {{ site.title }}{% else %}{{ site.title }}{% endif %}</title>
   <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="alternate" type="application/atom+xml" title="{{ site.title }}" href="/feed.xml">
+  <meta name="description" content="{% if page.excerpt %}{{ page.excerpt | strip_html | strip_newlines | truncate: 160 }}{% else %}{{ site.description }}{% endif %}">
 
   <!-- MathJax 수식 렌더링 -->
   <script>
@@ -28,21 +31,29 @@
 <nav>
   <a href="/" class="nav-logo">
     <span class="prompt">~$</span>
-    yejunkim2000.github.io
+    <span class="logo-text">yejunkim2000.github.io</span>
     <span class="cursor"></span>
   </a>
   <ul class="nav-links">
     <li><a href="/">home</a></li>
-    <li><a href="/posts">posts</a></li>
-    <li><a href="/about">about</a></li>
-    <li><a href="https://github.com/yejunkim2000" target="_blank">github</a></li>
+    <li><a href="/posts/">posts</a></li>
+    <li><a href="/about/">about</a></li>
+    <li><a href="https://github.com/yejunkim2000" target="_blank" rel="noopener">github</a></li>
   </ul>
 </nav>
 
-{{ content }}
+{% if page.url == '/' or page.url == '/posts/' or page.layout == 'category' %}
+  <div class="shell">
+    {% include sidebar.html %}
+    <main>{{ content }}</main>
+  </div>
+{% else %}
+  <div class="shell shell--solo">{{ content }}</div>
+{% endif %}
 
 <footer>
-  <p>© 2026 yejunkim2000 · Built with Jekyll · <a href="https://github.com/yejunkim2000/yejunkim2000.github.io">source</a></p>
+  <p class="term-line"><span class="prompt">C:\Users\{{ site.data.profile.name }}&gt;</span> <span class="cmd">system_info</span></p>
+  <p>© 2026 {{ site.data.profile.name }} · Built with Jekyll · <a href="https://github.com/yejunkim2000/yejunkim2000.github.io">source</a></p>
 </footer>
 
 </body>

@@ -4,63 +4,108 @@ title: About
 permalink: /about/
 ---
 
+{% assign p = site.data.profile %}
+
 <div class="about-layout">
 
-  <div class="about-avatar">YJ</div>
+  <div class="about-head">
+    <div class="about-avatar">{{ p.initials | default: "YJ" }}</div>
+    <div>
+      <h1 class="about-name">{{ p.name }}{% if p.real_name %} <span class="about-realname">{{ p.real_name }}</span>{% endif %}</h1>
+      <div class="about-role">{{ p.role }}</div>
+      {% if p.affiliations.size > 0 %}
+        <div class="profile-affil">
+          {% for a in p.affiliations %}<span>{{ a }}</span>{% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
 
-  <h1 class="about-name">yejunkim2000</h1>
+  {% if p.tags.size > 0 %}
+    <div class="hash-list" style="margin-bottom:1.5rem;">
+      {% for t in p.tags %}<span class="hash-tag">#{{ t }}</span>{% endfor %}
+    </div>
+  {% endif %}
 
-  <p class="about-bio">
-    보안에 관심이 많은 개발자입니다.<br>
-    CTF, Bug Bounty, 개발을 즐기며 배운 것들을 이 블로그에 기록합니다.
-  </p>
+  <p class="about-bio">{{ p.bio }}</p>
 
-  <div class="section-header" style="margin-bottom: 1rem;">
+  {% if p.now.size > 0 %}
+  <div class="section-header">
+    <span class="section-label">now — 하고 있는 것</span>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="now-list">
+    {% for n in p.now %}
+      <div class="now-item">
+        <span class="now-dot"></span>
+        <div>
+          <div class="now-text">{{ n.text }}</div>
+          {% if n.note %}<div class="now-note">{{ n.note }}</div>{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if p.timeline.size > 0 %}
+  <div class="section-header" style="margin-top:2.5rem;">
+    <span class="section-label">timeline — 이력</span>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="timeline">
+    {% for t in p.timeline %}
+      <div class="tl-item">
+        <div class="tl-period">{{ t.period }}</div>
+        <div class="tl-title">{{ t.title }}</div>
+        {% if t.org %}<div class="tl-org">{{ t.org }}</div>{% endif %}
+        {% if t.desc %}<div class="tl-desc">{{ t.desc }}</div>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if p.skills.size > 0 %}
+  <div class="section-header" style="margin-top:2rem;">
     <span class="section-label">skills</span>
     <div class="section-line"></div>
   </div>
 
-  <div class="skill-list">
-    <span class="skill-tag">Python</span>
-    <span class="skill-tag">C / C++</span>
-    <span class="skill-tag">Web Security</span>
-    <span class="skill-tag">Reverse Engineering</span>
-    <span class="skill-tag">Pwnable</span>
-    <span class="skill-tag">Jekyll</span>
-    <span class="skill-tag">Linux</span>
-    <span class="skill-tag">Git</span>
-  </div>
+  {% for g in p.skills %}
+    <div class="skill-group">
+      <div class="skill-group-name">// {{ g.group }}</div>
+      <div class="skill-list" style="margin-bottom:0;">
+        {% for s in g.items %}<span class="skill-tag">{{ s }}</span>{% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+  {% endif %}
 
-  <div class="section-header" style="margin-bottom: 1rem; margin-top: 2rem;">
-    <span class="section-label">interests</span>
+  <div class="section-header" style="margin-top:2.5rem;">
+    <span class="section-label">categories — 무엇을 쓰는가</span>
     <div class="section-line"></div>
   </div>
 
-  <div class="posts-list">
-    <div class="post-item" style="pointer-events:none;">
-      <span class="post-date">분야</span>
-      <span class="post-title">CTF / Wargame 문제풀이 및 기법 연구</span>
-      <span class="post-tag tag-red">CTF/Wargame</span>
-    </div>
-    <div class="post-item" style="pointer-events:none;">
-      <span class="post-date">분야</span>
-      <span class="post-title">웹 취약점 발굴 및 Bug Bounty 참여</span>
-      <span class="post-tag tag-amber">BugBounty</span>
-    </div>
-    <div class="post-item" style="pointer-events:none;">
-      <span class="post-date">분야</span>
-      <span class="post-title">보안 도구 개발 및 자동화</span>
-      <span class="post-tag tag-blue">개발</span>
-    </div>
+  <div class="categories-grid">
+    {% for c in site.data.categories %}
+      <a href="/category/{{ c.slug }}/" class="cat-card" data-color="{{ c.color }}">
+        <span class="cat-icon">{{ c.icon }}</span>
+        <div class="cat-name">{{ c.name }}</div>
+        <div class="cat-count">{{ site.posts | where: "category", c.key | size }} posts</div>
+      </a>
+    {% endfor %}
   </div>
 
-  <div class="section-header" style="margin-bottom: 1rem; margin-top: 2.5rem;">
+  <div class="section-header">
     <span class="section-label">contact</span>
     <div class="section-line"></div>
   </div>
 
-  <p style="font-family: var(--mono); font-size: 13px; color: var(--text-secondary);">
-    GitHub: <a href="https://github.com/yejunkim2000" style="color: var(--accent-teal);">github.com/yejunkim2000</a>
-  </p>
+  <div class="link-list">
+    {% for l in p.links %}
+      <a href="{{ l.url }}" class="btn-neon"{% if l.url contains '://' %} target="_blank" rel="noopener"{% endif %}>{{ l.name }} ↗</a>
+    {% endfor %}
+  </div>
 
 </div>

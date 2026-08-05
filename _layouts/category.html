@@ -2,22 +2,18 @@
 layout: default
 ---
 
-<section class="section" style="padding-top:3rem;">
+{% assign filtered = site.posts | where: "category", page.cat_key %}
+
+<section class="section">
   <div class="section-header">
-    <span class="cat-icon-lg" style="font-size:20px;">{{ page.cat_icon }}</span>
-    <span class="section-label" style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ page.cat_name }}</span>
+    <span class="section-label">{{ page.cat_icon }} {{ page.cat_name }}</span>
     <div class="section-line"></div>
-    <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted);">
-      {{ site.posts | where: "category", page.cat_key | size }} posts
-    </span>
+    <span class="post-tag tag-{{ page.cat_color }}">{{ filtered | size }} posts</span>
   </div>
 
-  <div class="posts-list" style="margin-top:1.5rem;">
-    {% assign filtered = site.posts | where: "category", page.cat_key %}
+  <div class="posts-list">
     {% if filtered.size == 0 %}
-      <div style="padding:4rem 0;text-align:center;font-family:var(--mono);font-size:13px;color:var(--text-muted);">
-        // 아직 작성된 글이 없습니다. 첫 글을 작성해보세요!
-      </div>
+      <div class="empty-note">// 아직 작성된 글이 없습니다. 첫 글을 작성해보세요!</div>
     {% else %}
       {% for post in filtered %}
         <a href="{{ post.url }}" class="post-item">

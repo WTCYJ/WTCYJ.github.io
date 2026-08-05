@@ -1,0 +1,67 @@
+# ────────────────────────────────────────────────
+#  프로필 / 이력 — 이 파일만 고치면 about 페이지와
+#  사이드바 프로필 카드가 같이 바뀝니다.
+#  (항목을 지우면 해당 섹션 자체가 안 보입니다)
+# ────────────────────────────────────────────────
+
+initials: "WT"          # 아바타에 들어갈 글자
+name: "WTCY"            # 핸들 / 활동명
+real_name: "김예준"
+role: "정보보안 컨설턴트"
+tagline: "보안과 개발을 탐구하고 기록합니다."
+
+# 소속 (프로필 카드에 줄바꿈으로 표시)
+affiliations:
+  - "가천대학교 사이버보안학과"
+  - "화이트햇스쿨"
+
+# 프로필 해시태그
+tags:
+  - "정보보안"
+  - "면접컨설팅"
+  - "자료구조/알고리즘"
+  - "자소서관리"
+
+bio: >
+  웹/모바일 취약점 분석, CTF, 버그바운티, 보안 도구 개발을 하고 있습니다.
+  실습하고 분석한 것들을 정리해 이 블로그에 남깁니다.
+
+# ── 지금 하고 있는 것 ──────────────────────────
+now:
+  - text: "화이트햇스쿨 교육 과정"
+    note: "여기에 기수·진행 상황을 적으세요"
+  - text: "버그바운티 / 취약점 리서치"
+    note: "HackerOne 호스팅 프로그램 위주로 진행"
+  - text: "CTF·워게임 문제 풀이와 라이트업 정리"
+    note: "웹 · 리버싱 · 포너블"
+
+# ── 이력 (최신순) ──────────────────────────────
+timeline:
+  - period: "2026 —"
+    title: "화이트햇스쿨"
+    org: "여기에 기수 / 과정명을 적으세요"
+    desc: "무엇을 했는지 한두 줄로 적으면 됩니다."
+  - period: "재학 중"
+    title: "사이버보안학과"
+    org: "가천대학교"
+    desc: "정보보안 전공."
+  - period: "2026"
+    title: "기술 블로그 운영"
+    org: "yejunkim2000.github.io"
+    desc: "취약점 분석, CTF 라이트업, 논문 리뷰를 기록."
+
+# ── 기술 스택 ──────────────────────────────────
+skills:
+  - group: "language"
+    items: ["Python", "C / C++", "JavaScript", "Solidity", "Bash"]
+  - group: "security"
+    items: ["Web Security", "Reverse Engineering", "Pwnable", "Fuzzing", "Android", "Forensics"]
+  - group: "tooling"
+    items: ["Burp Suite", "IDA Pro", "Frida", "Docker", "Linux", "Git"]
+
+# ── 링크 ───────────────────────────────────────
+links:
+  - name: "GitHub"
+    url: "https://github.com/yejunkim2000"
+  - name: "RSS"
+    url: "/feed.xml"

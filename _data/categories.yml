@@ -1,0 +1,38 @@
+# 카테고리 정의 — 여기가 유일한 원본입니다.
+# key : 글 front matter의 `category:` 값과 정확히 일치해야 함
+# slug: /category/<slug>/ 주소
+- name: "개발"
+  key: "개발"
+  slug: "dev"
+  icon: "⌨"
+  color: "blue"
+
+- name: "CTF / Wargame"
+  key: "CTF/Wargame"
+  slug: "ctf"
+  icon: "⚑"
+  color: "red"
+
+- name: "Bug Bounty"
+  key: "BugBounty"
+  slug: "bugbounty"
+  icon: "◎"
+  color: "amber"
+
+- name: "블로그 / 기술문서"
+  key: "블로그/기술문서"
+  slug: "docs"
+  icon: "✎"
+  color: "teal"
+
+- name: "논문 / 컨퍼런스"
+  key: "논문/컨퍼런스"
+  slug: "research"
+  icon: "◈"
+  color: "purple"
+
+- name: "공모전 / 자격증"
+  key: "공모전/자격증"
+  slug: "cert"
+  icon: "★"
+  color: "green"

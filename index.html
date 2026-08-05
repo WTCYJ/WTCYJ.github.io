@@ -3,15 +3,15 @@ layout: default
 title: Home
 ---
 
-<main>
 <section class="hero">
   <p class="hero-label">// security · development · research</p>
-  <h1>Hello,<br>I'm <span class="highlight">yejunkim2000</span>.<br>hehe.</h1>
-  <p class="hero-desc">보안과 개발을 탐구하는 공간입니다.<br>CTF 풀이, 취약점 분석, 개발 기록을 공유합니다.</p>
+  <h1>Hello, I'm<br><span class="highlight glitch" data-text="{{ site.data.profile.name }}">{{ site.data.profile.name }}</span>.</h1>
+  <p class="hero-sub">{{ site.data.profile.real_name }} · {{ site.data.profile.affiliations | join: " · " }}</p>
+  <p class="hero-desc">{{ site.data.profile.bio | default: "보안과 개발을 탐구하는 공간입니다." }}</p>
   <div class="hero-stats">
     <div class="stat-item">posts <span>{{ site.posts | size }}</span></div>
-    <div class="stat-item">categories <span>6</span></div>
-    <div class="stat-item">github <span><a href="https://github.com/yejunkim2000" style="color:inherit;text-decoration:none;">@yejunkim2000</a></span></div>
+    <div class="stat-item">categories <span>{{ site.data.categories | size }}</span></div>
+    <div class="stat-item">github <span><a href="https://github.com/yejunkim2000" target="_blank" rel="noopener">@yejunkim2000</a></span></div>
   </div>
 </section>
 
@@ -22,36 +22,13 @@ title: Home
   </div>
 
   <div class="categories-grid">
-    <a href="/category/dev/" class="cat-card" data-color="blue">
-      <span class="cat-icon">⌨</span>
-      <div class="cat-name">개발</div>
-      <div class="cat-count">{{ site.posts | where: "category", "개발" | size }} posts</div>
-    </a>
-    <a href="/category/ctf/" class="cat-card" data-color="red">
-      <span class="cat-icon">⚑</span>
-      <div class="cat-name">CTF / Wargame</div>
-      <div class="cat-count">{{ site.posts | where: "category", "CTF/Wargame" | size }} posts</div>
-    </a>
-    <a href="/category/bugbounty/" class="cat-card" data-color="amber">
-      <span class="cat-icon">◎</span>
-      <div class="cat-name">Bug Bounty</div>
-      <div class="cat-count">{{ site.posts | where: "category", "BugBounty" | size }} posts</div>
-    </a>
-    <a href="/category/docs/" class="cat-card" data-color="teal">
-      <span class="cat-icon">✎</span>
-      <div class="cat-name">블로그 / 기술문서</div>
-      <div class="cat-count">{{ site.posts | where: "category", "블로그/기술문서" | size }} posts</div>
-    </a>
-    <a href="/category/research/" class="cat-card" data-color="purple">
-      <span class="cat-icon">◈</span>
-      <div class="cat-name">논문 / 컨퍼런스</div>
-      <div class="cat-count">{{ site.posts | where: "category", "논문/컨퍼런스" | size }} posts</div>
-    </a>
-    <a href="/category/cert/" class="cat-card" data-color="green">
-      <span class="cat-icon">★</span>
-      <div class="cat-name">공모전 / 자격증</div>
-      <div class="cat-count">{{ site.posts | where: "category", "공모전/자격증" | size }} posts</div>
-    </a>
+    {% for c in site.data.categories %}
+      <a href="/category/{{ c.slug }}/" class="cat-card" data-color="{{ c.color }}">
+        <span class="cat-icon">{{ c.icon }}</span>
+        <div class="cat-name">{{ c.name }}</div>
+        <div class="cat-count">{{ site.posts | where: "category", c.key | size }} posts</div>
+      </a>
+    {% endfor %}
   </div>
 
   <div class="section-header">
@@ -61,25 +38,21 @@ title: Home
 
   <div class="posts-list">
     {% for post in site.posts limit: 10 %}
-      {% assign color = "teal" %}
-      {% if post.category == "개발" %}{% assign color = "blue" %}
-      {% elsif post.category == "CTF/Wargame" %}{% assign color = "red" %}
-      {% elsif post.category == "BugBounty" %}{% assign color = "amber" %}
-      {% elsif post.category == "블로그/기술문서" %}{% assign color = "teal" %}
-      {% elsif post.category == "논문/컨퍼런스" %}{% assign color = "purple" %}
-      {% elsif post.category == "공모전/자격증" %}{% assign color = "green" %}
-      {% endif %}
+      {% assign c = site.data.categories | where: "key", post.category | first %}
       <a href="{{ post.url }}" class="post-item">
         <span class="post-date">{{ post.date | date: "%y.%m.%d" }}</span>
         <span class="post-title">{{ post.title }}</span>
-        <span class="post-tag tag-{{ color }}">{{ post.category }}</span>
+        <span class="post-tag tag-{{ c.color | default: 'teal' }}">{{ post.category }}</span>
       </a>
     {% endfor %}
     {% if site.posts.size == 0 %}
-    <div style="padding:3rem 0;text-align:center;font-family:var(--mono);font-size:13px;color:var(--text-muted);">
-      // 아직 작성된 글이 없습니다.
-    </div>
+      <div class="empty-note">// 아직 작성된 글이 없습니다.</div>
     {% endif %}
   </div>
+
+  {% if site.posts.size > 10 %}
+    <div style="margin-top:1.5rem;">
+      <a href="/posts/" class="btn-neon">전체 글 보기 →</a>
+    </div>
+  {% endif %}
 </section>
-</main>

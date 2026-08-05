@@ -28,31 +28,7 @@ defaults:
       layout: "post"
       permalink: /posts/:title/
 
-categories:
-  - name: "개발"
-    slug: "dev"
-    icon: "⌨"
-    color: "blue"
-  - name: "CTF/Wargame"
-    slug: "ctf"
-    icon: "⚑"
-    color: "red"
-  - name: "Bug Bounty"
-    slug: "bugbounty"
-    icon: "◎"
-    color: "amber"
-  - name: "블로그/기술문서"
-    slug: "docs"
-    icon: "✎"
-    color: "teal"
-  - name: "논문/컨퍼런스"
-    slug: "research"
-    icon: "◈"
-    color: "purple"
-  - name: "공모전/자격증"
-    slug: "cert"
-    icon: "★"
-    color: "green"
+# 카테고리 정의는 _data/categories.yml 로 이동했습니다.
 
 exclude: ["sitemap.xml", "feed.xml", "LICENSE", "README.md", "Gemfile", "Gemfile.lock"]
 
