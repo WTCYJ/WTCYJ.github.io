@@ -1,0 +1,5 @@
+# Jekyll 빌드 산출물
+_site/
+.jekyll-cache/
+.jekyll-metadata
+.sass-cache/
