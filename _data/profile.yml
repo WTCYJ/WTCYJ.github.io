@@ -30,11 +30,11 @@ bio: >
 # ── 지금 하고 있는 것 ──────────────────────────
 now:
   - text: "화이트햇스쿨 4기"
-    note: "정보보안 교육 과정 참여 중"
-  - text: "HSPACE Knight Frontier 2기"
-    note: ""            # 활동 내용 한 줄 (비워두면 표시 안 됨)
+    note: "2026.06 — 정보보안 교육 과정 참여 중"
   - text: "유니브 컨설팅 컨설턴트"
-    note: "면접 컨설팅 · 자소서 관리 · 자료구조/알고리즘"
+    note: "2026.05 — 면접 컨설팅 · 자소서 관리 · 자료구조/알고리즘"
+  - text: "HSPACE Knight Frontier 2기"
+    note: "2026.04 —"    # 활동 내용을 뒤에 덧붙일 수 있습니다
   - text: "버그바운티 / 취약점 리서치"
     note: "HackerOne 호스팅 프로그램 위주로 진행"
   - text: "CTF·워게임 문제 풀이와 라이트업 정리"
@@ -42,21 +42,21 @@ now:
 
 # ── 이력 (최신순) ──────────────────────────────
 timeline:
-  - period: "2026 —"
-    title: "화이트햇스쿨 4기"
-    org: ""            # 주관 기관을 적을 수 있습니다
+  - period: "2026 하계"
+    title: "청소년 IT 학술대회 및 대학생 IT 논문 경진대회 심사위원"
+    org: ""            # 주최 기관을 적을 수 있습니다
     desc: ""           # 무엇을 했는지 한두 줄 (비워두면 표시 안 됨)
-  - period: "2026 —"
-    title: "HSPACE Knight Frontier 2기"
-    org: "HSPACE"
+  - period: "2026.06 —"
+    title: "화이트햇스쿨 4기"
+    org: ""
     desc: ""
-  - period: "2026 —"
+  - period: "2026.05 —"
     title: "컨설턴트"
     org: "유니브 컨설팅"
     desc: "면접 컨설팅, 자기소개서 관리, 자료구조/알고리즘 지도."
-  - period: "2026 하계"
-    title: "IT 청소년 대회 심사위원"
-    org: ""            # 주최 기관을 적을 수 있습니다
+  - period: "2026.04 —"
+    title: "HSPACE Knight Frontier 2기"
+    org: "HSPACE"
     desc: ""
   - period: "재학 중"
     title: "사이버보안학과"
