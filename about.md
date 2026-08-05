@@ -41,7 +41,7 @@ permalink: /about/
         <span class="now-dot"></span>
         <div>
           <div class="now-text">{{ n.text }}</div>
-          {% if n.note %}<div class="now-note">{{ n.note }}</div>{% endif %}
+          {% if n.note and n.note != '' %}<div class="now-note">{{ n.note }}</div>{% endif %}
         </div>
       </div>
     {% endfor %}
@@ -59,8 +59,8 @@ permalink: /about/
       <div class="tl-item">
         <div class="tl-period">{{ t.period }}</div>
         <div class="tl-title">{{ t.title }}</div>
-        {% if t.org %}<div class="tl-org">{{ t.org }}</div>{% endif %}
-        {% if t.desc %}<div class="tl-desc">{{ t.desc }}</div>{% endif %}
+        {% if t.org and t.org != '' %}<div class="tl-org">{{ t.org }}</div>{% endif %}
+        {% if t.desc and t.desc != '' %}<div class="tl-desc">{{ t.desc }}</div>{% endif %}
       </div>
     {% endfor %}
   </div>
