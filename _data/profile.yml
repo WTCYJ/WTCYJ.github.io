@@ -48,8 +48,8 @@ timeline:
     desc: ""           # 무엇을 했는지 한두 줄 (비워두면 표시 안 됨)
   - period: "2026.06 —"
     title: "화이트햇스쿨 4기"
-    org: ""
-    desc: ""
+    org: "KISA"
+    desc: ""           # 무엇을 했는지 한두 줄 (비워두면 표시 안 됨)
   - period: "2026.05 —"
     title: "컨설턴트"
     org: "유니브 컨설팅"
