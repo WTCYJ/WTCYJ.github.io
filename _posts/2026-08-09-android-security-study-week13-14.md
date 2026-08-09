@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Android 앱 보안 분석 13~14주차 - JNI·ELF 심볼과 난독화의 실제 효과"
-date: 2026-08-09
+date: 2026-08-09 13:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 네이티브, JNI, ELF, 심볼테이블, dynsym, NDK, 난독화, R8, ProGuard, jadx, 리버싱, 정적분석, 학습기록]

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Android 보안 분석 24주 로드맵 - 환경 분리 설계와 CVE 재현 프로토콜"
-date: 2026-08-08
+date: 2026-08-08 09:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 학습로드맵, AOSP, Cuttlefish, OWASP, MASTG, MASVS, CVE, SecurityBulletin, Frida, jadx, apktool, MobSF, adb, 에뮬레이터, SELinux, VerifiedBoot, Binder, 취약점분석, 정적분석, 동적분석]
@@ -344,7 +344,7 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 
 ## 9. 진행 기록
 
-진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/) · [9~10주차](/posts/android-security-study-week9-10/) · [11~12주차](/posts/android-security-study-week11-12/) · [13~14주차](/posts/android-security-study-week13-14/) · [15~16주차](/posts/android-security-study-week15-16/)
+진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/) · [9~10주차](/posts/android-security-study-week9-10/) · [11~12주차](/posts/android-security-study-week11-12/) · [13~14주차](/posts/android-security-study-week13-14/) · [15~16주차](/posts/android-security-study-week15-16/) · [17주차](/posts/android-security-study-week17/)
 
 아래는 이 계획을 8주차까지 따라간 결과물입니다. 3~4주차에 직접 작성해 5주차부터 분석 대상으로 쓰고 있는 테스트 앱 `kr.wtcy.memovault`가 `sec-api33` 에뮬레이터에서 도는 화면입니다.
 
@@ -362,9 +362,9 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 | 13~14주 네이티브·런타임 | **완료** | 2026-08-09 | ELF 심볼 직접 파싱, R8 난독화 전후 리포트 대조 |
 | 15~16주 시스템 보안 | **완료** | 2026-08-09 | Binder 2층 강제 확인, API 33/16 비교, Verified Boot는 에뮬레이터 한계 |
 | 환경 구성 (단계 B) | 시작 전 | — | Linux/KVM · Cuttlefish 2 인스턴스 |
-| 17주 Cuttlefish 실습 | 시작 전 | — | |
+| 17주 Cuttlefish 실습 | **대체 수행** | 2026-08-09 | AOSP 빌드 400GB 요구로 불가 → 두 이미지 비교 하네스로 대체 |
 | 18주 CVE 선정 | 시작 전 | — | |
-| 19~20주 패치 전·후 빌드 | 시작 전 | — | |
+| 19~20주 패치 전·후 빌드 | 재설계 | — | 이 장비에서 불가능(400GB·RAM 64GB), 22주 소스 분석으로 흡수 |
 | 21~22주 검증·근본 원인 | 시작 전 | — | |
 | 23~24주 최종 보고서 | 시작 전 | — | |
 

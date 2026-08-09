@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Android 앱 보안 분석 5~6주차 - apktool·jadx 정적 분석과 자작 리포트 도구"
-date: 2026-08-09
+date: 2026-08-09 09:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 정적분석, jadx, apktool, aapt2, APK, DEX, AndroidManifest, WebView, addJavascriptInterface, 딥링크, exported, 데이터흐름, taint, Kotlin, Metadata, 취약점분석, 학습기록]

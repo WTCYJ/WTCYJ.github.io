@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Android 앱 보안 분석 11~12주차 - InsecureShop 미니 모의진단"
-date: 2026-08-09
+date: 2026-08-09 12:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 모의진단, MASVS, MASTG, OWASP, InsecureShop, 딥링크, WebView, ContentProvider, protectionLevel, 하드코딩자격증명, 취약점진단, 보고서, 학습기록]

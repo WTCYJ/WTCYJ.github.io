@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Android 앱 보안 분석 1~4주차 - 구조 실측과 분석 대상 앱 제작"
-date: 2026-08-08
+date: 2026-08-08 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 학습기록, APK, DEX, AndroidManifest, Sandbox, SELinux, UID, 앱수명주기, Kotlin, adb, 에뮬레이터, AVD, aapt2, apkanalyzer, 취약점분석, exported, ScopedStorage, SharedPreferences, 정적분석, 동적분석]

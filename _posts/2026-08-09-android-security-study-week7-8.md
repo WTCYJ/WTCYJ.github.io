@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Android 앱 보안 분석 7~8주차 - 동적 분석으로 검증한 컴포넌트 노출과 평문 통신"
-date: 2026-08-09
+date: 2026-08-09 10:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 동적분석, adb, logcat, 프록시, MITM, 평문통신, cleartext, exported, IntentExtra, 인가우회, ScopedStorage, 경로이탈, PathTraversal, WebView, 회귀테스트, 학습기록]
