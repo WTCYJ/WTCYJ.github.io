@@ -11,7 +11,7 @@ excerpt: "앞선 구간에서 재현해둔 약점 10건을 실제로 고치고, 
 > **진행 구간**: 24주 로드맵의 9~10주차 (취약점 유형별 점검·수정)
 > **대상**: `kr.wtcy.memovault` · AVD `sec-api33` (Android 13, API 33)
 > **구성**: 앱 → `https://10.0.2.2:8443` (자체 서명 인증서, network security config 로 고정)
-> **이전 글**: [7~8주차 동적 분석](/posts/android-security-study-week7-8/) · [5~6주차](/posts/android-security-study-week5-6/) · [24주 로드맵](/posts/android-security-study-roadmap/)
+> **이전 글**: [7~8주차](/posts/android-security-study-week7-8/) · [5~6주차](/posts/android-security-study-week5-6/) · [24주 로드맵](/posts/android-security-study-roadmap/) · **다음** [11~12주차 미니 모의진단](/posts/android-security-study-week11-12/)
 
 ---
 
