@@ -11,7 +11,7 @@ excerpt: "24주 로드맵의 첫 4주를 진행한 기록입니다. Android 앱 
 > **진행 구간**: 24주 로드맵의 1~4주차
 > **환경**: Windows 11 호스트 · AVD `sec-api33`(Android 13, API 33, 보안 패치 2024-03-01) · Gradle 8.9 + AGP 8.7.2 + Kotlin 2.0.21 + JBR 21
 > **산출물**: 스터디 작업 디렉터리, 관측 자동화 스크립트 6종, 로컬 테스트 API, 테스트 앱 `kr.wtcy.memovault`
-> **관련 글**: [Android 보안·취약점 분석 24주 학습 로드맵](/posts/android-security-study-roadmap/)
+> **관련 글**: [24주 학습 로드맵](/posts/android-security-study-roadmap/) · [5~6주차 정적 분석](/posts/android-security-study-week5-6/)
 
 ---
 
@@ -193,11 +193,23 @@ GET  /memos  -> 200
 POST /upload -> 201
 ```
 
+![MemoVault 로그인 화면. 에뮬레이터 sec-api33에서 실행 중이며 아이디·비밀번호 입력란과 로그인 버튼, 하단에 접속 서버 주소 http://10.0.2.2:8099가 표시돼 있다](/assets/img/android-security-study/01-login.png)
+
+로그인 후 메모 목록입니다. 여기서 한 가지가 바로 눈에 띕니다.
+
+![메모 목록 화면. 상단에 "사용자: alice"로 로그인돼 있는데 목록에는 alice의 메모(장보기, 스터디 메모)뿐 아니라 bob의 메모(회의 요약, 비밀 메모)까지 함께 나열돼 있다](/assets/img/android-security-study/02-memo-list.png)
+
+`alice`로 로그인했는데 `bob`의 메모까지 보입니다. 서버가 토큰 주인을 확인하지 않고 전체 목록을 내려주기 때문입니다. 일부러 남겨둔 인가 결함이고, 앱의 클라이언트 측 인가 문제와 짝을 이룹니다.
+
 ```
 D MemoVault: submit credentials u=alice p=alice123 key=mv_live_7c1f9a3e...
 ```
 
 첫 줄에서 비밀번호와 API 키가 그대로 logcat에 찍힙니다. 심어둔 대로입니다.
+
+3~4주차 과제에 있던 파일 업로드도 붙였습니다. 메모 상세에서 첨부를 올리면 서버 저장 이름과 로컬 사본 경로가 함께 표시됩니다.
+
+![메모 상세 화면에서 첨부 파일 업로드 버튼을 누른 결과. "업로드 완료: 0001-memo-1786235238359.txt (29 bytes)"와 로컬 사본 경로가 표시돼 있다](/assets/img/android-security-study/03-attach-upload.png)
 
 ---
 
@@ -259,7 +271,11 @@ adb shell am start -n kr.wtcy.memovault/.MemoDetailActivity \
   --es attach_path /data/data/kr.wtcy.memovault/shared_prefs/session.xml
 ```
 
-서버에 `session.xml`이 올라왔습니다. 내용은 이렇습니다.
+서버에 `session.xml`이 올라왔습니다. 앱 화면이 그 결과를 그대로 보여줍니다.
+
+![메모 상세 화면 하단에 "업로드 완료: 0002-session.xml (213 bytes)"와 로컬 사본 경로가 표시돼 있다. 외부 인텐트로 지정한 앱 내부 세션 파일이 서버로 전송된 결과](/assets/img/android-security-study/04-exfil-session.png)
+
+올라간 파일 내용은 이렇습니다.
 
 ```xml
 <string name="auth_token">mvt_alice_0001</string>
