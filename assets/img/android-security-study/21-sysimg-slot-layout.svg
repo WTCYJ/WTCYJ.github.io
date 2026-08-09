@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" role="img" aria-label="같은 패키지의 두 리비전을 SDK 트리에 공존시키는 디렉터리 구조도">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ph{fill:#cdd8e8;font:600 14px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .cd{fill:#dfe7f5;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .dim{fill:#6f7f99;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .bad{fill:#ff4d6a;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .good{fill:#ffb63d;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .mag{fill:#ff2bd6;font:600 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1;rx:6}
+  </style>
+  <rect class="bg" width="900" height="470"/>
+  <text class="ttl" x="28" y="38">같은 패키지의 두 리비전을 한 SDK 에 두기</text>
+  <text class="sub" x="28" y="61">android-31 / default / x86_64 는 표준 경로가 한 칸뿐입니다. 리비전 두 개를 동시에 놓을 수 없습니다.</text>
+
+  <rect class="box" x="28" y="84" width="400" height="150"/>
+  <text class="ph"  x="46" y="110">표준 경로 &#8212; 칸이 하나</text>
+  <text class="dim" x="46" y="138">$ANDROID_HOME/</text>
+  <text class="dim" x="60" y="158">system-images/android-31/default/</text>
+  <text class="cd"  x="74" y="178">x86_64/  &#8592; 여기에 한 리비전만</text>
+  <text class="bad" x="46" y="208">r03 과 r05 중 하나를 버려야 함</text>
+
+  <rect class="box" x="472" y="84" width="400" height="150"/>
+  <text class="ph"  x="490" y="110">슬롯별 트리 &#8212; 칸을 늘림</text>
+  <text class="dim" x="490" y="138">$ANDROID_HOME/</text>
+  <text class="cd"  x="504" y="158">system-images<tspan class="mag">-r03</tspan>/android-31/default/x86_64/</text>
+  <text class="cd"  x="504" y="178">system-images<tspan class="mag">-r05</tspan>/android-31/default/x86_64/</text>
+  <text class="good" x="490" y="208">뒤 세 칸은 표준과 동일하게 유지</text>
+
+  <rect class="box" x="28" y="252" width="844" height="90"/>
+  <text class="ph"  x="46" y="278">AVD 는 config.ini 한 줄로 자기 이미지를 고릅니다</text>
+  <text class="cd"  x="46" y="304">image.sysdir.1 = <tspan class="mag">system-images-r03</tspan>\android-31\default\x86_64\</text>
+  <text class="sub" x="46" y="326">이 값은 <tspan class="cd">$ANDROID_HOME</tspan> 기준 상대 경로입니다. 절대 경로에 기대지 않아도 됩니다.</text>
+
+  <rect class="box" x="28" y="360" width="844" height="86"/>
+  <text class="ph"  x="46" y="386">해석 방식은 추측이 아니라 부팅 산출물에서 확인했습니다</text>
+  <text class="cd"  x="46" y="410">hardware-qemu.ini:  kernel.path = &lt;SDK루트&gt;\system-images-r03\android-31\default\x86_64\\kernel-ranchu</text>
+  <text class="sub" x="46" y="432">SDK 루트 문자열 뒤에 값이 그대로 이어 붙습니다. 끝의 <tspan class="cd">\\</tspan> 가 단순 문자열 연결임을 보여줍니다.</text>
+</svg>

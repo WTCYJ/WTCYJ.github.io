@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 450" width="900" height="450" role="img" aria-label="시작 상태를 스냅샷 복원에서 냉부팅으로 바꾸자 가짜 차이가 사라진 것을 보여주는 비교도">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ph{fill:#cdd8e8;font:600 14px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .cd{fill:#dfe7f5;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .minus{fill:#ff4d6a;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .plus{fill:#4ddb9a;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .bad{fill:#ff4d6a;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .good{fill:#ffb63d;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1;rx:6}
+  </style>
+  <rect class="bg" width="900" height="450"/>
+  <text class="ttl" x="28" y="38">같은 두 이미지, 시작 상태만 바꾼 두 번의 대조</text>
+  <text class="sub" x="28" y="61">프로브도 이미지도 그대로입니다. 실행 전 상태를 맞추는 방법만 바꿨습니다.</text>
+
+  <rect class="box" x="28" y="84" width="844" height="132"/>
+  <text class="ph"    x="46" y="110">① clean 스냅샷 복원으로 시작</text>
+  <text class="minus" x="46" y="136">- ro.build.id                    SE1A.220621.001</text>
+  <text class="plus"  x="46" y="154">+ ro.build.id                    SE1A.220826.006.A1</text>
+  <text class="minus" x="46" y="176">- mDefaultPhoneApp=ComponentInfo{com.android.dialer/...DialtactsActivity}</text>
+  <text class="plus"  x="46" y="194">+ mDefaultPhoneApp=null</text>
+  <text class="bad"   x="560" y="176">&#8592; 이미지 차이처럼 보임</text>
+
+  <rect class="box" x="28" y="234" width="844" height="104"/>
+  <text class="ph"    x="46" y="260">② -wipe-data 냉부팅으로 시작</text>
+  <text class="minus" x="46" y="286">- ro.build.id                    SE1A.220621.001</text>
+  <text class="plus"  x="46" y="304">+ ro.build.id                    SE1A.220826.006.A1</text>
+  <text class="good"  x="46" y="328">mDefaultPhoneApp 차이는 나타나지 않음 &#8212; 빌드 지문만 남음</text>
+
+  <rect class="box" x="28" y="356" width="844" height="76"/>
+  <text class="ph"  x="46" y="382">그 차이는 이미지가 아니라 스냅샷을 뜬 시점의 흔적이었습니다</text>
+  <text class="sub" x="46" y="406">두 스냅샷은 각자 첫 부팅 뒤 서로 다른 시점에 저장됐습니다. 그 시점 차이가 게스트 상태로 굳어</text>
+  <text class="sub" x="46" y="426">대조에 따라 나온 것입니다. 시작 상태를 공장 초기화로 바꾸자 사라졌습니다.</text>
+</svg>
