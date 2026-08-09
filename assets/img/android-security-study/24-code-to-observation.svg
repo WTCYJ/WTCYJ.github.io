@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" role="img" aria-label="디컴파일한 코드의 검사식과 기기에서 측정한 거부 지점이 서로 대응하는 것을 보여주는 도식">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ph{fill:#cdd8e8;font:600 14px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .cd{fill:#dfe7f5;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .step{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .pred{fill:#ffb63d;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .meas{fill:#ff2bd6;font:600 14px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1;rx:6}
+    .arw{stroke:#3a4a63;stroke-width:1.5;marker-end:url(#a)}
+  </style>
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#3a4a63"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="900" height="470"/>
+  <text class="ttl" x="28" y="38">코드가 예측한 값이 기기에서 그대로 나왔다</text>
+  <text class="sub" x="28" y="61">두 이미지에서 services.jar 를 뽑아 ZenModeHelper 를 디컴파일하고, 같은 프로브로 측정했습니다.</text>
+
+  <rect class="box" x="28" y="84" width="410" height="188"/>
+  <text class="ph"   x="46" y="110">r03 &#8212; 보안 패치 2022-08-01</text>
+  <text class="cd"   x="46" y="138">if (newRuleInstanceCount &gt; 100 || &#8230;)</text>
+  <text class="step" x="46" y="166">세는 함수: getCurrentInstanceCount(<tspan fill="#ff4d6a">컴포넌트</tspan>)</text>
+  <line class="arw" x1="60" y1="180" x2="60" y2="200"/>
+  <text class="pred" x="46" y="220">예측 &#8212; 컴포넌트 5개면 5 &#215; 100 = 500까지</text>
+  <text class="meas" x="46" y="250">실측: 501에서 거부 (2회 재현)</text>
+
+  <rect class="box" x="462" y="84" width="410" height="188"/>
+  <text class="ph"   x="480" y="110">r05 &#8212; 보안 패치 2022-10-01</text>
+  <text class="cd"   x="480" y="138">if (newPackageRuleCount &gt; 100 || &#8230;)</text>
+  <text class="step" x="480" y="166">세는 함수: getPackageRuleCount(<tspan fill="#ffb63d">패키지</tspan>)</text>
+  <line class="arw" x1="494" y1="180" x2="494" y2="200"/>
+  <text class="pred" x="480" y="220">예측 &#8212; 컴포넌트를 늘려도 100까지</text>
+  <text class="meas" x="480" y="250">실측: 101에서 거부</text>
+
+  <rect class="box" x="28" y="290" width="844" height="72"/>
+  <text class="ph"  x="46" y="316">그 외에는 같은 코드입니다</text>
+  <text class="sub" x="46" y="340">디컴파일한 ZenModeHelper 1,541행 중 두 이미지가 다른 줄은 <tspan fill="#ff2bd6">17줄</tspan>이고, 전부 이 패치입니다.</text>
+
+  <rect class="box" x="28" y="380" width="844" height="66"/>
+  <text class="ph"  x="46" y="406">한도는 전역이 아니라 패키지별입니다</text>
+  <text class="sub" x="46" y="430">r05 에서 프로브 규칙 100개와 <tspan class="cd">pkg=android</tspan> 규칙 2개가 함께 존재했습니다(합계 102).</text>
+</svg>
