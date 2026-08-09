@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" width="900" height="520" role="img" aria-label="앱에서 시스템 서버로 가는 호출 흐름과 신뢰 경계, 그리고 한도 계산이 어떤 값을 키로 썼는지 보여주는 도식">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ph{fill:#cdd8e8;font:600 14px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .cd{fill:#dfe7f5;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .trust{fill:#4ddb9a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .untrust{fill:#ff4d6a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .fix{fill:#ffb63d;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .bad{fill:#ff4d6a;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1;rx:6}
+    .bnd{stroke:#ff2bd6;stroke-width:1.5;stroke-dasharray:6 4}
+    .arw{stroke:#3a4a63;stroke-width:1.5;marker-end:url(#a)}
+  </style>
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#3a4a63"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="900" height="520"/>
+  <text class="ttl" x="28" y="36">한도 계산이 무엇을 키로 삼았는가</text>
+  <text class="sub" x="28" y="59">Binder 를 건너오면 시스템이 믿을 수 있는 값과 호출자가 정하는 값이 갈립니다.</text>
+
+  <rect class="box" x="28" y="80" width="330" height="118"/>
+  <text class="ph"      x="46" y="106">앱 (kr.wtcy.zenprobe)</text>
+  <text class="cd"      x="46" y="130">nm.addAutomaticZenRule(rule)</text>
+  <text class="untrust" x="46" y="158">rule 의 모든 필드는 앱이 정한다</text>
+  <text class="note"    x="46" y="178">name · owner · configurationActivity · conditionId</text>
+
+  <line class="bnd" x1="380" y1="72" x2="380" y2="470"/>
+  <text class="ph" x="388" y="72" fill="#ff2bd6">Binder 경계</text>
+
+  <rect class="box" x="412" y="80" width="460" height="118"/>
+  <text class="ph"    x="430" y="106">system_server &#8212; NotificationManagerService</text>
+  <text class="cd"    x="430" y="130">checkCallerIsSameApp(pkg)</text>
+  <text class="trust" x="430" y="152">&#8594; 호출 UID 로 패키지를 확인한다 (인증된 신원)</text>
+  <text class="cd"    x="430" y="176">enforcePolicyAccess(callingUid)</text>
+
+  <line class="arw" x1="196" y1="200" x2="196" y2="222"/>
+  <line class="arw" x1="640" y1="200" x2="640" y2="222"/>
+
+  <rect class="box" x="28" y="228" width="844" height="150"/>
+  <text class="ph"  x="46" y="254">ZenModeHelper.addAutomaticZenRule &#8212; 개수를 센다</text>
+
+  <text class="cd"      x="46" y="284">getCurrentInstanceCount(</text>
+  <text class="untrust" x="230" y="284">rule.configurationActivity</text>
+  <text class="cd"      x="404" y="284">)</text>
+  <text class="bad"     x="440" y="284">&#8592; 패치 전: 앱이 정하는 값이 키</text>
+  <text class="note"    x="46"  y="306">별칭을 하나 더 선언하면 카운터가 하나 더 생깁니다. 매니페스트 한 줄 비용입니다.</text>
+
+  <text class="cd"    x="46" y="340">getPackageRuleCount(</text>
+  <text class="trust" x="206" y="340">pkg</text>
+  <text class="cd"    x="240" y="340">)</text>
+  <text class="fix"   x="440" y="340">&#8592; 패치 후: 인증된 신원이 키</text>
+  <text class="note"  x="46"  y="362">이 값은 이미 <tspan class="cd">rule.pkg</tspan> 로 저장되고 있었습니다. 새로 만든 상태가 없습니다.</text>
+
+  <rect class="box" x="28" y="396" width="844" height="98"/>
+  <text class="ph"  x="46" y="422">결함의 한 줄 요약</text>
+  <text class="sub" x="46" y="448">자원 한도의 키를 <tspan class="untrust">호출자가 바꿀 수 있는 값</tspan>으로 잡았습니다.</text>
+  <text class="sub" x="46" y="470">쿼터는 <tspan class="trust">신뢰 경계에서 인증된 주체</tspan>를 키로 세어야 하고, 그 값은 이미 손에 있었습니다.</text>
+</svg>
