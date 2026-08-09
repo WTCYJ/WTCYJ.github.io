@@ -344,7 +344,9 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 
 ## 9. 진행 기록
 
-진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/) · [9~10주차](/posts/android-security-study-week9-10/) · [11~12주차](/posts/android-security-study-week11-12/) · [13~14주차](/posts/android-security-study-week13-14/) · [15~16주차](/posts/android-security-study-week15-16/) · [17주차](/posts/android-security-study-week17/) · [18주차](/posts/android-security-study-week18/) · [19주차](/posts/android-security-study-week19/) · [20주차](/posts/android-security-study-week20/) · [21주차](/posts/android-security-study-week21/) · [22주차](/posts/android-security-study-week22/)
+**24주 전 구간을 완주했습니다(2026-08-09).** 마지막 구간의 결과물은 [23~24주차 최종 보고서](/posts/android-security-study-week23-24/) 이고, 재현 대상은 CVE-2022-20425 였습니다.
+
+진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/) · [9~10주차](/posts/android-security-study-week9-10/) · [11~12주차](/posts/android-security-study-week11-12/) · [13~14주차](/posts/android-security-study-week13-14/) · [15~16주차](/posts/android-security-study-week15-16/) · [17주차](/posts/android-security-study-week17/) · [18주차](/posts/android-security-study-week18/) · [19주차](/posts/android-security-study-week19/) · [20주차](/posts/android-security-study-week20/) · [21주차](/posts/android-security-study-week21/) · [22주차](/posts/android-security-study-week22/) · [23~24주차 최종 보고서](/posts/android-security-study-week23-24/)
 
 아래는 이 계획을 8주차까지 따라간 결과물입니다. 3~4주차에 직접 작성해 5주차부터 분석 대상으로 쓰고 있는 테스트 앱 `kr.wtcy.memovault`가 `sec-api33` 에뮬레이터에서 도는 화면입니다.
 
@@ -368,7 +370,7 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 | 20주 프로브 작성·대조 실행 | **완료** | 2026-08-09 | CVE-2022-20425 재현 — 한도가 컴포넌트당 100에서 패키지당 100으로 바뀐 것 확인 |
 | 21주 안전한 검증 | **완료** | 2026-08-09 | services.jar/framework.jar 디컴파일 대조 — ZenModeHelper 17줄 외 경로 클래스 동일 |
 | 22주 근본 원인 분석 | **완료** | 2026-08-09 | 결함=쿼터의 키를 호출자가 정함. 수정은 인증된 pkg 로 키 교체 |
-| 23~24주 최종 보고서 | 시작 전 | — | |
+| 23~24주 최종 보고서 | **완료** | 2026-08-09 | 10절 목차 + 적대적 재검토. C=3 측정으로 대안 모델 배제 |
 
 ---
 

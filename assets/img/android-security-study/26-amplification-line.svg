@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" role="img" aria-label="컴포넌트 수에 따른 거부 지점 그래프. 패치 전은 100 곱하기 컴포넌트 수 더하기 1 직선 위에 놓이고, 패치 후는 컴포넌트 수와 무관하게 101에서 평평하다">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .axis{stroke:#2a3548;stroke-width:1}
+    .grid{stroke:#161f2e;stroke-width:1}
+    .lab{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .pt{fill:#ff2bd6}
+    .pt2{fill:#4ddb9a}
+    .l1{stroke:#ff2bd6;stroke-width:2;fill:none}
+    .l2{stroke:#4ddb9a;stroke-width:2;fill:none}
+    .val{fill:#f2f6ff;font:600 13px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .leg{fill:#cdd8e8;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1;rx:6}
+  </style>
+  <rect class="bg" width="900" height="470"/>
+  <text class="ttl" x="28" y="36">컴포넌트 수를 바꿔 가며 잰 거부 지점</text>
+  <text class="sub" x="28" y="59">C=3 을 재기 전에는 &#8220;컴포넌트당 100&#8221; 과 &#8220;전역 500 천장&#8221; 이 같은 데이터에 들어맞았습니다.</text>
+
+  <line class="axis" x1="120" y1="380" x2="700" y2="380"/>
+  <line class="axis" x1="120" y1="100" x2="120" y2="380"/>
+  <line class="grid" x1="120" y1="333" x2="700" y2="333"/>
+  <line class="grid" x1="120" y1="240" x2="700" y2="240"/>
+  <line class="grid" x1="120" y1="146" x2="700" y2="146"/>
+  <text class="lab" x="112" y="337" text-anchor="end">100</text>
+  <text class="lab" x="112" y="244" text-anchor="end">300</text>
+  <text class="lab" x="112" y="150" text-anchor="end">500</text>
+  <text class="lab" x="112" y="384" text-anchor="end">0</text>
+  <text class="lab" x="150" y="400" text-anchor="middle">C=1</text>
+  <text class="lab" x="400" y="400" text-anchor="middle">C=3</text>
+  <text class="lab" x="650" y="400" text-anchor="middle">C=5</text>
+  <text class="lab" x="410" y="424" text-anchor="middle">configurationActivity 로 쓴 컴포넌트 수</text>
+  <text class="lab" x="40"  y="90">거부된 순번</text>
+
+  <polyline class="l1" points="150,333 400,240 650,146"/>
+  <circle class="pt" cx="150" cy="333" r="5"/>
+  <circle class="pt" cx="400" cy="240" r="5"/>
+  <circle class="pt" cx="650" cy="146" r="5"/>
+  <text class="val" x="162" y="326" fill="#ff2bd6">101</text>
+  <text class="val" x="412" y="233" fill="#ff2bd6">301</text>
+  <text class="val" x="662" y="139" fill="#ff2bd6">501</text>
+
+  <polyline class="l2" points="150,333 400,333 650,333"/>
+  <circle class="pt2" cx="400" cy="333" r="5"/>
+  <circle class="pt2" cx="650" cy="333" r="5"/>
+  <text class="val" x="662" y="352" fill="#4ddb9a">101</text>
+
+  <rect class="box" x="716" y="120" width="156" height="96"/>
+  <text class="leg" x="732" y="146" fill="#ff2bd6">&#9679; r03 &#8212; 패치 전</text>
+  <text class="lab" x="732" y="166">100 &#215; C + 1</text>
+  <text class="leg" x="732" y="192" fill="#4ddb9a">&#9679; r05 &#8212; 패치 후</text>
+  <text class="lab" x="732" y="210">C 와 무관하게 101</text>
+
+  <text class="sub" x="28" y="452">세 점이 모두 직선 위에 놓여, 컴포넌트 단위로 센다는 설명만 남습니다.</text>
+</svg>
