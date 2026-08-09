@@ -11,7 +11,7 @@ excerpt: "지금까지는 답을 아는 제 앱이 대상이었습니다. 이번
 > **진행 구간**: 24주 로드맵의 11~12주차 (미니 모의진단)
 > **대상**: InsecureShop `com.insecureshop` v1.0 · SHA-256 `a83298ae…07d4d1bd`
 > **환경**: AVD `sec-api33` (Android 13, API 33) · apktool · jadx 1.5.5 · adb
-> **이전 글**: [9~10주차 취약점 수정](/posts/android-security-study-week9-10/) · [7~8주차](/posts/android-security-study-week7-8/) · [24주 로드맵](/posts/android-security-study-roadmap/)
+> **이전 글**: [9~10주차](/posts/android-security-study-week9-10/) · [7~8주차](/posts/android-security-study-week7-8/) · [24주 로드맵](/posts/android-security-study-roadmap/) · **다음** [13~14주차 네이티브·런타임](/posts/android-security-study-week13-14/)
 
 ---
 
