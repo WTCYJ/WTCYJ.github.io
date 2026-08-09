@@ -11,7 +11,7 @@ excerpt: "readelf도 NDK도 없는 환경에서 파이썬으로 ELF 파서를 �
 > **진행 구간**: 24주 로드맵의 13~14주차 (네이티브·런타임 기초)
 > **대상 1**: `libexample_nativelib.so` (x86_64, 295,144 bytes, NDK r25b, stripped)
 > **대상 2**: `kr.wtcy.memovault` 를 같은 소스로 debug / R8 release 두 벌 빌드
-> **이전 글**: [11~12주차 미니 모의진단](/posts/android-security-study-week11-12/) · [9~10주차](/posts/android-security-study-week9-10/) · [24주 로드맵](/posts/android-security-study-roadmap/)
+> **이전 글**: [11~12주차](/posts/android-security-study-week11-12/) · [9~10주차](/posts/android-security-study-week9-10/) · [24주 로드맵](/posts/android-security-study-roadmap/) · **다음** [15~16주차 시스템 보안](/posts/android-security-study-week15-16/)
 
 ---
 

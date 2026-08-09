@@ -344,7 +344,7 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 
 ## 9. 진행 기록
 
-진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/) · [9~10주차](/posts/android-security-study-week9-10/) · [11~12주차](/posts/android-security-study-week11-12/) · [13~14주차](/posts/android-security-study-week13-14/)
+진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/) · [9~10주차](/posts/android-security-study-week9-10/) · [11~12주차](/posts/android-security-study-week11-12/) · [13~14주차](/posts/android-security-study-week13-14/) · [15~16주차](/posts/android-security-study-week15-16/)
 
 아래는 이 계획을 8주차까지 따라간 결과물입니다. 3~4주차에 직접 작성해 5주차부터 분석 대상으로 쓰고 있는 테스트 앱 `kr.wtcy.memovault`가 `sec-api33` 에뮬레이터에서 도는 화면입니다.
 
@@ -360,7 +360,7 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 | 9~10주 취약점 유형 | **완료** | 2026-08-09 | 약점 10건 수정 후 동일 스크립트 재실행 — 전부 재현 불가 |
 | 11~12주 미니 모의진단 | **완료** | 2026-08-09 | InsecureShop 진단, 12건 확인(기기 재현 8·정적 근거 4) |
 | 13~14주 네이티브·런타임 | **완료** | 2026-08-09 | ELF 심볼 직접 파싱, R8 난독화 전후 리포트 대조 |
-| 15~16주 시스템 보안 | 시작 전 | — | |
+| 15~16주 시스템 보안 | **완료** | 2026-08-09 | Binder 2층 강제 확인, API 33/16 비교, Verified Boot는 에뮬레이터 한계 |
 | 환경 구성 (단계 B) | 시작 전 | — | Linux/KVM · Cuttlefish 2 인스턴스 |
 | 17주 Cuttlefish 실습 | 시작 전 | — | |
 | 18주 CVE 선정 | 시작 전 | — | |
