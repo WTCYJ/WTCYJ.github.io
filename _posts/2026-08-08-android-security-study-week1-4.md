@@ -11,7 +11,7 @@ excerpt: "24주 로드맵의 첫 4주를 진행한 기록입니다. Android 앱 
 > **진행 구간**: 24주 로드맵의 1~4주차
 > **환경**: Windows 11 호스트 · AVD `sec-api33`(Android 13, API 33, 보안 패치 2024-03-01) · Gradle 8.9 + AGP 8.7.2 + Kotlin 2.0.21 + JBR 21
 > **산출물**: 스터디 작업 디렉터리, 관측 자동화 스크립트 6종, 로컬 테스트 API, 테스트 앱 `kr.wtcy.memovault`
-> **관련 글**: [24주 학습 로드맵](/posts/android-security-study-roadmap/) · [5~6주차 정적 분석](/posts/android-security-study-week5-6/)
+> **관련 글**: [24주 학습 로드맵](/posts/android-security-study-roadmap/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/)
 
 ---
 

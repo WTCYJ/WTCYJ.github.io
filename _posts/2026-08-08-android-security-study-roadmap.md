@@ -309,7 +309,11 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 
 ## 9. 진행 기록
 
-진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/)
+진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/)
+
+아래는 이 계획을 8주차까지 따라간 결과물입니다. 3~4주차에 직접 작성해 5주차부터 분석 대상으로 쓰고 있는 테스트 앱 `kr.wtcy.memovault`가 `sec-api33` 에뮬레이터에서 도는 화면입니다.
+
+![MemoVault 메모 목록 화면. 상단에 "사용자: alice"로 로그인돼 있고 새로고침·공지사항 보기·로그아웃 버튼과 메모 입력란이 있으며, 목록에는 alice와 bob의 메모가 함께 나열돼 있다](/assets/img/android-security-study/02-memo-list.png)
 
 | 구간 | 상태 | 갱신일 | 비고 |
 | --- | --- | --- | --- |
@@ -317,7 +321,7 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 | 1~2주 Android 구조 | **완료** | 2026-08-08 | DEX 헤더 실측 디코딩, UID/SELinux 두 겹 격리 확인 |
 | 3~4주 테스트 앱 작성 | **완료** | 2026-08-08 | `kr.wtcy.memovault` (로그인·메모·파일 업로드), 약점 10개 배치 |
 | 5~6주 정적 분석 | **완료** | 2026-08-09 | 표 9종 생성, 심어둔 약점 10개 중 7개 자동 탐지 |
-| 7~8주 동적 분석 | 시작 전 | — | |
+| 7~8주 동적 분석 | **완료** | 2026-08-09 | 관찰 프록시 + `verify-dynamic.sh`로 약점 10개 전부 기기 재현 |
 | 9~10주 취약점 유형 | 시작 전 | — | |
 | 11~12주 미니 모의진단 | 시작 전 | — | |
 | 13~14주 네이티브·런타임 | 시작 전 | — | |

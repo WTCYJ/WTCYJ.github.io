@@ -11,7 +11,7 @@ excerpt: "직접 만든 앱을 APK에서부터 다시 분석했습니다. 심어
 > **진행 구간**: 24주 로드맵의 5~6주차 (정적 분석)
 > **대상**: `kr.wtcy.memovault` debug APK · 5,945,029 bytes · SHA-256 `d1815d75…c71cdd01`
 > **도구**: apktool · jadx 1.5.5 · aapt2 34.0.0 · 자작 리포트 스크립트
-> **이전 글**: [1~4주차 진행 기록](/posts/android-security-study-week1-4/) · [24주 로드맵](/posts/android-security-study-roadmap/)
+> **이전 글**: [1~4주차](/posts/android-security-study-week1-4/) · [24주 로드맵](/posts/android-security-study-roadmap/) · **다음** [7~8주차 동적 분석](/posts/android-security-study-week7-8/)
 
 ---
 
@@ -74,6 +74,14 @@ adb shell am start -a android.intent.action.VIEW -d "memovault://notice"
 **여기서 한 번 잘못 결론 낼 뻔했습니다.** 처음 캡처에서는 "브릿지 상태: 없음"이라고 나왔습니다. 테스트 페이지가 `window.MemoBridge`를 찾고 있었는데 앱이 붙인 실제 이름은 `MemoVaultBridge`였습니다. 이름 하나 안 맞아서 "노출 안 됨"으로 읽힐 뻔했습니다.
 
 탐지 스크립트가 이름 후보를 순회하도록 고치고 다시 찍으니 위 화면이 나왔습니다. `Object.keys()`로는 브릿지 멤버가 비어 나와서 `for..in`으로 프로토타입 체인까지 훑어야 했던 것도 이때 알았습니다. **없다는 결과는 "없다"가 아니라 "내 방법으로는 못 찾았다"입니다.**
+
+그런데 "노출됐다"와 "호출해서 값을 꺼낼 수 있다"는 다른 주장입니다. 열거에서 멈추지 말고 실제로 불러봤습니다.
+
+![공지 페이지의 "브릿지 호출 결과" 상자에 getSessionToken() → mvt_alice_0001, getUsername() → alice, getApiKey() → mv_live_7c1f9a3e42b8d05612ff8ab34c7e9d20, readFile('/proc/self/cmdline') → kr.wtcy.memovault 가 출력돼 있다](/assets/img/android-security-study/09-bridge-exfil.png)
+
+딥링크로 연 웹페이지가 앱의 세션 토큰과 사용자명, API 키를 그대로 읽어냈습니다. `readFile`은 앱 권한으로 파일까지 읽어 돌려줍니다.
+
+`addJavascriptInterface` 한 줄과 URL 검증 누락 한 줄이 겹치면 이렇게 됩니다. 둘 중 하나만 있었으면 이 화면은 안 나왔을 겁니다 — 브릿지가 있어도 우리 페이지만 로드했다면, URL이 자유로워도 브릿지가 없었다면. **취약점이 하나씩 있을 때보다 겹칠 때 급이 달라진다**는 걸 화면으로 봤습니다.
 
 ---
 
