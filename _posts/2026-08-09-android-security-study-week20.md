@@ -267,6 +267,8 @@ adb shell settings get secure enabled_notification_policy_access_packages
 
 ### 완성된 측정 행렬
 
+![컴포넌트 수 1부터 6까지 잰 거부 지점이 100×C+1 직선 위에 모두 놓이고, 패치 후 이미지는 컴포넌트 수와 무관하게 101에서 평평한 그래프](/assets/img/android-security-study/26-amplification-line.svg)
+
 | 컴포넌트 수 C | 예측 `100·C+1` | r03 (2022-08-01) | r05 (2022-10-01) |
 | --- | --- | --- | --- |
 | 1 | 101 | **101** | 101 |
@@ -277,6 +279,8 @@ adb shell settings get secure enabled_notification_policy_access_packages
 | 6 | 601 | **601** | 101 |
 
 본문에서 `—` 로 비워뒀던 칸(r05 · 5컴포넌트 · 600회)도 채웠습니다. **101** 로, 시도 횟수를 늘려도 그대로입니다.
+
+본문 3-2 의 표와 그림은 게시 당시의 두 조건(컴포넌트 1개·5개)만 담고 있습니다. 위 행렬이 이후 채운 전체입니다.
 
 ### 범위를 명시합니다
 
