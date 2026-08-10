@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" role="img" aria-label="컴포넌트 수 1부터 5까지 잰 거부 지점 그래프. 패치 전은 100 곱하기 컴포넌트 수 더하기 1 직선 위에 다섯 점이 모두 놓이고, 패치 후는 컴포넌트 수와 무관하게 101에서 평평하다">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" role="img" aria-label="컴포넌트 수 1부터 6까지 잰 거부 지점 그래프. 패치 전은 100 곱하기 컴포넌트 수 더하기 1 직선 위에 여섯 점이 모두 놓이고, 패치 후는 컴포넌트 수와 무관하게 101에서 평평하다">
   <style>
     .bg{fill:#070a12}
     .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
@@ -15,54 +15,60 @@
     .box{fill:#0d1420;stroke:#1b2537;stroke-width:1;rx:6}
   </style>
   <rect class="bg" width="900" height="470"/>
-  <text class="ttl" x="28" y="36">컴포넌트 수를 1부터 5까지 바꿔 가며 잰 거부 지점</text>
-  <text class="sub" x="28" y="59">패치 전은 다섯 점이 모두 직선 위에 놓입니다. 패치 후는 컴포넌트를 늘려도 움직이지 않습니다.</text>
+  <text class="ttl" x="28" y="36">컴포넌트 수를 1부터 6까지 바꿔 가며 잰 거부 지점</text>
+  <text class="sub" x="28" y="59">패치 전은 여섯 점이 모두 직선 위에 놓입니다. 패치 후는 컴포넌트를 늘려도 움직이지 않습니다.</text>
 
   <line class="axis" x1="120" y1="380" x2="700" y2="380"/>
-  <line class="axis" x1="120" y1="100" x2="120" y2="380"/>
-  <line class="grid" x1="120" y1="333" x2="700" y2="333"/>
-  <line class="grid" x1="120" y1="286" x2="700" y2="286"/>
-  <line class="grid" x1="120" y1="240" x2="700" y2="240"/>
-  <line class="grid" x1="120" y1="193" x2="700" y2="193"/>
-  <line class="grid" x1="120" y1="146" x2="700" y2="146"/>
+  <line class="axis" x1="120" y1="120" x2="120" y2="380"/>
+  <line class="grid" x1="120" y1="340" x2="700" y2="340"/>
+  <line class="grid" x1="120" y1="300" x2="700" y2="300"/>
+  <line class="grid" x1="120" y1="260" x2="700" y2="260"/>
+  <line class="grid" x1="120" y1="220" x2="700" y2="220"/>
+  <line class="grid" x1="120" y1="180" x2="700" y2="180"/>
+  <line class="grid" x1="120" y1="140" x2="700" y2="140"/>
   <text class="lab" x="112" y="384" text-anchor="end">0</text>
-  <text class="lab" x="112" y="337" text-anchor="end">100</text>
-  <text class="lab" x="112" y="290" text-anchor="end">200</text>
-  <text class="lab" x="112" y="244" text-anchor="end">300</text>
-  <text class="lab" x="112" y="197" text-anchor="end">400</text>
-  <text class="lab" x="112" y="150" text-anchor="end">500</text>
+  <text class="lab" x="112" y="344" text-anchor="end">100</text>
+  <text class="lab" x="112" y="304" text-anchor="end">200</text>
+  <text class="lab" x="112" y="264" text-anchor="end">300</text>
+  <text class="lab" x="112" y="224" text-anchor="end">400</text>
+  <text class="lab" x="112" y="184" text-anchor="end">500</text>
+  <text class="lab" x="112" y="144" text-anchor="end">600</text>
   <text class="lab" x="150" y="400" text-anchor="middle">1</text>
-  <text class="lab" x="275" y="400" text-anchor="middle">2</text>
-  <text class="lab" x="400" y="400" text-anchor="middle">3</text>
-  <text class="lab" x="525" y="400" text-anchor="middle">4</text>
-  <text class="lab" x="650" y="400" text-anchor="middle">5</text>
+  <text class="lab" x="250" y="400" text-anchor="middle">2</text>
+  <text class="lab" x="350" y="400" text-anchor="middle">3</text>
+  <text class="lab" x="450" y="400" text-anchor="middle">4</text>
+  <text class="lab" x="550" y="400" text-anchor="middle">5</text>
+  <text class="lab" x="650" y="400" text-anchor="middle">6</text>
   <text class="lab" x="400" y="424" text-anchor="middle">configurationActivity 로 쓴 컴포넌트 수 C</text>
-  <text class="lab" x="40"  y="90">거부된 순번</text>
+  <text class="lab" x="40"  y="108">거부된 순번</text>
 
-  <polyline class="l1" points="150,333 275,286 400,240 525,193 650,146"/>
-  <circle class="pt" cx="150" cy="333" r="5"/>
-  <circle class="pt" cx="275" cy="286" r="5"/>
-  <circle class="pt" cx="400" cy="240" r="5"/>
-  <circle class="pt" cx="525" cy="193" r="5"/>
-  <circle class="pt" cx="650" cy="146" r="5"/>
-  <text class="val" x="160" y="326" fill="#ff2bd6">101</text>
-  <text class="val" x="285" y="279" fill="#ff2bd6">201</text>
-  <text class="val" x="410" y="233" fill="#ff2bd6">301</text>
-  <text class="val" x="535" y="186" fill="#ff2bd6">401</text>
-  <text class="val" x="660" y="139" fill="#ff2bd6">501</text>
+  <polyline class="l1" points="150,340 250,300 350,260 450,220 550,180 650,140"/>
+  <circle class="pt" cx="150" cy="340" r="5"/>
+  <circle class="pt" cx="250" cy="300" r="5"/>
+  <circle class="pt" cx="350" cy="260" r="5"/>
+  <circle class="pt" cx="450" cy="220" r="5"/>
+  <circle class="pt" cx="550" cy="180" r="5"/>
+  <circle class="pt" cx="650" cy="140" r="5"/>
+  <text class="val" x="160" y="333" fill="#ff2bd6">101</text>
+  <text class="val" x="260" y="293" fill="#ff2bd6">201</text>
+  <text class="val" x="360" y="253" fill="#ff2bd6">301</text>
+  <text class="val" x="460" y="213" fill="#ff2bd6">401</text>
+  <text class="val" x="560" y="173" fill="#ff2bd6">501</text>
+  <text class="val" x="660" y="133" fill="#ff2bd6">601</text>
 
-  <polyline class="l2" points="150,333 275,333 400,333 525,333 650,333"/>
-  <circle class="pt2" cx="275" cy="333" r="5"/>
-  <circle class="pt2" cx="400" cy="333" r="5"/>
-  <circle class="pt2" cx="525" cy="333" r="5"/>
-  <circle class="pt2" cx="650" cy="333" r="5"/>
-  <text class="val" x="660" y="352" fill="#4ddb9a">101</text>
+  <polyline class="l2" points="150,340 250,340 350,340 450,340 550,340 650,340"/>
+  <circle class="pt2" cx="250" cy="340" r="5"/>
+  <circle class="pt2" cx="350" cy="340" r="5"/>
+  <circle class="pt2" cx="450" cy="340" r="5"/>
+  <circle class="pt2" cx="550" cy="340" r="5"/>
+  <circle class="pt2" cx="650" cy="340" r="5"/>
+  <text class="val" x="660" y="359" fill="#4ddb9a">101</text>
 
-  <rect class="box" x="716" y="120" width="156" height="96"/>
-  <text class="leg" x="732" y="146" fill="#ff2bd6">&#9679; r03 &#8212; 패치 전</text>
-  <text class="lab" x="732" y="166">100 &#215; C + 1</text>
-  <text class="leg" x="732" y="192" fill="#4ddb9a">&#9679; r05 &#8212; 패치 후</text>
-  <text class="lab" x="732" y="210">C 와 무관하게 101</text>
+  <rect class="box" x="716" y="140" width="156" height="96"/>
+  <text class="leg" x="732" y="166" fill="#ff2bd6">&#9679; r03 &#8212; 패치 전</text>
+  <text class="lab" x="732" y="186">100 &#215; C + 1</text>
+  <text class="leg" x="732" y="212" fill="#4ddb9a">&#9679; r05 &#8212; 패치 후</text>
+  <text class="lab" x="732" y="230">C 와 무관하게 101</text>
 
-  <text class="sub" x="28" y="452">C=1 과 C=5 두 점만 있었을 때는 &#8220;전역 500 천장&#8221; 모델도 같은 데이터에 들어맞았습니다. 가운데 세 점이 그것을 배제합니다.</text>
+  <text class="sub" x="28" y="452">C=6 은 별칭을 하나 더 넣은 새 빌드로 쟀습니다. 같은 빌드로 C=5 를 다시 재 501 이 그대로인 것을 확인하고 표에 올렸습니다.</text>
 </svg>
