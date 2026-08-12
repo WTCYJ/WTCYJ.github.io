@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" role="img" aria-label="2023년 2월 Binder 보안 수정이 정렬 검사를 잃었고 2024년 6월에 그 검사를 되살리는 새 CVE 가 나온 회귀 관계를 보여주는 도식">
+<style>
+.bg{fill:#070a12}.ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+.sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.ph{fill:#cdd8e8;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.cd{fill:#dfe7f5;font:400 11px ui-monospace,Consolas,monospace}
+.cds{fill:#8fa2bf;font:400 10px ui-monospace,Consolas,monospace}
+.note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.bad{fill:#ff4d6a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.fix{fill:#ffb63d;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.box{fill:#0d1420;stroke:#1b2537;stroke-width:1}
+.hot{fill:#1a0f14;stroke:#ff4d6a;stroke-width:1.5}
+</style>
+<rect class="bg" x="0" y="0" width="900" height="470"/>
+<text class="ttl" x="30" y="36">보안 수정이 만든 취약점</text>
+<text class="sub" x="30" y="58">두 CVE 를 잇는 것은 커밋 트레일러 한 줄이다 — <tspan class="cd">Fixes: 6d98eb95b450</tspan></text>
+<rect class="box" x="30" y="84" width="400" height="150" rx="6"/>
+<text class="ph" x="46" y="110">CVE-2023-20938 · 2023-02-05</text>
+<text class="cds" x="46" y="130">kernel/common · drivers/android/binder.c · 커밋 6개</text>
+<text class="note" x="46" y="156">그중 하나 (mainline 6d98eb95b450)</text>
+<text class="cd" x="46" y="178">"binder: avoid potential data leakage</text>
+<text class="cd" x="46" y="196"> when copying txn"</text>
+<text class="note" x="46" y="220">복사 경로를 binder_alloc_copy_from_buffer 에서</text>
+<text class="note" x="46" y="238" opacity="0">x</text>
+<rect class="hot" x="470" y="84" width="400" height="150" rx="6"/>
+<text class="ph" x="486" y="110">CVE-2024-26926 · 2024-06-05</text>
+<text class="cds" x="486" y="130">같은 파일 · 커밋 2개 · Bug A-320661088</text>
+<text class="cd" x="486" y="156">FROMLIST: binder: check offset</text>
+<text class="cd" x="486" y="174">alignment in binder_get_object()</text>
+<text class="bad" x="486" y="200">Fixes: 6d98eb95b450</text>
+<text class="note" x="486" y="220">위 커밋을 고친다고 명시돼 있다</text>
+<path d="M430 158 L470 158" stroke="#ff4d6a" stroke-width="2" marker-end="url(#a)"/>
+<text class="bad" x="404" y="256" text-anchor="middle">16개월</text>
+<text class="ph" x="30" y="292">2024년에 되살린 것</text>
+<rect class="box" x="30" y="304" width="840" height="76" rx="5"/>
+<text class="cd" x="46" y="326">  read_size = min_t(size_t, sizeof(*object), buffer-&gt;data_size - offset);</text>
+<text class="cd" x="46" y="344" fill="#ff8fa3">- if (offset &gt; buffer-&gt;data_size || read_size &lt; sizeof(*hdr))</text>
+<text class="cd" x="46" y="362" fill="#ffd48a">+ if (offset &gt; buffer-&gt;data_size || read_size &lt; sizeof(*hdr) ||</text>
+<text class="cd" x="46" y="376" fill="#ffd48a">+     !IS_ALIGNED(offset, sizeof(u32)))</text>
+<text class="note" x="30" y="410">2023년 수정이 복사 경로를 바꾸면서, 예전 경로가 안에서 하던 4바이트 정렬 검사가 함께 사라졌다.</text>
+<text class="note" x="30" y="432">기능은 그대로였고 컴파일도 됐다. 없어진 것은 <tspan class="fix">아무도 명시적으로 쓰지 않던 검사</tspan> 하나다.</text>
+<text class="note" x="30" y="454">7편에서는 "불완전한 수정이 새 CVE 가 된다" 였는데, 여기서는 <tspan class="bad">완결된 수정이 새 CVE 를 만들었다</tspan>.</text>
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#ff4d6a"/></marker></defs>
+</svg>
