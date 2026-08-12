@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" role="img" aria-label="API 28 이미지 여덟 장에서 사용자영역 보안 패치 라벨과 커널이 서로 다른 지점에서 바뀌는 것을 보여주는 도식. 마지막 세 장은 라벨이 2018-09-05 에서 2019-08-05 로 뛰는데 커널은 그대로다">
+<style>
+.bg{fill:#070a12}.ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+.sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.ph{fill:#cdd8e8;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.cd{fill:#dfe7f5;font:400 11px ui-monospace,Consolas,monospace}
+.cds{fill:#8fa2bf;font:400 10px ui-monospace,Consolas,monospace}
+.note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.bad{fill:#ff4d6a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.dot{fill:#1d6b8f;stroke:#4aa3cc;stroke-width:1.5}
+.dotk{fill:#5a3a12;stroke:#ffb63d;stroke-width:1.5}
+.line{stroke:#2a3purple}
+</style>
+<rect class="bg" x="0" y="0" width="900" height="470"/>
+<text class="ttl" x="30" y="36">두 축은 따로 움직인다 — API 28 이미지 여덟 장</text>
+<text class="sub" x="30" y="58">위는 사용자영역 보안 패치 라벨, 아래는 실제 커널. 점이 바뀌는 자리가 서로 다르다.</text>
+<line x1="90" y1="140" x2="860" y2="140" stroke="#1b2537" stroke-width="2"/>
+<line x1="90" y1="300" x2="860" y2="300" stroke="#1b2537" stroke-width="2"/>
+<text class="ph" x="30" y="144">라벨</text>
+<text class="ph" x="30" y="304">커널</text>
+<text class="cds" x="90" y="88" text-anchor="middle">r03</text>
+<circle class="dot" cx="90" cy="140" r="5"/>
+<circle class="dotk" cx="90" cy="300" r="5"/>
+<text class="cd" x="90" y="124" text-anchor="middle" transform="rotate(-40 90 124)">2018-06-05</text>
+<text class="cds" x="90" y="322" text-anchor="middle">e276dd</text>
+<text class="cds" x="90" y="338" text-anchor="middle">5826640</text>
+<text class="cds" x="200" y="88" text-anchor="middle">r04</text>
+<circle class="dot" cx="200" cy="140" r="8"/>
+<circle class="dotk" cx="200" cy="300" r="8"/>
+<text class="cd" x="200" y="124" text-anchor="middle" transform="rotate(-40 200 124)">2018-07-05</text>
+<text class="cds" x="200" y="322" text-anchor="middle">b68d60</text>
+<text class="cds" x="200" y="338" text-anchor="middle">5978464</text>
+<text class="cds" fill="#4aa3cc" x="200" y="162" text-anchor="middle">바뀜</text>
+<text class="cds" fill="#ffb63d" x="200" y="284" text-anchor="middle">바뀜</text>
+<text class="cds" x="310" y="88" text-anchor="middle">r05</text>
+<circle class="dot" cx="310" cy="140" r="8"/>
+<circle class="dotk" cx="310" cy="300" r="8"/>
+<text class="cd" x="310" y="124" text-anchor="middle" transform="rotate(-40 310 124)">2018-08-05</text>
+<text class="cds" x="310" y="322" text-anchor="middle">cbc7a4</text>
+<text class="cds" x="310" y="338" text-anchor="middle">6014240</text>
+<text class="cds" fill="#4aa3cc" x="310" y="162" text-anchor="middle">바뀜</text>
+<text class="cds" fill="#ffb63d" x="310" y="284" text-anchor="middle">바뀜</text>
+<text class="cds" x="420" y="88" text-anchor="middle">r07</text>
+<circle class="dot" cx="420" cy="140" r="5"/>
+<circle class="dotk" cx="420" cy="300" r="8"/>
+<text class="cd" x="420" y="124" text-anchor="middle" transform="rotate(-40 420 124)">2018-08-05</text>
+<text class="cds" x="420" y="322" text-anchor="middle">e125db</text>
+<text class="cds" x="420" y="338" text-anchor="middle">6011040</text>
+<text class="cds" fill="#ffb63d" x="420" y="284" text-anchor="middle">바뀜</text>
+<text class="cds" x="530" y="88" text-anchor="middle">r08</text>
+<circle class="dot" cx="530" cy="140" r="8"/>
+<circle class="dotk" cx="530" cy="300" r="8"/>
+<text class="cd" x="530" y="124" text-anchor="middle" transform="rotate(-40 530 124)">2018-09-05</text>
+<text class="cds" x="530" y="322" text-anchor="middle">9f9c6c</text>
+<text class="cds" x="530" y="338" text-anchor="middle">6010832</text>
+<text class="cds" fill="#4aa3cc" x="530" y="162" text-anchor="middle">바뀜</text>
+<text class="cds" fill="#ffb63d" x="530" y="284" text-anchor="middle">바뀜</text>
+<text class="cds" x="640" y="88" text-anchor="middle">r09</text>
+<circle class="dot" cx="640" cy="140" r="5"/>
+<circle class="dotk" cx="640" cy="300" r="8"/>
+<text class="cd" x="640" y="124" text-anchor="middle" transform="rotate(-40 640 124)">2018-09-05</text>
+<text class="cds" x="640" y="322" text-anchor="middle">4589a0</text>
+<text class="cds" x="640" y="338" text-anchor="middle">6038176</text>
+<text class="cds" fill="#ffb63d" x="640" y="284" text-anchor="middle">바뀜</text>
+<text class="cds" x="750" y="88" text-anchor="middle">r10</text>
+<circle class="dot" cx="750" cy="140" r="8"/>
+<circle class="dotk" cx="750" cy="300" r="5"/>
+<text class="cd" x="750" y="124" text-anchor="middle" transform="rotate(-40 750 124)">2019-08-05</text>
+<text class="cds" x="750" y="322" text-anchor="middle">4589a0</text>
+<text class="cds" x="750" y="338" text-anchor="middle">6038176</text>
+<text class="cds" fill="#4aa3cc" x="750" y="162" text-anchor="middle">바뀜</text>
+<text class="cds" x="860" y="88" text-anchor="middle">r11</text>
+<circle class="dot" cx="860" cy="140" r="5"/>
+<circle class="dotk" cx="860" cy="300" r="5"/>
+<text class="cd" x="860" y="124" text-anchor="middle" transform="rotate(-40 860 124)">2019-08-05</text>
+<text class="cds" x="860" y="322" text-anchor="middle">4589a0</text>
+<text class="cds" x="860" y="338" text-anchor="middle">6038176</text>
+<rect x="614" y="48" width="272" height="310" fill="none" stroke="#ff4d6a" stroke-width="1.5" stroke-dasharray="5 4" rx="6"/>
+<text class="bad" x="30" y="392">마지막 세 장(r09·r10·r11)은 커널이 바이트 단위로 같다. 그런데 라벨은 2018-09-05 에서 2019-08-05 로 열한 달을 뛴다.</text>
+<text class="note" x="30" y="416">그 커널은 <tspan class="cd">Linux version 4.4.124+ … Wed Jan 30 07:13:09 UTC 2019</tspan> 로, 2019년 1월에 빌드된 것이다.</text>
+<text class="note" x="30" y="440">즉 "2019-08-05 패치" 라고 적힌 이미지가 2019년 1월 커널을 싣고 있다. 커널 CVE 를 이 라벨로 판정하면 틀린다.</text>
+</svg>
