@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" width="900" height="620" role="img" aria-label="가로 또는 세로가 16 미만이면 매크로블록 총수가 0이 되고, 부호 없는 뺄셈이 언더플로해 읽을 비트 수가 32가 되며, 그 결과 32비트 워드 전체가 정수로 캐스팅되어 음수가 되고 위쪽 경계만 검사하는 조건을 그대로 통과하는 과정을 보여주는 도식">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ph{fill:#cdd8e8;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .cd{fill:#dfe7f5;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .cds{fill:#8fa2bf;font:400 11px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ok{fill:#4ddb9a;font:600 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .bad{fill:#ff4d6a;font:600 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .fix{fill:#ffb63d;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1}
+    .hot{fill:#1a0f14;stroke:#ff4d6a;stroke-width:1.5}
+    .new{fill:#1a1408;stroke:#ffb63d;stroke-width:1.5}
+  </style>
+  <rect class="bg" x="0" y="0" width="900" height="620"/>
+  <text class="ttl" x="30" y="38">CVE-2019-2184 — 부호가 뒤집히는 자리</text>
+  <text class="sub" x="30" y="60">디코더를 돌리지 않고 산술만 옮겨 호스트에서 실행한 값이다. 네 걸음이면 음수가 된다.</text>
+
+  <!-- step 1 -->
+  <rect class="box" x="30" y="82" width="840" height="104" rx="6"/>
+  <text class="ph" x="46" y="106">① 가로·세로가 16 미만이면 매크로블록 총수가 0 이 된다</text>
+  <text class="cds" x="46" y="126">vop.cpp — 이 경로에는 16 배수 반올림이 없다</text>
+  <text class="cd" x="46" y="148">nTotalMB = width/16 * height/16;</text>
+  <text class="ok" x="470" y="148">176×144 → 99</text>
+  <text class="ok" x="620" y="148">16×16 → 1</text>
+  <text class="bad" x="760" y="148">16×8 → 0</text>
+  <text class="note" x="46" y="172">16 으로 나누면서 잘리므로 한 변만 작아도 0 이다.</text>
+
+  <path d="M450 186 L450 202" fill="none" stroke="#ff4d6a" stroke-width="1.5"/>
+
+  <!-- step 2 -->
+  <rect class="hot" x="30" y="204" width="840" height="86" rx="6"/>
+  <text class="ph" x="46" y="228">② 그 0 에서 1 을 빼는데, 부호 없는 정수다</text>
+  <text class="cd" x="46" y="252">nBitsForMBID = CalcNumBits((uint)nTotalMB - 1);</text>
+  <text class="bad" x="470" y="252">(uint)0 − 1 = 0xffffffff</text>
+  <text class="cds" x="46" y="276">CalcNumBits 는 최상위 1 비트 자리를 센다 →</text>
+  <text class="bad" x="330" y="276">32</text>
+  <text class="note" x="360" y="276">(정상 범위는 6~14)</text>
+
+  <path d="M450 290 L450 306" fill="none" stroke="#ff4d6a" stroke-width="1.5"/>
+
+  <!-- step 3 -->
+  <rect class="hot" x="30" y="308" width="840" height="130" rx="6"/>
+  <text class="ph" x="46" y="332">③ 32 비트를 요구하면 시프트가 0 이 되어 워드 전체가 돌아온다</text>
+  <text class="cds" x="46" y="352">bitstream.h</text>
+  <text class="cd" x="46" y="374">code = stream-&gt;curr_word &gt;&gt; (32 - nbits);</text>
+  <text class="cds" x="46" y="400">curr_word = 0x80000000 일 때</text>
+  <text class="cd" x="300" y="400">nbits=31 → 0x40000000</text>
+  <text class="ok" x="500" y="400">(int) 1073741824</text>
+  <text class="cd" x="300" y="422">nbits=32 → 0x80000000</text>
+  <text class="bad" x="500" y="422">(int) −2147483648</text>
+  <text class="fix" x="660" y="422">부호 뒤집힘</text>
+
+  <path d="M450 438 L450 454" fill="none" stroke="#ff4d6a" stroke-width="1.5"/>
+
+  <!-- step 4 -->
+  <rect class="hot" x="30" y="456" width="840" height="86" rx="6"/>
+  <text class="ph" x="46" y="480">④ 경계 검사가 위쪽만 본다</text>
+  <text class="cd" x="46" y="504">if (*next_MB &gt;= nTotalMB) { ... }</text>
+  <text class="bad" x="400" y="504">−2147483648 &gt;= 0 은 거짓 → 그대로 통과</text>
+  <text class="note" x="46" y="528">아래쪽 경계가 없다. 음수는 검사에 걸리지 않고 매크로블록 번호로 쓰인다.</text>
+
+  <!-- fix -->
+  <rect class="new" x="30" y="558" width="840" height="44" rx="6"/>
+  <text class="fix" x="46" y="576">패치가 넣은 것</text>
+  <text class="cd" x="160" y="576">int mbnum = (int) BitstreamReadBits16(stream, nbits);</text>
+  <text class="cd" x="160" y="594">if (mbnum &lt; 0) { return PV_FAIL; }</text>
+  <text class="note" x="600" y="594">아래쪽 경계 한 줄</text>
+</svg>
