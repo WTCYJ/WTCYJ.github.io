@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" width="900" height="640" role="img" aria-label="ExternalStorageProvider 가 Android/data 를 막는 방식이 세 세대에 걸쳐 정규식에서 파일시스템 비교로 바뀐 것과, 각 세대에서 하위 디렉터리에 트리차단 비트가 서는지 실측한 결과를 보여주는 도식">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ph{fill:#cdd8e8;font:600 14px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .cd{fill:#dfe7f5;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .cds{fill:#8fa2bf;font:400 11px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ok{fill:#4ddb9a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .bad{fill:#ff4d6a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .fix{fill:#ffb63d;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1}
+    .hot{fill:#1a0f14;stroke:#ff4d6a;stroke-width:1.5}
+  </style>
+  <rect class="bg" x="0" y="0" width="900" height="640"/>
+  <text class="ttl" x="30" y="38">Android/data 를 막는 방법이 세 번 바뀌었다</text>
+  <text class="sub" x="30" y="60">관측값은 문서 flags 의 한 비트. <tspan class="cd">FLAG_DIR_BLOCKS_OPEN_DOCUMENT_TREE = 1&lt;&lt;15 = 32768</tspan></text>
+  <text class="sub" x="30" y="80">이 비트가 서면 폴더 선택 화면에서 "이 폴더 사용"을 못 누른다.</text>
+
+  <!-- gen 1 -->
+  <rect class="box" x="30" y="100" width="840" height="150" rx="6"/>
+  <text class="ph" x="46" y="126">1세대 · API 33 패치 2022-11-05</text>
+  <text class="note" x="330" y="126">FileSystemProvider.shouldHide — 절대경로 정규식</text>
+  <rect class="hot" x="46" y="138" width="600" height="26" rx="4"/>
+  <text class="cd" x="58" y="156">"(?i)^/storage/[^/]+/(?:[0-9]+/)?Android/(?:data|obb|sandbox)$"</text>
+  <text class="bad" x="660" y="156">끝이 $ 다</text>
+  <text class="note" x="46" y="186">디렉터리 자신만 매치한다. 그 아래는 이 정규식에 안 걸린다.</text>
+
+  <text class="cd" x="46" y="214">Android/data</text>
+  <text class="cds" x="300" y="214">flags=49484</text>
+  <text class="ok" x="420" y="214">차단</text>
+  <text class="cd" x="46" y="236">Android/data/&lt;패키지&gt;</text>
+  <text class="cds" x="300" y="236">flags=16716</text>
+  <text class="bad" x="420" y="236">차단 안 됨  ← 32768 이 빠져 있다</text>
+
+  <!-- gen 2 -->
+  <rect class="box" x="30" y="264" width="840" height="130" rx="6"/>
+  <text class="ph" x="46" y="290">2세대 · API 33 패치 2024-03-01</text>
+  <text class="note" x="330" y="290">ExternalStorageProvider 로 옮기고 정규식을 고침</text>
+  <rect class="box" x="46" y="302" width="600" height="26" rx="4"/>
+  <text class="cd" x="58" y="320">"^Android/(?:data|obb|sandbox)(?:/.+)?"</text>
+  <text class="fix" x="660" y="320">(?:/.+)? 추가</text>
+
+  <text class="cd" x="46" y="352">Android/data</text>
+  <text class="cds" x="300" y="352">flags=49484</text>
+  <text class="ok" x="420" y="352">차단</text>
+  <text class="cd" x="46" y="374">Android/data/&lt;패키지&gt;</text>
+  <text class="cds" x="300" y="374">flags=49484</text>
+  <text class="ok" x="420" y="374">차단</text>
+
+  <!-- gen 3 -->
+  <rect class="box" x="30" y="408" width="840" height="176" rx="6"/>
+  <text class="ph" x="46" y="434">3세대 · API 36 패치 2025-07-05</text>
+  <text class="note" x="330" y="434">정규식을 버렸다 — 실제 파일 동일성으로 비교</text>
+  <rect class="box" x="46" y="446" width="600" height="70" rx="4"/>
+  <text class="cd" x="58" y="466">for (p = Paths.get(root, path); p != null; p = p.getParent())</text>
+  <text class="cd" x="58" y="484">    if (Files.isSameFile(restricted, p)) return true;</text>
+  <text class="cd" x="58" y="502">catch (Exception e) { return true; }</text>
+  <text class="fix" x="660" y="466">조상까지</text>
+  <text class="fix" x="660" y="484">문자열 아님</text>
+  <text class="fix" x="660" y="502">실패시 차단</text>
+
+  <text class="cd" x="46" y="540">Android/data</text>
+  <text class="cds" x="300" y="540">flags=49484</text>
+  <text class="ok" x="420" y="540">차단</text>
+  <text class="cd" x="46" y="562">Android/data/&lt;패키지&gt;</text>
+  <text class="cds" x="300" y="562">flags=49484</text>
+  <text class="ok" x="420" y="562">차단</text>
+
+  <text class="note" x="30" y="612">49484 − 16716 = 32768. 세 세대를 가른 것은 그 비트 하나이고, 1세대는 정규식 끝의 <tspan class="cd">$</tspan> 때문에 그것을 못 세웠다.</text>
+</svg>
