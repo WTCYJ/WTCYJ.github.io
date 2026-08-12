@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" width="900" height="620" role="img" aria-label="파일 모드 문자열 w 가 Android 9 에서는 truncate 비트를 포함했지만 Android 10 부터는 포함하지 않게 된 것과, 그 결과 큰 파일을 작게 덮어쓸 때 원본 꼬리가 남는 것을 보여주는 도식">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ph{fill:#cdd8e8;font:600 14px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .cd{fill:#dfe7f5;font:400 13px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .cds{fill:#8fa2bf;font:400 11px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ok{fill:#4ddb9a;font:600 13px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .bad{fill:#ff4d6a;font:600 13px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .fix{fill:#ffb63d;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1}
+    .hot{fill:#1a0f14;stroke:#ff4d6a;stroke-width:1.5}
+  </style>
+  <rect class="bg" x="0" y="0" width="900" height="620"/>
+  <text class="ttl" x="30" y="38">CVE-2023-21036 — 한 글자가 사라진 자리</text>
+  <text class="sub" x="30" y="60">앱 코드는 그대로인데 <tspan class="cd">"w"</tspan> 의 뜻이 바뀌었다. 그것이 전부다.</text>
+
+  <!-- panel A -->
+  <text class="ph" x="30" y="98">① parseMode 가 돌려주는 비트 (기기 실측)</text>
+
+  <rect class="box" x="30" y="112" width="400" height="150" rx="6"/>
+  <text class="ph" x="46" y="136">Android 9 이하</text>
+  <text class="cds" x="46" y="154">"w".equals(mode) || "wt".equals(mode)</text>
+  <text class="cd" x="46" y="182">w</text>
+  <text class="ok" x="120" y="182">0x2c000000</text>
+  <text class="cds" x="240" y="182">TRUNCATE 포함</text>
+  <text class="cd" x="46" y="208">wt</text>
+  <text class="ok" x="120" y="208">0x2c000000</text>
+  <text class="cds" x="240" y="208">TRUNCATE 포함</text>
+  <text class="note" x="46" y="240">두 값이 같다 — 소스에 나란히 적혀 있으니 당연하다</text>
+
+  <rect class="box" x="470" y="112" width="400" height="150" rx="6"/>
+  <text class="ph" x="486" y="136">Android 10 이상 (현재까지)</text>
+  <text class="cds" x="486" y="154">translateModeStringToPosix(mode)</text>
+  <text class="cd" x="486" y="182">w</text>
+  <text class="bad" x="560" y="182">0x28000000</text>
+  <text class="cds" x="680" y="182">TRUNCATE 없음</text>
+  <text class="cd" x="486" y="208">wt</text>
+  <text class="ok" x="560" y="208">0x2c000000</text>
+  <text class="cds" x="680" y="208">TRUNCATE 포함</text>
+  <text class="fix" x="486" y="240">O_TRUNC 은 문자열에 't' 가 있을 때만 붙는다</text>
+
+  <line x1="30" y1="286" x2="870" y2="286" stroke="#1b2537" stroke-width="1"/>
+
+  <!-- panel B -->
+  <text class="ph" x="30" y="318">② 그래서 큰 파일을 "w" 로 다시 열어 작게 덮어쓰면 (PNG 실측)</text>
+
+  <text class="note" x="30" y="346">원본 320×320 PNG</text>
+  <rect class="box" x="30" y="356" width="500" height="30" rx="4"/>
+  <text class="cds" x="42" y="376">2251 B</text>
+
+  <text class="note" x="30" y="416">Android 9 — 잘린다</text>
+  <rect class="box" x="30" y="426" width="101" height="30" rx="4"/>
+  <text class="cds" x="42" y="446">454 B</text>
+  <text class="ok" x="146" y="446">파일 = 454 B. 원본은 사라졌다</text>
+
+  <text class="note" x="30" y="486">Android 10 이상 — 앞만 덮인다</text>
+  <rect class="box" x="30" y="496" width="101" height="30" rx="4"/>
+  <text class="cds" x="42" y="516">454 B</text>
+  <rect class="hot" x="131" y="496" width="399" height="30" rx="4"/>
+  <text class="cds" x="143" y="516">1797 B — 원본 바이트 그대로 (실측: 전부 일치)</text>
+  <text class="bad" x="546" y="516">파일 = 2251 B</text>
+
+  <path d="M131 536 L131 552" fill="none" stroke="#ffb63d" stroke-width="1.5"/>
+  <text class="fix" x="139" y="556">디코더는 여기 IEND 에서 멈춘다 → 화면엔 80×80 으로 보인다</text>
+  <text class="note" x="30" y="586">가려서 지웠다고 믿은 부분이 파일에는 남아 있다. 뷰어가 안 보여줄 뿐이다.</text>
+</svg>
