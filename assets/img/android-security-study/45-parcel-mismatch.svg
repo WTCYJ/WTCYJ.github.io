@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" role="img" aria-label="WorkSource 를 Parcel 에 쓸 때는 20바이트를 쓰는데 읽을 때는 16바이트만 소비해서, 뒤따르는 값이 4바이트 밀리는 것을 보여주는 도식">
+<style>
+.bg{fill:#070a12}.ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+.sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.ph{fill:#cdd8e8;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.cd{fill:#dfe7f5;font:400 11px ui-monospace,Consolas,monospace}
+.cds{fill:#8fa2bf;font:400 10px ui-monospace,Consolas,monospace}
+.note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.bad{fill:#ff4d6a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.ok{fill:#4ddb9a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.fix{fill:#ffb63d;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+</style>
+<rect class="bg" x="0" y="0" width="900" height="560"/>
+<text class="ttl" x="30" y="36">쓸 때 20바이트, 읽을 때 16바이트</text>
+<text class="sub" x="30" y="58">WorkSource 의 체인 목록이 <tspan class="cd">비어 있지만 null 이 아닐 때</tspan>만 어긋난다. 기기에서 잰 값이다.</text>
+<text class="ph" x="30" y="136">쓴다</text>
+<rect x="110" y="110" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cds" x="152" y="126" text-anchor="middle">mNum</text>
+<text class="cd" x="152" y="144" text-anchor="middle">0</text>
+<text class="cds" x="152" y="102" text-anchor="middle">0</text>
+<rect x="198" y="110" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cds" x="240" y="126" text-anchor="middle">mUids</text>
+<text class="cd" x="240" y="144" text-anchor="middle">-1</text>
+<text class="cds" x="240" y="102" text-anchor="middle">4</text>
+<rect x="286" y="110" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cds" x="328" y="126" text-anchor="middle">mNames</text>
+<text class="cd" x="328" y="144" text-anchor="middle">-1</text>
+<text class="cds" x="328" y="102" text-anchor="middle">8</text>
+<rect x="374" y="110" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cds" x="416" y="126" text-anchor="middle">size</text>
+<text class="cd" x="416" y="144" text-anchor="middle">0</text>
+<text class="cds" x="416" y="102" text-anchor="middle">12</text>
+<rect x="462" y="110" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cds" x="504" y="126" text-anchor="middle">list len</text>
+<text class="cd" x="504" y="144" text-anchor="middle">0</text>
+<text class="cds" x="504" y="102" text-anchor="middle">16</text>
+<rect x="550" y="110" width="84" height="42" fill="#2b1f3d" stroke="#2a3a52"/>
+<text class="cds" x="592" y="126" text-anchor="middle">MARK</text>
+<text class="cd" x="592" y="144" text-anchor="middle">4d41524b</text>
+<text class="cds" x="592" y="102" text-anchor="middle">20</text>
+<text class="cds" x="14" y="102">바이트 위치</text>
+<text class="ph" x="30" y="228">패치 전이 읽는 범위</text>
+<rect x="106" y="202" width="352" height="42" fill="none" stroke="#ff4d6a" stroke-width="2" rx="4"/>
+<text class="bad" x="474" y="228">여기서 멈춘다 — numChains(=0) &gt; 0 이 거짓이라 readParcelableList 를 안 부른다</text>
+<rect x="110" y="202" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cd" x="152" y="229" text-anchor="middle">0</text>
+<rect x="198" y="202" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cd" x="240" y="229" text-anchor="middle">-1</text>
+<rect x="286" y="202" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cd" x="328" y="229" text-anchor="middle">-1</text>
+<rect x="374" y="202" width="84" height="42" fill="#123047" stroke="#2a3a52"/>
+<text class="cd" x="416" y="229" text-anchor="middle">0</text>
+<rect x="462" y="202" width="84" height="42" fill="#1a0f14" stroke="#ff4d6a" stroke-dasharray="4 3"/>
+<text class="cd" x="504" y="229" text-anchor="middle" fill="#ff8fa3">0</text>
+<rect x="550" y="202" width="84" height="42" fill="#1a0f14" stroke="#ff4d6a" stroke-dasharray="4 3"/>
+<text class="cd" x="592" y="229" text-anchor="middle" fill="#ff8fa3">4d41524b</text>
+<text class="ph" x="30" y="314">그래서 다음 값은</text>
+<text class="cd" x="106" y="314" fill="#ff8fa3">MARK 를 읽으려는데 위치가 16 이라 list len(0) 이 나온다 → 0x00000000</text>
+<text class="cds" x="106" y="336">기기 실측: 기대 0x4d41524b, 실제 0x00000000</text>
+<text class="fix" x="30" y="392">패치</text>
+<text class="cd" x="110" y="392">- if (numChains &gt; 0)   →   + if (numChains &gt;= 0)</text>
+<text class="note" x="110" y="414">0 이어도 readParcelableList 를 불러 두 번째 int 를 소비한다. 쓰기와 읽기가 대칭이 된다.</text>
+<text class="note" x="30" y="450">이 CVE 는 불리틴이 <tspan class="bad">limited, targeted exploitation</tspan> 을 명시한 건이고 CISA KEV 에도 올라 있다. 수정의 실체는 부등호 한 글자다.</text>
+</svg>
