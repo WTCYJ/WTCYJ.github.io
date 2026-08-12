@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" role="img" aria-label="ZIP 파일을 중앙 디렉터리부터 거꾸로 파싱하는 구조와, 패치 전후 이미지에서 오프셋 0 검사가 있고 없음에 따라 거부 지점이 달라지는 것을 보여주는 도식">
+  <style>
+    .bg{fill:#070a12}
+    .ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ph{fill:#cdd8e8;font:600 14px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .cd{fill:#dfe7f5;font:400 12px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .cds{fill:#8fa2bf;font:400 11px ui-monospace,'Cascadia Mono',Consolas,monospace}
+    .note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ok{fill:#4ddb9a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .bad{fill:#ff4d6a;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .fix{fill:#ffb63d;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+    .box{fill:#0d1420;stroke:#1b2537;stroke-width:1}
+    .hit{fill:#1a0f14;stroke:#ff4d6a;stroke-width:1.5}
+    .new{fill:#1a1408;stroke:#ffb63d;stroke-width:1.5}
+  </style>
+  <rect class="bg" x="0" y="0" width="900" height="560"/>
+  <text class="ttl" x="30" y="38">CVE-2017-13156 — 검사받지 않던 오프셋 0</text>
+  <text class="sub" x="30" y="60">ZIP 은 끝에서부터 거꾸로 읽는다. 그래서 파일 앞부분은 아무도 안 보고 있었다.</text>
+
+  <!-- ZIP layout -->
+  <text class="ph" x="30" y="100">ZIP 파일 구조와 파싱 순서</text>
+  <rect class="hit" x="30" y="112" width="150" height="46" rx="5"/>
+  <text class="cd" x="42" y="132">offset 0</text>
+  <text class="cds" x="42" y="149">50 4b 03 04</text>
+  <rect class="box" x="186" y="112" width="300" height="46" rx="5"/>
+  <text class="cd" x="198" y="132">엔트리 데이터 …</text>
+  <text class="cds" x="198" y="149">classes.dex, resources.arsc, META-INF/…</text>
+  <rect class="box" x="492" y="112" width="180" height="46" rx="5"/>
+  <text class="cd" x="504" y="132">Central Directory</text>
+  <text class="cds" x="504" y="149">각 엔트리의 오프셋 목록</text>
+  <rect class="box" x="678" y="112" width="120" height="46" rx="5"/>
+  <text class="cd" x="690" y="132">EOCD</text>
+  <text class="cds" x="690" y="149">시작점</text>
+
+  <path d="M738 168 L738 186 L582 186 L582 168" fill="none" stroke="#4ddb9a" stroke-width="1.5"/>
+  <path d="M582 186 L582 168" fill="none" stroke="#4ddb9a" stroke-width="1.5" marker-end="url(#ag)"/>
+  <path d="M492 140 L188 140" fill="none" stroke="#4ddb9a" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ag)"/>
+  <text class="ok" x="600" y="204">① EOCD 찾기 → ② 중앙 디렉터리 → ③ 각 엔트리로 점프</text>
+  <text class="note" x="30" y="204">파일 앞 4바이트를 읽을 이유가 없다</text>
+
+  <line x1="30" y1="228" x2="870" y2="228" stroke="#1b2537" stroke-width="1"/>
+
+  <!-- two images -->
+  <text class="ph" x="30" y="260">같은 입력(오프셋 0 을 <tspan class="cd">50 4b ff ff</tspan> 로 손상)을 두 이미지에 넣었을 때</text>
+
+  <!-- r08 -->
+  <rect class="box" x="30" y="278" width="400" height="230" rx="6"/>
+  <text class="ph" x="46" y="304">sec-26-r08 · 패치 2017-11-05</text>
+  <text class="note" x="46" y="324">libziparchive 에 검사 문자열 0회</text>
+
+  <rect class="box" x="46" y="340" width="368" height="34" rx="4"/>
+  <text class="cd" x="58" y="362">아카이브 열기</text>
+  <text class="ok" x="330" y="362">통과</text>
+
+  <rect class="box" x="46" y="384" width="368" height="34" rx="4"/>
+  <text class="cd" x="58" y="406">엔트리 목록 읽기</text>
+  <text class="ok" x="330" y="406">통과</text>
+
+  <rect class="hit" x="46" y="428" width="368" height="34" rx="4"/>
+  <text class="cd" x="58" y="450">v1 서명 검증 · 매니페스트 파싱</text>
+  <text class="bad" x="330" y="450">거부</text>
+
+  <text class="cds" x="46" y="482">INSTALL_PARSE_FAILED_NO_CERTIFICATES</text>
+  <text class="note" x="46" y="500">— 오프셋 0 때문이 아니라, 내 아티팩트가 자바 검증기에서 깨진 것</text>
+
+  <!-- r09 -->
+  <rect class="box" x="470" y="278" width="400" height="230" rx="6"/>
+  <text class="ph" x="486" y="304">sec-26-r09 · 패치 2018-04-05</text>
+  <text class="note" x="486" y="324">libziparchive 에 검사 문자열 1회</text>
+
+  <rect class="new" x="486" y="340" width="368" height="34" rx="4"/>
+  <text class="cd" x="498" y="362">아카이브 열기 → offset 0 == PK\x03\x04 ?</text>
+  <text class="bad" x="806" y="362">거부</text>
+
+  <rect class="box" x="486" y="384" width="368" height="34" rx="4" opacity="0.35"/>
+  <text class="cd" x="498" y="406" opacity="0.35">엔트리 목록 읽기</text>
+  <text class="note" x="806" y="406" opacity="0.5">도달 안 함</text>
+
+  <rect class="box" x="486" y="428" width="368" height="34" rx="4" opacity="0.35"/>
+  <text class="cd" x="498" y="450" opacity="0.35">v1 서명 검증 · 매니페스트 파싱</text>
+  <text class="note" x="806" y="450" opacity="0.5">도달 안 함</text>
+
+  <text class="cds" x="486" y="482">W ziparchive: … invalid LFH signature ffff4b50</text>
+  <text class="fix" x="486" y="500">— 패치가 넣은 문장에, 내가 넣은 값이 그대로</text>
+
+  <text class="note" x="30" y="540">둘 다 설치는 실패한다. 갈린 것은 성공/실패가 아니라 <tspan class="fix">어디서 거부되는가</tspan> 다.</text>
+
+  <defs>
+    <marker id="ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 z" fill="#4ddb9a"/>
+    </marker>
+  </defs>
+</svg>
