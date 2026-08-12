@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600" role="img" aria-label="블루투스 스택의 다섯 CVE 가 일곱 해에 걸쳐 모두 버퍼 크기를 모르는 채 쓰는 같은 형태였음을 보여주는 도식">
+<style>
+.bg{fill:#070a12}.ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+.sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.ph{fill:#cdd8e8;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.cd{fill:#dfe7f5;font:400 11px ui-monospace,Consolas,monospace}
+.cds{fill:#8fa2bf;font:400 10px ui-monospace,Consolas,monospace}
+.note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.yr{fill:#ff2bd6;font:600 12px ui-monospace,Consolas,monospace}
+.fix{fill:#ffb63d;font:600 11px ui-monospace,Consolas,monospace}
+.box{fill:#0d1420;stroke:#1b2537;stroke-width:1}
+.hot{fill:#1a0f14;stroke:#ff4d6a;stroke-width:1.5}
+</style>
+<rect class="bg" x="0" y="0" width="900" height="600"/>
+<text class="ttl" x="30" y="36">일곱 해, 다섯 건, 한 가지 형태</text>
+<text class="sub" x="30" y="58">전부 블루투스 스택이다. 버퍼에 쓰는 쪽이 그 버퍼가 얼마나 큰지 몰랐다. 수정은 매번 "모르던 크기"를 알려준다.</text>
+<rect class="hot" x="30" y="84" width="840" height="90" rx="6"/>
+<text class="yr" x="46" y="108">2017</text>
+<text class="ph" x="96" y="108">CVE-2017-0781</text>
+<text class="cds" x="260" y="108">BlueBorne · BNEP 외 4개 파일</text>
+<text class="note" x="46" y="130">할당할 때 헤더 크기를 빼먹었다</text>
+<text class="cd" x="46" y="154" fill="#ff8fa3">− osi_malloc(peer_mtu)</text>
+<text class="fix" x="440" y="154">+ osi_malloc(peer_mtu + sizeof(BT_HDR))</text>
+<rect class="hot" x="30" y="186" width="840" height="90" rx="6"/>
+<text class="yr" x="46" y="210">2020</text>
+<text class="ph" x="96" y="210">CVE-2020-0022</text>
+<text class="cds" x="260" y="210">BlueFrag · packet_fragmenter</text>
+<text class="note" x="46" y="232">재조립 길이를 뺄셈으로 구하다 offset 을 잃었다</text>
+<text class="cd" x="46" y="256" fill="#ff8fa3">− len = partial->len - partial->offset</text>
+<text class="fix" x="440" y="256">+ … + packet->offset</text>
+<rect class="hot" x="30" y="288" width="840" height="90" rx="6"/>
+<text class="yr" x="46" y="312">2022</text>
+<text class="ph" x="96" y="312">CVE-2022-20411</text>
+<text class="cds" x="260" y="312">AVDTP · avdt_msg 재조립</text>
+<text class="note" x="46" y="334">합계를 버퍼 상수와 대조하지 않았다</text>
+<text class="cd" x="46" y="358" fill="#ff8fa3">− memcpy(...)  ← 검사 없음</text>
+<text class="fix" x="440" y="358">+ if (sizeof(BT_HDR)+offset+len > BT_DEFAULT_BUFFER_SIZE)</text>
+<rect class="hot" x="30" y="390" width="840" height="90" rx="6"/>
+<text class="yr" x="46" y="414">2023</text>
+<text class="ph" x="96" y="414">CVE-2023-21108</text>
+<text class="cds" x="260" y="414">SDP · sdpu_build_uuid_seq</text>
+<text class="note" x="46" y="436">남은 공간을 아예 몰랐다</text>
+<text class="cd" x="46" y="460" fill="#ff8fa3">− 함수에 남은 크기 인자가 없음</text>
+<text class="fix" x="440" y="460">+ uint16_t& bytes_left  를 인자로 추가</text>
+<rect class="hot" x="30" y="492" width="840" height="90" rx="6"/>
+<text class="yr" x="46" y="516">2024</text>
+<text class="ph" x="96" y="516">CVE-2024-0039</text>
+<text class="cds" x="260" y="516">GATT · attp_build_value_cmd</text>
+<text class="note" x="46" y="538">누적 크기를 8비트에 담았다</text>
+<text class="cd" x="46" y="562" fill="#ff8fa3">− uint8_t pair_len</text>
+<text class="fix" x="440" y="562">+ size_t pair_len + CHECK_SIZE() 매번 대조</text>
+<text class="note" x="30" y="610">다섯 번 다 "쓰는 쪽이 크기를 안다" 로 고쳤다. 형태가 같은데 일곱 해에 걸쳐 따로따로 발견됐다.</text>
+</svg>
