@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" role="img" aria-label="세 CVE 가 모두 부호 없는 뺄셈에서 나온 것을 나란히 보여주는 도식. 아래쪽 경계에서 터지는 두 건과 위쪽 경계에서 터지는 한 건">
+<style>
+.bg{fill:#070a12}.ttl{fill:#f0f5ff;font:600 19px system-ui,-apple-system,'Segoe UI',sans-serif}
+.sub{fill:#8fa2bf;font:400 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.ph{fill:#cdd8e8;font:600 13px system-ui,-apple-system,'Segoe UI',sans-serif}
+.cd{fill:#dfe7f5;font:400 12px ui-monospace,Consolas,monospace}
+.cds{fill:#8fa2bf;font:400 11px ui-monospace,Consolas,monospace}
+.note{fill:#8fa2bf;font:400 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.bad{fill:#ff4d6a;font:600 12px ui-monospace,Consolas,monospace}
+.ok{fill:#4ddb9a;font:600 12px ui-monospace,Consolas,monospace}
+.fix{fill:#ffb63d;font:600 12px system-ui,-apple-system,'Segoe UI',sans-serif}
+.box{fill:#0d1420;stroke:#1b2537;stroke-width:1}
+.hot{fill:#1a0f14;stroke:#ff4d6a;stroke-width:1.5}
+</style>
+<rect class="bg" x="0" y="0" width="900" height="560"/>
+<text class="ttl" x="30" y="36">같은 실수, 세 번</text>
+<text class="sub" x="30" y="58">전부 부호 없는 뺄셈이다. 왼쪽 값이 오른쪽보다 작아질 수 있는데, 그걸 아무도 안 막았다.</text>
+<rect class="hot" x="30" y="86" width="840" height="132" rx="6"/>
+<text class="ph" x="46" y="110">CVE-2015-3828</text>
+<text class="cds" x="200" y="110">MPEG4Extractor.cpp  3GPP 메타데이터</text>
+<text class="bad" x="760" y="110">아래쪽 경계</text>
+<rect class="box" x="46" y="120" width="808" height="26" rx="4"/>
+<text class="cd" x="58" y="138">if (size - 6 >= 4) { ... buffer + 6 ... }</text>
+<text class="note" x="46" y="166">size 가 6 미만이면  size-6 이 거대한 값이 되어 검사를 통과한다</text>
+<text class="fix" x="46" y="194">수정</text>
+<text class="cd" x="100" y="194" fill="#ffd48a">+ if (size < 6) return ERROR_MALFORMED;</text>
+<rect class="hot" x="30" y="232" width="840" height="132" rx="6"/>
+<text class="ph" x="46" y="256">CVE-2015-3864</text>
+<text class="cds" x="200" y="256">MPEG4Extractor.cpp  청크 크기</text>
+<text class="bad" x="760" y="256">위쪽 경계</text>
+<rect class="box" x="46" y="266" width="808" height="26" rx="4"/>
+<text class="cd" x="58" y="284">if (SIZE_MAX - chunk_size <= size) return ERROR_MALFORMED;</text>
+<text class="note" x="46" y="312">chunk_size 가 SIZE_MAX 보다 크면  좌변이 뒤집혀 검사를 통과한다</text>
+<text class="fix" x="46" y="340">수정</text>
+<text class="cd" x="100" y="340" fill="#ffd48a">+ if ((chunk_size > SIZE_MAX) || ...)</text>
+<rect class="hot" x="30" y="378" width="840" height="132" rx="6"/>
+<text class="ph" x="46" y="402">CVE-2019-2184</text>
+<text class="cds" x="200" y="402">packet_util.cpp  매크로블록 번호  (4편)</text>
+<text class="bad" x="760" y="402">아래쪽 경계</text>
+<rect class="box" x="46" y="412" width="808" height="26" rx="4"/>
+<text class="cd" x="58" y="430">nBitsForMBID = CalcNumBits((uint)nTotalMB - 1);</text>
+<text class="note" x="46" y="458">nTotalMB 가 0 이면  0xFFFFFFFF 가 되어 32비트를 통째로 읽는다</text>
+<text class="fix" x="46" y="486">수정</text>
+<text class="cd" x="100" y="486" fill="#ffd48a">+ if (mbnum < 0) return PV_FAIL;</text>
+<text class="note" x="30" y="538">세 건이 4년에 걸쳐 따로 보고됐다. 컴포넌트도 팀도 다르다. 그런데 형태는 하나다 — <tspan class="cd">a - b</tspan> 를 쓰면서 <tspan class="cd">a &lt; b</tspan> 를 안 본 것.</text>
+</svg>
