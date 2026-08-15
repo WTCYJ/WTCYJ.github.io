@@ -5,7 +5,7 @@ date: 2026-08-15 09:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
 tags: [AI에이전트, 에이전트보안, ClaudeCode, 샌드박스, bubblewrap, 권한모델, 측정, 하드닝, WSL2, HackerOne]
-excerpt: "AI 코딩 에이전트에 경계 설정을 걸어 두고 그게 실제로 무엇을 막는지 관측으로 쟀습니다. 막힌 칸은 네 칸 중 하나였고, 그 한 칸조차 패키지 두 개와 권한 모드 선택에 달려 있었습니다. 그리고 권고 설정 안의 어떤 줄은 아무것도 하지 않고 있었습니다."
+excerpt: "AI 코딩 에이전트에 경계 설정을 걸어 두고 그게 실제로 무엇을 막는지 관측으로 쟀습니다. 막힌 칸은 네 칸 중 하나였고, 그 한 칸조차 패키지 두 개와 권한 모드 선택에 달려 있었습니다. 권고 설정 안의 어떤 줄은 아무것도 하지 않고 있었고, 벤더에 보고한 건은 Informative 로 닫혔습니다 — 그 판단에 동의하며, 왜 그런지도 함께 적었습니다."
 ---
 
 AI 코딩 에이전트에 샌드박스와 권한 규칙을 걸어 두면 마음이 놓입니다. 설정 파일에
@@ -94,9 +94,23 @@ printf '%s' "$STAMP" > "${XDG_CACHE_HOME:-$HOME/.cache}/pkg/sample-project/objec
 **1행과 2행은 소비자가 확인할 모든 속성에서 동일합니다.** 게다가 "샌드박스가
 켜져 있다" 는 긍정 신호도 없어서, 정상 상태를 확인할 방법도 없습니다.
 
-`stream-json` 은 프로그램이 읽으라고 만든 인터페이스입니다. CI 파이프라인이
-stdout 만 파싱하면 강제 층이 사라진 것을 알 수 없습니다. 제 측정 하네스가
+`stream-json` 은 프로그램이 읽으라고 만든 인터페이스입니다. CLI 를 감싸 stdout
+만 파싱하는 자동화는 강제 층이 사라진 것을 알 수 없습니다. 제 측정 하네스가
 정확히 그랬고, 그래서 10/10 이 그냥 "통과" 로 기록됐습니다.
+
+> **범위를 좁혀 적어야 합니다.** 이 fail-open 동작 자체는 **공식 문서에 명시돼
+> 있습니다** — *"if the sandbox cannot start because dependencies are missing …
+> Claude Code shows a warning and runs commands without sandboxing. To make this
+> a hard failure instead, set `sandbox.failIfUnavailable` to `true`."*
+>
+> 그리고 **TypeScript Agent SDK 는 샌드박스를 켜면 그 하드 실패를 기본으로
+> 적용합니다.** 벤더가 알려준 사실인데, 문서 페이지에 없어서 직접 재 봤습니다 —
+> 의존이 없는 배포판에서 SDK 로 `sandbox: { enabled: true }` 만 주고 돌리면
+> `Sandbox required but unavailable: … bubblewrap (bwrap) not installed, socat
+> not installed` 로 **즉시 실패**합니다. 사실이었습니다.
+>
+> 그러면 실제로 노출되는 것은 **SDK 사용자가 아니라 CLI 를 직접 감싸는
+> 자동화**입니다. 제 하네스가 바로 그것이었고, 그래서 제가 당했습니다.
 
 > `sudo apt install bubblewrap socat`
 >
@@ -259,11 +273,11 @@ Agent {"description": "Run report binary and capture stdout",
 
 ---
 
-## 제보
+## 제보와 그 결과 — Informative
 
-`stderr` 로만 나오는 경고 문제는 HackerOne 의 Anthropic 프로그램에 보고했습니다
+`stderr` 로만 나오는 경고 문제를 HackerOne 의 Anthropic 프로그램에 보고했습니다
 (자산 `Claude Code`, CWE-223 *Omission of Security-relevant Information*, Low).
-제안한 수정은 셋이고 첫 번째가 가장 작습니다.
+제안한 수정은 셋이었습니다.
 
 1. `system`/`init` 이벤트에 샌드박스 상태를 싣는다 —
    `"sandbox": {"requested": true, "active": false, "reason": "..."}`.
@@ -272,9 +286,28 @@ Agent {"description": "Run report binary and capture stdout",
    문제입니다.
 3. `sandbox.enabled` 를 명시하면 `failIfUnavailable` 을 `true` 로 기본값화한다.
 
-**이건 샌드박스 탈출이 아닙니다.** 의존이 갖춰진 상태에서 샌드박스는 60회 전부
-막았습니다. 보고한 것은 **돌지 않는 통제를 제대로 도는 통제와 구별할 수 없다**는
-관측성 문제입니다. 회신이 오면 이 글에 덧붙이겠습니다.
+**결과는 Informative 로 닫혔습니다.** 회신 요지는 셋입니다.
+
+- 이 동작은 **설계대로이고 공개 문서에 있다.** 맞습니다. 위에 인용한 그 문장입니다.
+- 하드 요구가 필요한 배포는 `failIfUnavailable: true` 를 쓰라는 것이 문서화된
+  통제이고, **TypeScript Agent SDK 는 그것을 기본으로 적용한다.** 확인해 보니
+  사실이었습니다.
+- 의존 설치 여부·stderr 캡처 여부·하드 실패 옵션은 전부 **운영자 환경의 속성**
+  이지 공격자가 건드릴 수 있는 것이 아니다 → 프로그램 범위상 취약점이 아니라
+  **관측성 개선 제안**이다.
+
+**이 판단에 동의합니다.** 제 보고서도 스스로 "샌드박스 탈출이 아니다" 라고 적고
+Low 로 제출했습니다. 공격자가 전제 조건을 만들 수 없으면 그건 취약점이 아니라
+운영 함정이고, 버그바운티의 경계는 거기서 그어지는 게 맞습니다.
+
+**그래도 함정은 남습니다.** 문서에 적혀 있다는 것과, 잘못된 상태가 **자동화가
+읽는 채널에 나타난다**는 것은 다릅니다. 제가 그걸 직접 당했습니다 — 하네스가
+`0/60` 과 `10/10` 을 같은 "통과" 로 기록하고 있었고, 원인을 알아내는 데 두
+단계가 더 걸렸습니다. 문서를 안 읽어서가 아니라 **읽은 것과 도는 것이 같은지
+확인할 신호가 없어서**입니다.
+
+이 구분 자체가 이 글에서 남길 만한 것이라 생각합니다. **"문서화된 위험" 과
+"탐지 가능한 위험" 은 다른 물건입니다.**
 
 ---
 
