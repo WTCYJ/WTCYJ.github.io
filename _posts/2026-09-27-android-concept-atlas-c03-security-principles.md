@@ -1,0 +1,143 @@
+---
+layout: post
+title: "Android Security Concept Atlas C03 - 최소권한·완전중재·심층방어, Atlas가 실증해온 설계 원칙"
+date: 2026-09-27 21:00:00 +0900
+category: 블로그/기술문서
+author: WTCY
+tags: [Android, AndroidSecurity, 모바일보안, LeastPrivilege, CompleteMediation, DefenseInDepth, FailSafeDefaults, ReferenceMonitor, SaltzerSchroeder, ConceptAtlas, 학습기록]
+excerpt: "이 Atlas의 거의 모든 모듈은 사실 몇 개의 오래된 설계 원칙(Saltzer & Schroeder 1975)의 사례입니다. 앱마다 UID를 주고 capability를 0으로 만드는 건 최소권한, SELinux가 매 접근을 검사하는 건 완전중재, 규칙이 없으면 거부하는 건 fail-safe defaults, UID+SELinux+seccomp를 겹치는 건 심층방어(이건 현대 원칙이지 S&S 8개엔 없음)죠. Reference monitor는 '항상 호출됨+변조불가+검증가능' 세 속성으로 정의되고요. 중요한 뉘앙스 - 완전중재는 stale 인가/권한 캐싱 버그를 막지 고전 TOCTOU 레이스는 원자성이 따로 필요하고, Binder는 프레임워크로 가는 주 매개 채널이지 유일한 문은 아닙니다. Atlas 전체를 하나의 원칙 지도로 묶는 Tier 0 토대 모듈입니다."
+---
+
+> **Concept Atlas 모듈**: C03 — 최소권한·완전중재·심층방어(설계 원칙)
+> **계층**: Tier 0 (보안·시스템 기초) · **난이도**: 기초 · **선수 개념**: C01, C02
+> **성격**: 원칙 편 — Atlas 전체를 하나의 원칙 지도로.
+
+지금까지 각 티어에서 본 메커니즘들은 사실 **몇 개의 오래된 설계 원칙**의 사례입니다. 이 편은 그 원칙에 이름을 붙여 Atlas 전체를 하나로 묶습니다.
+
+한 문장으로: **Android 보안은 최소권한·완전중재·fail-safe defaults 같은 Saltzer & Schroeder(1975) 원칙과 현대의 심층방어를 각 계층에서 실현한 것이다.** 🟡 기초·원칙 편이라 원칙 지도에 집중합니다.
+
+## 배경 개념 — S&S 8원칙 + 현대
+
+- **최소권한**: 필요한 최소 권한만(권한의 **크기**).
+- **완전중재**: 모든 접근을 매번 검사(캐시된 결정 재사용·우회 금지).
+- **fail-safe defaults**: 기본 거부(무규칙·오류 시 거부) — 최소권한과 **다른 축**.
+- **심층방어**: 독립 층 겹치기 — **S&S 8개엔 없는 현대 원칙**.
+
+## 질문 1 — 이 개념은 Android 전체 구조에서 어디에 있는가
+
+**Atlas 전체가 실현해온 원칙에 이름 붙이기**입니다. 거의 모든 모듈이 어느 원칙의 사례이고, 이 편이 그 지도입니다.
+
+## 질문 2 — 어떤 원칙들이며 무엇을 뜻하는가
+
+- **S&S 8원칙(1975)**: 최소권한 · 완전중재 · fail-safe defaults · economy of mechanism(보안 핵심을 작고 단순하게=검증가능) · separation of privilege(둘 이상의 독립 조건) · least common mechanism(공유 메커니즘 최소화) · psychological acceptability(쓸 만해야) · open design(설계 비밀 아닌 키에만 의존).
+- **현대**: **심층방어**(독립 층 다중화 — S&S 8개엔 **없음**).
+- **Reference monitor(Anderson 1972)**: 접근 매개자의 **세 속성** — (1) 항상 호출됨(=완전중재), (2) **변조 불가**, (3) 검증 가능할 만큼 작음(=economy). 세 속성 중 **변조 불가는 S&S 어느 원칙에도 안 매핑** — 그래서 "두 원칙의 합성"이 아님.
+
+## 질문 3 — 무엇을 신뢰하고 무엇을 신뢰하면 안 되는가
+
+- **원칙은 겹쳐서** 작동합니다(어느 하나가 만능 아님).
+- **신뢰하면 안 되는 것들**:
+  - **"최소권한 = fail-safe defaults"** — 다른 축입니다. 최소권한=권한의 **크기**, fail-safe defaults=**기본/오류 시** 방향(거부).
+  - **"심층방어는 Saltzer-Schroeder 원칙"** — 아닙니다. 현대 원칙입니다(S&S 8개 = 위 목록).
+  - **"reference monitor는 완전중재+economy 두 원칙의 합성"** — **세 속성**입니다. **변조 불가**는 별개 요구(어느 S&S 원칙에도 안 매핑).
+  - **"완전중재가 TOCTOU를 막는다"** — 완전중재는 **stale 인가/권한 캐싱** 버그를 막습니다. 고전 **TOCTOU 레이스는 원자적 check-and-use**가 따로 필요(별개).
+  - **"Binder가 유일한 문이라 완전중재가 자동"** — Binder는 프레임워크로 가는 **주** 매개 채널이지 유일한 문이 아닙니다(소켓·공유메모리·파일·직접 시스템콜도 — 각각 DAC/SELinux/seccomp가 매개).
+
+## 질문 4 — Android는 각 원칙을 어떻게 구현하나 (입출력)
+
+- **최소권한**: 앱마다 UID(C09) + capability 0(C24) + 요청한 권한만(C10) + system_server가 root 아닌 전용 서비스(C19) + isolatedProcess는 극단(C25).
+- **완전중재**: SELinux가 **매 접근**을 정책과 대조(C23; AVC는 **결정 캐시**지 우회 아님) + system_server의 레퍼런스 모니터가 **매 호출** 호출자 UID 검사(C19/C21/C22) + Binder가 주 매개 채널(C17).
+- **fail-safe defaults**: SELinux deny-by-default + neverallow(C23) + 컴포넌트 기본 non-exported(C21) + 권한 미요청=미보유(C10).
+- **심층방어**: 앱 샌드박스 = DAC+MAC+seccomp+caps 비움(C09/C23/C24) + 검증 부팅 체인(C27/C28/C30~C32) + 완화(C37) — 한 층 실패가 전면 실패가 아님.
+
+## 질문 5 — 원칙 위반이 어떤 취약점이 되나
+
+- **최소권한 위반**: 과특권 컴포넌트(root로 도는 데몬, shared-UID) → 침해 시 폭발 반경 큼.
+- **완전중재 위반**: stale 인가 재사용·우회 경로(권한 캐싱 버그).
+- **fail-safe 위반**: default-allow(잊은 규칙이 허용으로).
+- **심층방어 부재**: 단일 층 실패가 전면 장악.
+- **economy 위반**: 거대 TCB는 감사 불가 → 숨은 버그. (Android도 SELinux **엔진/TCB**는 작지만 **정책 자체는 방대**하다는 한계.)
+- **Atlas는 이 위반들의 지도**이자, 각 원칙이 어느 계층에서 실현되는지의 안내서.
+
+## 질문 6 — Android 버전/역사에 따라 무엇이 달라졌나
+
+- 원칙 자체는 시대 무관(S&S 1975). Android는 시간이 갈수록 **원칙을 강화**: pre-Treble의 모놀리식 벤더 특권·shared-UID(최소권한·least common mechanism 위반)를 **Treble/GKI(C31/C35)·isolatedProcess(C25)·shared-UID 폐기(C09)**로 개선.
+
+## 질문 7 — 소스에서 확인하려면 어디를 봐야 하는가
+
+- **원전**: Saltzer & Schroeder, "The Protection of Information in Computer Systems"(1975) — 8원칙; Anderson(1972) — reference monitor; Orange Book.
+- **Android**: AOSP 소스 + 공개 sepolicy(=**open design**의 실증). 각 원칙을 어느 모듈이 실현하는지 이 Atlas로 추적.
+
+**주의**: 개념 검증은 도구 무관 → **어떤 설계든 "이 원칙 중 무엇을 지키고 무엇을 어겼나"로 점검** 가능.
+
+## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
+
+- **최소권한**: C09·C24·C10·C19·C25.
+- **완전중재**: C23·C17·C19·C21·C22.
+- **fail-safe defaults**: C23·C21·C10.
+- **심층방어**: C09+C23+C24 + C27/C28 + C37.
+- **reference monitor**: C23(SELinux) + system_server 권한 검사.
+- 이 원칙 지도가 Atlas의 뼈대이고, 다음 티어들은 그 원칙의 추가 사례입니다.
+
+## 직접 그릴 수 있는 호출 흐름
+
+```
+[ 설계 원칙 → Android 실현 지도 ]
+
+  최소권한 ────────▶ 앱 UID(C09)·caps 0(C24)·요청권한(C10)·non-root SS(C19)
+  완전중재 ────────▶ SELinux 매 접근(C23,AVC=캐시)·SS 매 호출 UID검사(C19/21/22)
+                     (stale 인가는 막지만 고전 TOCTOU 레이스는 원자성 별도)
+  fail-safe defaults ▶ SELinux deny-by-default·non-exported(C21)·미요청=거부(C10)
+  심층방어(현대) ──▶ DAC+MAC+seccomp+caps + 검증부팅(C27/28) + 완화(C37)
+                     (S&S 8원칙에는 없음)
+
+  Reference monitor(Anderson): ①항상호출 ②변조불가 ③검증가능(작음)
+     ≈ SELinux LSM(엔진 작음, 정책은 방대) + system_server 권한검사
+     ⚠ 변조불가는 어느 S&S 원칙에도 안 매핑 → "두 원칙 합성"이 아님
+
+  Binder = 프레임워크로 가는 주 매개 채널(유일한 문 X: 소켓/파일/syscall도)
+```
+
+## 오개념 판별 문제 5개
+
+1. "최소권한과 fail-safe defaults는 사실상 같은 원칙이다."
+2. "심층방어는 Saltzer & Schroeder의 고전 보안 원칙 중 하나다."
+3. "reference monitor는 완전중재와 economy of mechanism 두 원칙을 합친 것이다."
+4. "완전중재를 지키면 TOCTOU 경쟁 조건이 방어된다."
+5. "Android에서는 Binder가 유일한 IPC 문이라 완전중재가 자동으로 보장된다."
+
+<details><summary>판정 기준(펼치기)</summary>
+
+1. **다른 축**입니다. 최소권한=권한의 크기, fail-safe defaults=기본/오류 시 거부 방향.
+2. 아닙니다. 심층방어는 **현대** 원칙입니다(S&S 8 = 최소권한·완전중재·fail-safe defaults·economy·separation of privilege·least common mechanism·psychological acceptability·open design).
+3. **세 속성**(항상호출+변조불가+검증가능)입니다. **변조 불가**는 어느 S&S 원칙에도 안 매핑됩니다.
+4. 완전중재는 **stale 인가/권한 캐싱**을 막습니다. 고전 TOCTOU는 **원자적 check-and-use**가 별도로 필요합니다.
+5. Binder는 **주** 채널이지 유일한 문이 아닙니다(소켓·공유메모리·파일·직접 시스템콜, 각각 DAC/SELinux/seccomp가 매개).
+</details>
+
+## 서술형 문제 3개
+
+1. 최소권한과 fail-safe defaults가 왜 다른 축인지 정의로 구분하고, 각각을 Android 메커니즘으로 예시하세요.
+2. reference monitor의 세 속성을 서술하고, 왜 "완전중재+economy 두 원칙의 합성"이라 하면 부정확한지(변조 불가) 설명하세요.
+3. 완전중재가 막는 것(stale 인가)과 막지 못하는 것(고전 TOCTOU 레이스)을 구분해, 후자에 왜 원자성이 필요한지 서술하세요.
+
+## 소스 탐색 과제
+
+- 이 Atlas의 다섯 모듈을 골라, 각각이 어느 원칙(최소권한/완전중재/fail-safe/심층방어/…)의 사례인지 매핑하세요.
+- Android에서 fail-safe defaults의 증거 셋(SELinux deny-by-default, non-exported 기본, 미요청 권한)을 각각 실측 명령으로 확인하세요.
+- 과거 원칙 위반(예: shared-UID, 모놀리식 벤더 특권)과 그 개선(C09/C25/C31)을 대응시키세요.
+
+## 블로그 초안 작성 과제
+
+이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+
+1. **원칙 지도**: 이 Atlas 모듈들을 원칙별로 분류한 표(글로).
+2. **fail-safe 실측**: SELinux deny-by-default·non-exported·미요청 권한을 명령으로.
+3. **위반→개선 서술**: shared-UID 폐기·isolatedProcess를 원칙으로 재서술.
+4. **연결**: reference monitor를 SELinux+system_server로 어떻게 근사하는지.
+
+각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+
+## 마치며
+
+이 Atlas의 거의 모든 모듈은 사실 몇 개의 오래된 설계 원칙(Saltzer & Schroeder 1975)의 사례입니다: 앱마다 UID를 주고 capability를 0으로 만드는 건 **최소권한**, SELinux가 매 접근을 검사하는 건 **완전중재**, 규칙이 없으면 거부하는 건 **fail-safe defaults**, UID+SELinux+seccomp를 겹치는 건 **심층방어**(이건 현대 원칙이지 S&S 8개엔 없음)입니다. Reference monitor는 "항상 호출됨+변조 불가+검증 가능" **세** 속성으로 정의되고요. 뉘앙스는 — 완전중재는 stale 인가/권한 캐싱 버그를 막지 고전 TOCTOU 레이스는 원자성이 따로 필요하고, Binder는 프레임워크로 가는 **주** 매개 채널이지 유일한 문은 아니라는 것입니다. 이로써 Tier 0(보안·시스템 기초)을 닫습니다 — 이 원칙 지도가 Atlas 전체의 뼈대입니다. 다음은 남은 티어(Tier 5·8·9)로 이어집니다.

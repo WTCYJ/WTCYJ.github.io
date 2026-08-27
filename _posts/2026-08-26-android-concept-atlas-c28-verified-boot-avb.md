@@ -1,0 +1,213 @@
+---
+layout: post
+title: "Android Security Concept Atlas C28 - Verified Boot·vbmeta·dm-verity, 실리콘에서 커널까지 이어지는 신뢰"
+date: 2026-08-26 21:00:00 +0900
+category: 블로그/기술문서
+author: WTCY
+tags: [Android, AndroidSecurity, 모바일보안, VerifiedBoot, AVB, vbmeta, dmverity, RootOfTrust, RollbackProtection, KeyAttestation, avbtool, Bootloader, Treble, ConceptAtlas, 학습기록]
+excerpt: "15~16주차에서 저는 'Verified Boot는 에뮬레이터에서 안 보인다'고 한 줄 적고 지나갔습니다. 그게 왜 안 보였는지, 실기기에서는 무엇이 어떻게 동작하는지가 이 글의 주제입니다. 실리콘에 구워진 키 해시에서 시작해 부트로더가 vbmeta 서명을 검증하고, 그 vbmeta가 dm-verity의 해시 트리 루트를 보증하고, 마침내 그 부팅 상태가 Keystore attestation으로 원격 서버까지 전달되는 하나의 신뢰 사슬. 그리고 그 모든 것이 왜 '잠긴 부트로더'라는 전제 위에서만 의미가 있는지. Concept Atlas의 아홉 번째 모듈입니다."
+---
+
+> **Concept Atlas 모듈**: C28 — AVB·vbmeta·dm-verity
+> **계층**: Tier 5 (부팅·업데이트 체인) · **난이도**: 고급 · **선수 개념**: C05(ARM64 예외수준; EL3 시큐어 모니터·신뢰의 뿌리), C08(APK 서명 스킴)
+> **성격**: 미학습 → 풀 작성. 선수 C27(부트 ROM·부트로더 — 아직 미작성)의 맥락은 이 글이 스스로 서도록 최소한만 깝니다.
+> **완료 기준**: vbmeta 서명 체인을 도식화하고 dm-verity 해시 트리 검증을 설명할 수 있다.
+
+15~16주차에서 저는 "Verified Boot는 에뮬레이터에서 안 보인다"고 한 줄 적고 지나갔습니다. 그때는 그게 **왜** 안 보이는지 몰랐습니다. 이 모듈이 그 답입니다. 그리고 그 답은 Android 부팅 체인 전체(Domain 2)의 앵커이자, C05의 "EL3 너머 신뢰의 뿌리"와 C40의 attestation이 실제로 걸려 있는 자리입니다.
+
+한 문장으로 요약하면: **실리콘에 구워진 키 해시에서 시작한 신뢰가, 부트로더 → vbmeta 서명 → dm-verity 해시 트리 → 부팅 상태 → 원격 attestation으로 이어지는 하나의 사슬**입니다. 그리고 그 사슬은 **잠긴 부트로더**라는 전제 위에서만 의미가 있습니다 — 에뮬레이터에서 안 보였던 이유가 바로 그것입니다.
+
+## 배경 개념 - 검증된 부팅이라는 사슬
+
+- **신뢰의 뿌리(Root of Trust)**: 변경 불가능한 마스크 ROM(Boot ROM)과, OTP/eFuse에 **한 번만** 구워지는 값. 이 값은 재플래시할 수 없어 하드웨어 앵커가 됩니다.
+- **AVB (Android Verified Boot) 2.0**: Android 8.0(Oreo)에 도입된 검증 부팅 설계. 중심에 **vbmeta** 파티션이 있어 다른 모든 파티션의 다이제스트를 담고, 한 번 서명됩니다.
+- **vbmeta**: 서명된 메타데이터. 헤더 + 인증(Authentication) 블록(해시+서명) + 보조(Auxiliary) 블록(공개키 + 디스크립터).
+- **dm-verity**: 큰 읽기전용 파티션(system 등)을 블록 단위로 검증하는 커널 device-mapper. 머클(해시) 트리를 쓰고, 그 루트가 vbmeta 안에 있습니다.
+- **롤백 방지**: 서명된 **구버전** 이미지로 되돌리는 다운그레이드 공격을 막는 단조 증가 인덱스.
+
+🔴 미학습 영역이라 처음부터 세웁니다. 여덟 질문으로 조립합니다.
+
+## 질문 1 — 이 개념은 Android 전체 구조에서 어디에 있는가
+
+부팅 체인의 **무결성 앵커**입니다. C05에서 부팅이 각 EL의 코드를 심는 과정이라 했는데, Verified Boot는 그 각 단계가 **다음 단계를 실행하기 전에 암호학적으로 검증**하도록 만듭니다. 신뢰가 실리콘(퓨즈)에서 위로 사슬처럼 올라가, 어느 단계도 자기를 로드한 것을 그냥 믿지 않습니다. 그리고 이 앵커는 위로 C40(Keystore attestation의 `verifiedBootState`)과, 옆으로 C31/C32(Treble 파티션 분할)와 이어집니다.
+
+## 질문 2 — 어느 프로세스와 권한 수준에서 동작하는가
+
+**부트로더**(C05의 EL 사다리에서 커널보다 아래, 최종적으로 EL3/EL2에서 도는 펌웨어 단계)가 주역입니다. 흐름은 이렇습니다.
+
+1. **Boot ROM**이 첫 부트로더를 OTP에 구워진 키 해시로 검증.
+2. 각 부트로더 단계가 다음 단계를 검증.
+3. 최종 부트로더가 **libavb**로 vbmeta 서명을 검증하고, 그제서야 그 안의 디스크립터를 믿고 커널로 점프.
+
+부팅이 끝난 뒤에도 하나가 계속 삽니다: **dm-verity**는 커널 안에서 살아, system/vendor의 블록을 **읽을 때마다** 검증합니다. 즉 Verified Boot는 "부팅 때 한 번"이 아니라, 작은 파티션은 로드 시 한 번 + 큰 파티션은 **읽는 내내** 검증됩니다.
+
+## 질문 3 — 무엇을 신뢰하고 무엇을 신뢰하면 안 되는가
+
+이 모듈에서 가장 미묘하고 가장 많이 틀리는 지점이 신뢰의 뿌리가 **어디** 있느냐입니다.
+
+- **퓨즈에는 전체 키가 아니라 키의 해시만 굽습니다.** OTP/eFuse에는 신뢰하는 vbmeta 서명 공개키의 **SHA-256 다이제스트**만 들어갑니다(작고 불변이라야 하므로). **전체 공개키는 vbmeta 안에 실려서** 옵니다. 부트로더는 그 실려온 키로 서명을 검증한 **다음**, 그 키의 해시가 퓨즈 값과 일치하는지 확인합니다. 그래서 자가서명 vbmeta는 자기 키로는 서명이 맞아도 **퓨즈 해시와 안 맞아** 잠긴 기기에서 거부됩니다. **진짜 신뢰의 뿌리는 키 소유가 아니라 이 해시 대조입니다.**
+- **vbmeta는 한 번 서명됩니다.** 파티션마다 따로 서명하는 게 아니라, vbmeta가 **파티션별 다이제스트(디스크립터)**를 담고 그 vbmeta 서명 하나가 전부를 전이적으로 보증합니다.
+- **AVB는 잠긴 부트로더에서만 의미가 있습니다.** 언락하면 강제가 꺼지고 ORANGE가 됩니다. 신뢰하면 안 되는 것: "언락해도 AVB가 지켜준다", "에뮬레이터에서 안 보이니 고장".
+- **AVB는 런타임 침해를 막지 않고 기밀성을 주지 않습니다.** 부팅시점·정지상태의 무결성과 롤백 방지일 뿐입니다(질문 5).
+
+## 질문 4 — 입력과 출력은 무엇인가
+
+**vbmeta의 검증 봉투**부터 정확히. vbmeta 이미지는 세 블록입니다: **헤더**(256바이트, 매직 `AVB0`) + **인증 블록**(해시 + 서명) + **보조 블록**(공개키 + 디스크립터).
+
+- 부트로더는 **헤더 + 보조 블록**에 대해 해시를 계산합니다. **인증 블록은 제외**됩니다 — 그 안에 해시와 서명 자신이 들어 있어, 자기를 담은 영역을 해시할 수 없기 때문입니다.
+- 그 계산한 해시를 인증 블록에 저장된 해시와 비교하고, **서명은 그 해시(다이제스트)에 대해** RSA 검증합니다(예: `SHA256_RSA4096`). 디스크립터가 보호받는 건 그것이 해시 입력인 보조 블록 안에 있기 때문입니다 — 디스크립터를 건드리면 해시가 바뀌어 서명이 깨집니다.
+
+**디스크립터**는 보조 블록 안의 TLV 레코드로, 태그가 있습니다: `PROPERTY=0`, `HASHTREE=1`, `HASH=2`, `KERNEL_CMDLINE=3`, `CHAIN_PARTITION=4`(`HASHTREE=1`이 `HASH=2`보다 작은 게 함정입니다). 두 검증 전략이 핵심입니다.
+
+| 디스크립터 | 대상 | 검증 방식 |
+|-----------|------|----------|
+| **HASH** (tag 2) | 작은 파티션 — `boot`·`init_boot`·`vendor_boot`·`dtbo` | 전체 이미지를 RAM에 통째로 올려 **한 번 해시**(로드 후 검증) |
+| **HASHTREE** (tag 1) | 큰 읽기전용 fs — `system`·`vendor`·`product` | dm-verity 머클 트리로 **읽을 때마다 블록 단위** 검증 |
+| **CHAIN_PARTITION** (tag 4) | `vbmeta_system`·`vbmeta_vendor` | **별도 키·별도 롤백 슬롯**을 가진 하위 vbmeta에 검증을 위임 |
+
+작은 파티션은 통째로 해시해도 되지만, 수 GB의 system을 부팅 때 전부 해시할 수는 없어서 **dm-verity가 존재**합니다. 파티션이 자기 이미지와 vbmeta 구조를 함께 담으면 끝에 64바이트 **AvbFooter**(매직 `AVBf`)를 붙이고, 최상위 `vbmeta` 파티션은 footer 없이 순수 vbmeta 이미지로 **검증의 진입점**이 됩니다.
+
+## 질문 5 — 실패하면 어떤 취약점으로 이어지는가
+
+**dm-verity의 실체** — 머클 트리입니다. 파티션의 4KiB 블록마다 SHA-256(+ per-partition salt)으로 리프 해시를 만들고, 그 해시들을 다시 블록으로 묶어 해시해 올라가, 마침내 하나의 **루트 해시**가 됩니다. 그 루트(와 salt)는 **서명된 vbmeta의 hashtree 디스크립터** 안에 있습니다. 즉 AVB가 vbmeta 서명을 검증 → vbmeta가 루트 해시를 보증 → dm-verity가 그 루트로 블록을 검증. **루트 해시가 서명 앵커 없이 파티션에만 있으면** 공격자가 변조 데이터 위에 유효한 트리를 새로 계산해버릴 수 있습니다 — 그래서 vbmeta 앵커가 load-bearing입니다.
+
+검증은 **읽을 때(lazy)** 일어납니다. 커널은 실제로 읽히는 4KiB 블록만 해시해 트리 위로 검증하므로, 거의 안 읽히는 블록의 변조도 **읽히는 순간** 잡힙니다. 실패 시 동작은 모드로 정해집니다: `restart`(재부팅), `eio`(그 읽기에 I/O 에러), `logging`(기록만). FEC(Reed-Solomon, Android 7+)는 **악의 없는 비트 부패**를 복구할 뿐, 악의적 변조 블록은 여전히 해시에서 걸립니다(우회 아님).
+
+**롤백 방지** — 서명된 **구버전**은 암호학적으로는 여전히 유효합니다. 그걸 막는 건 각 vbmeta의 단조 증가 `rollback_index`입니다. 기기는 위치별 최고값을 **RPMB(Replay Protected Memory Block)나 TEE 보안 저장소** 같은 변조 방지·재생 방지 저장소에 두고, 인덱스가 낮은 이미지는 부팅을 거부합니다. 버전 문자열이 아니라 정수를 비교합니다. 체인 파티션은 각자 롤백 슬롯을 가집니다.
+
+**정책이 곧 공격 표면**이라는 관점에서 AVB의 범위와 한계:
+
+- **AVB가 주는 것**: 정지상태 파티션의 **무결성 + 롤백 방지 + 서명된 부팅 상태 판정**.
+- **AVB가 주지 않는 것**: **기밀성**(그건 FBE, C43)과 **런타임 침해 방어**. 부팅 후 커널/유저스페이스 RCE는 살아있는 시스템을 그대로 장악하고, dm-verity는 디스크의 읽기전용 블록만 재검증하지 RAM은 못 봅니다. 즉 AVB는 "무엇이 부팅됐는가"의 부팅시점 증명이지 런타임 샌드박스가 아닙니다.
+- **표준 우회**: `fastboot --disable-verity --disable-verification flash vbmeta`가 vbmeta 헤더에 `HASHTREE_DISABLED`(비트 0)·`VERIFICATION_DISABLED`(비트 1) 플래그를 세워 dm-verity와 AVB 검사를 건너뜁니다. 모든 Magisk/커스텀 커널 가이드의 그 명령입니다. 단 이 변조된 vbmeta는 서명이 깨지므로 **잠긴 부트로더는 거부**합니다 — 언락에서만 먹힙니다. AVB의 가치가 전적으로 잠금 상태에 달렸다는 실증입니다.
+
+## 질문 6 — Android 버전에 따라 무엇이 달라졌는가
+
+| 시점 | 달라진 것 |
+|------|----------|
+| Android 4.4 | dm-verity가 `/system`에 도입(당시 루트 해시·서명은 파티션에 붙는 verity 메타데이터에) |
+| Android 6.0 | Verified Boot 요구(경고 수준) |
+| **Android 7.0** | **엄격 강제 + 부팅 상태 색(GREEN/YELLOW/ORANGE/RED) 정의**, FEC 도입 |
+| **Android 8.0 (Treble)** | **AVB 2.0**: 단일 서명 `vbmeta`로 통합, 디스크립터·체인 파티션·롤백 인덱스 |
+| Android 11 | `vendor_boot` 파티션(벤더 램디스크/DTB) |
+| Android 13 (GKI) | `init_boot` 파티션(제네릭 램디스크/init을 boot에서 분리) — **`boot.img`는 GKI 커널만** 담음 |
+
+즉 "`boot.img`가 init을 담는다"는 Android 13+ GKI 기기에서는 틀립니다. 그리고 이 글의 vbmeta·디스크립터·체인·`verifiedBootHash` 얘기는 전부 **AVB 2.0(Android 8.0+)** 한정입니다 — 그 이전 기기에는 `vbmeta` 파티션 자체가 없습니다.
+
+## 질문 7 — 소스에서 확인하려면 어디를 봐야 하는가
+
+**호스트에서(기기 없이도 가능)**
+- `avbtool info_image --image vbmeta.img` → 알고리즘·rollback index·flags(정상 0x0, `HASHTREE_DISABLED`/`VERIFICATION_DISABLED` 확인)와 각 디스크립터(Hash/Hashtree/Chain Partition/Prop/Kernel Cmdline). `boot.img`에 돌리면 끝의 `AvbFooter` 덕에 Hash 디스크립터가, `system` 관련엔 Hashtree 디스크립터가 보입니다. `avbtool verify_image`로 사슬 검증.
+
+**실기기에서**
+- `getprop ro.boot.verifiedbootstate`(green/yellow/orange/red), `ro.boot.flash.locked`(1/0), `ro.boot.veritymode`(enforcing/logging), `ro.boot.vbmeta.digest`(부트로더가 실제 검증한 vbmeta 해시). `cat /proc/cmdline`.
+- `fastboot getvar unlocked` / `current-slot`, `fastboot flashing get_unlock_ability`.
+- `ls -l /dev/block/dm-*`로 verity 매핑된 파티션 확인 — 있으면 hashtree가 런타임에 강제 중, 있어야 할 파티션에 없으면 `--disable-verity` 흔적.
+
+**소스·문서**
+- AOSP `external/avb`(libavb: `avb_vbmeta_image.h`·`avb_descriptor.h`·`avb_chain_partition_descriptor.h`·`avb_footer.h`; `avbtool.py`)
+- `source.android.com/docs/security/features/verifiedboot`(AVB·Boot flow·dm-verity), `.../keystore/attestation`(RootOfTrust)
+- Linux `Documentation/admin-guide/device-mapper/verity.rst`
+
+## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
+
+- **15~16주차 / CVE-01("에뮬레이터에선 안 보인다")**: 이제 이유가 분명합니다 — 강제는 **잠금 상태 + 하드웨어 신뢰의 뿌리**에 게이트됩니다. AOSP 에뮬레이터는 사실상 언락(ORANGE)이고 앵커할 퓨즈 RoT가 없어 vbmeta 강제가 없습니다. **빌드 변종 때문이 아닙니다** — userdebug 이미지도 테스트 키로 서명된 AVB 메타데이터를 싣고, 잠긴 기기에 그 키로 올리면 검증됩니다.
+- **week18(이미지 마커·패치 수준)**: `ro.boot.vbmeta.digest`가 도는 시스템을 특정 서명 이미지에 묶고, 롤백 인덱스는 "패치 수준 라벨"과 달리 단조 정수라 되돌릴 수 없습니다.
+- **C05(EL3·신뢰의 뿌리)**: 퓨즈 키 해시가 reset 시 신뢰되는 그 앵커이고, 검증이 사슬로 올라갑니다.
+- **C08(서명 스킴)**: APK v1~v4가 앱마다 서명한다면, AVB는 vbmeta를 **한 번** 서명해 파티션들을 전이적으로 덮습니다 — 같은 RSA-over-digest 암호, 다른 범위.
+- **C40/C42(Keystore·attestation)**: 부팅 상태가 attestation의 `RootOfTrust`로 전달됩니다(질문의 다리, 아래).
+- **C31/C32(Treble·파티션 신뢰)**: 체인 파티션이 곧 파티션별 신뢰 위임입니다.
+- 롤백은 **C29**에서, 기밀성 대비는 **C43(FBE)**에서 더 깊이 다룹니다.
+
+## 직접 그릴 수 있는 호출 흐름
+
+두 개를 손으로 그려 보시길 권합니다.
+
+```
+[ 신뢰의 사슬 — 퓨즈에서 커널까지 ]
+
+OTP/eFuse: vbmeta 서명 공개키의 해시(다이제스트)   ← 불변, 재플래시 불가
+   │  (Boot ROM 이 이 값으로 첫 단계 검증)
+   ▼
+Boot ROM ──검증──▶ 부트로더 단계들 ──검증──▶ 최종 부트로더(libavb)
+                                                │
+                                                ▼
+                              vbmeta 검증:
+                                hash(헤더 + 보조블록)  ← 인증블록은 제외
+                                = 인증블록의 해시?
+                                서명(다이제스트) RSA 검증
+                                실려온 키의 해시 == 퓨즈 값?   ← 진짜 뿌리
+                                                │ 통과
+                                                ▼
+                                        커널로 점프
+```
+
+```
+[ 하나의 vbmeta 가 보증하는 것들, 그리고 원격까지 ]
+
+           서명된 vbmeta
+        ┌───────┼────────────┬─────────────────┐
+        ▼       ▼            ▼                 ▼
+   HASH 디스크립터  HASHTREE 디스크립터   CHAIN 디스크립터    rollback_index
+   (boot 통째 해시) (system 루트 해시)   (vbmeta_system,     (RPMB/TEE 에
+        │            │  ↓ dm-verity      vbmeta_vendor       저장, 다운그레이드
+    로드시 검증    읽을 때마다 블록 검증   = 별도 키·롤백)      거부)
+                                                │
+   부팅 상태(GREEN/YELLOW/ORANGE/RED) ──────────┘
+        │
+        ▼
+   Keystore attestation 의 RootOfTrust
+   (verifiedBootState·deviceLocked·verifiedBootKey·verifiedBootHash)
+        │  TEE 가 서명 — OS 는 위조 불가
+        ▼
+   원격 서버가 "이 기기는 GREEN + 잠김"을 암호학적으로 확인
+```
+
+두 번째 그림의 마지막이 C40으로 가는 다리입니다. `verifiedBootState`는 로컬 경고 화면만이 아니라 하드웨어 서명된 인증서 필드라, 침해된 OS도 GREEN을 위조하지 못합니다.
+
+## 오개념 판별 문제 5개
+
+각 문장이 왜 틀렸는지 한 줄로 반박해 보세요.
+
+1. "OEM의 전체 공개키가 eFuse/OTP에 구워진다."
+2. "vbmeta가 모든 파티션을 각각 서명한다 / dm-verity가 부팅 때 system 전체를 해시한 뒤 마운트한다."
+3. "부팅 상태가 YELLOW면 그 기기는 언락되었거나 변조된 것이다."
+4. "Verified Boot는 부팅 후에도 시스템을 익스플로잇으로부터 지키고, 파티션을 암호화한다."
+5. "에뮬레이터에서 Verified Boot가 안 보이니 고장이다 / 언락해도 AVB가 지켜준다."
+
+<details><summary>판정 기준(펼치기)</summary>
+
+1. 퓨즈에는 키의 **해시**만 굽습니다. 전체 키는 vbmeta 안에 실려 오고, 부트로더가 그 키로 서명을 검증한 뒤 키 해시를 퓨즈 값과 대조합니다. 이 대조가 진짜 신뢰의 뿌리입니다.
+2. vbmeta는 **한 번** 서명되고 파티션별 다이제스트를 담습니다. 큰 파티션은 dm-verity가 **읽을 때마다 블록 단위**로 검증합니다 — 부팅 때 전체를 해시하는 건 작은 HASH 디스크립터 파티션(boot 등)뿐입니다.
+3. YELLOW는 **잠긴 채** 사용자 지정 키로 검증 성공(경고 + 키 지문). 언락(검증 안 함)은 ORANGE, 검증 실패는 RED입니다.
+4. AVB는 부팅시점·정지상태의 무결성 + 롤백 방지일 뿐입니다. 런타임 RCE는 살아있는 시스템을 장악하고(dm-verity는 디스크 읽기전용 블록만), 기밀성은 FBE(C43)가 담당합니다.
+5. 강제는 **잠금 상태 + 하드웨어 RoT**에 게이트됩니다. 에뮬은 언락 + 퓨즈 RoT 없음이라 안 보이는 게 정상입니다. 언락하면 ORANGE + 강제 꺼짐이고, `--disable-verity/--disable-verification` 플래그는 언락에서만 먹힙니다.
+</details>
+
+## 서술형 문제 3개
+
+1. 신뢰의 뿌리가 "퓨즈된 전체 키"가 아니라 "퓨즈된 키 해시 + vbmeta 안의 키"인 이유를, 자가서명 vbmeta가 왜 잠긴 기기에서 거부되는지로 설명하세요.
+2. HASH 디스크립터와 HASHTREE 디스크립터를 구분하고, 왜 `system`은 부팅 때 전체를 해시하지 않고 dm-verity로 읽을 때마다 검증하는지 서술하세요.
+3. 부팅 상태 색(GREEN/YELLOW/ORANGE/RED)이 로컬 경고 화면을 넘어 원격 서버까지 신뢰되는 경로(attestation `RootOfTrust`)를 서술하고, 왜 침해된 OS가 GREEN을 위조하지 못하는지 설명하세요.
+
+## 소스 탐색 과제
+
+- 실기기나 **공식 팩토리 이미지**에서 `vbmeta.img`와 `boot.img`(그리고 가능하면 system 관련)를 뽑아, 호스트에서 `avbtool info_image`로 디스크립터 종류(Hash vs Hashtree vs Chain Partition)·`rollback index`·`flags`·알고리즘을 읽으세요. Hash와 Hashtree 출력을 나란히 놓고 차이를 확인.
+- 실기기가 있으면 `getprop ro.boot.verifiedbootstate`·`ro.boot.flash.locked`·`ro.boot.vbmeta.digest`와 `ls -l /dev/block/dm-*`로 잠금·verity 상태를 캡처하고, **왜 `sec-api33` 에뮬에서는 이게 안 보이는지**(잠금 상태·RoT 부재)를 근거와 함께 적으세요.
+
+## 블로그 초안 작성 과제
+
+이 모듈을 **실측 글**로 승격하세요. 환경 특성을 먼저 명시합니다: `sec-api33` 에뮬은 사실상 언락 + 퓨즈 RoT 없음이라 **강제가 보이지 않습니다**(15~16주차 관찰의 진짜 원인 = 빌드가 아니라 잠금 상태·RoT 부재). 그러나 **`avbtool info_image`는 호스트에서 아무 이미지에나 돌릴 수 있으므로 구조 자체는 실측 가능**합니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+
+1. **구조 실측**: 공식 팩토리 이미지의 `vbmeta.img`·`boot.img`·system 관련을 뽑아 `avbtool info_image` 출력으로 Hash·Hashtree·Chain Partition 디스크립터를 실제로 보이기.
+2. **잠금·verity 상태**: 실기기(가능하면)에서 `ro.boot.*` props와 `/dev/block/dm-*`로 잠금 상태와 dm-verity 매핑을 캡처.
+3. **두 전략 대조**: HASH 디스크립터(boot)와 HASHTREE 디스크립터(system) 출력을 나란히 붙여 "로드 후 통째 vs 읽을 때마다 블록"을 실물로.
+4. **attestation 다리**(가능하면): 하드웨어 attestation 인증서를 하나 뽑아 `RootOfTrust`의 `verifiedBootState`를 읽어 부팅 상태 색과 연결.
+
+각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
+
+## 마치며
+
+15~16주차의 "에뮬레이터에선 안 보인다"는 한 줄은, 사실 이 모듈 전체를 압축하고 있었습니다 — **AVB의 모든 보장이 잠긴 부트로더와 하드웨어 신뢰의 뿌리를 전제**하기 때문에, 그것이 없는 에뮬레이터에서는 아무것도 강제되지 않았던 것입니다. 신뢰는 퓨즈된 키 **해시**에서 시작해(전체 키가 아니라), 부트로더가 vbmeta 서명을 검증하고, 그 vbmeta가 dm-verity의 루트 해시를 보증하고, 마침내 부팅 상태가 TEE 서명 attestation으로 원격까지 전달됩니다.
+
+그리고 그 범위는 분명합니다: AVB는 **부팅시점·정지상태의 무결성과 롤백 방지**이지, 런타임 방어도 기밀성도 아닙니다. 커널을 따면(C05의 EL0→EL1) 살아있는 시스템은 여전히 넘어가고, 데이터 기밀성은 C43(FBE)의 몫입니다. 다음은 이 부팅 상태가 실제로 키에 서명돼 나가는 자리인 **C40(Keystore·KeyMint·StrongBox)**, 또는 롤백 방지를 더 깊이 보는 **C29**로 이어집니다. 위의 「블로그 초안 작성 과제」를 마치면 이 모듈이 실측 글로 확정됩니다.

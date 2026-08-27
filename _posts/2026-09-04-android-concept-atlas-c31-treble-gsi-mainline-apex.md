@@ -1,0 +1,152 @@
+---
+layout: post
+title: "Android Security Concept Atlas C31 - Treble·GSI·Mainline·APEX, 프레임워크와 벤더를 가르다"
+date: 2026-09-04 21:00:00 +0900
+category: 블로그/기술문서
+author: WTCY
+tags: [Android, AndroidSecurity, 모바일보안, ProjectTreble, VINTF, VNDK, HIDL, AIDL, GSI, Mainline, APEX, apexd, ConceptAtlas, 학습기록]
+excerpt: "왜 어떤 Android 보안 패치는 OEM 업데이트를 기다리지 않고 Play를 통해 바로 오는가. Project Treble이 프레임워크(/system)와 벤더 구현(/vendor)을 안정된 인터페이스로 갈라 프레임워크만 따로 업데이트할 수 있게 했고, Mainline은 미디어·ART·conscrypt 같은 핵심 부품을 APEX 모듈로 만들어 Google이 플릿 전체를 직접 패치하게 했습니다. 그리고 그 벤더 인터페이스는 빌드 경계가 아니라 신뢰 경계입니다 - 벤더 HAL은 자기 SELinux 도메인과 링커 네임스페이스에 갇힙니다. 제가 CVE 시리즈에서 본 패치 갭을 줄인 구조입니다. Concept Atlas의 열일곱 번째 모듈입니다."
+---
+
+> **Concept Atlas 모듈**: C31 — Treble·GSI·Mainline·APEX
+> **계층**: Tier 5 (부팅·업데이트 체인) · **난이도**: 중급 · **선수 개념**: C30(dynamic partitions), C23(SELinux 분할), C33(링커 네임스페이스)
+> **성격**: 미학습 → 풀 작성. 여러 앞 모듈이 참조하던 "플랫폼/벤더 분리"의 본체.
+
+C23에서 SELinux가 plat/vendor로 나뉜다고, C33에서 링커 네임스페이스가 벤더 라이브러리를 가둔다고, C28에서 vbmeta가 체인 파티션으로 위임된다고 했습니다. 이 모듈이 그 모든 분리의 **본체** — Project Treble입니다.
+
+한 문장으로: **프레임워크(/system)와 벤더 구현(/vendor)을 안정된 인터페이스로 갈라 프레임워크만 따로 업데이트하게 하고, Mainline은 핵심 부품을 APEX 모듈로 만들어 Google이 플릿 전체를 직접 패치하게 한다.** 🔴 미학습이라 처음부터 세웁니다.
+
+## 배경 개념 - 프레임워크와 벤더의 계약
+
+- **Project Treble(Android 8.0)**: OS 프레임워크와 벤더/SoC 구현을 안정된 **벤더 인터페이스**로 분리.
+- **VINTF**: 벤더 매니페스트(제공)와 프레임워크 호환성 행렬(요구)을 대조해 호환성 강제.
+- **HAL**: 프레임워크에 dlopen되던 공유 라이브러리 → 별도 프로세스의 버전된 인터페이스(HIDL → AIDL).
+- **GSI(Generic System Image)**: 순수 AOSP `/system` 이미지. Treble 기기의 `/vendor` 위에서 부팅 → 컴플라이언스 검증용.
+- **Mainline / APEX**: 핵심 OS 부품을 Google Play로 업데이트하는 모듈 / 그 컨테이너 형식.
+
+## 질문 1 — 이 개념은 Android 전체 구조에서 어디에 있는가
+
+**업데이트 속도를 위한 재설계**입니다. 프레임워크가 벤더 내부에 의존하지 않게 해서, OEM이 SoC 벤더의 재포팅 없이 프레임워크만 업데이트할 수 있게 했습니다. 그리고 이 분리가 C23(SELinux plat/vendor), C33(링커 네임스페이스), C30(dynamic partitions), C28(chained vbmeta)로 층마다 표현됩니다.
+
+## 질문 2 — 어느 프로세스와 권한 수준에서 동작하는가
+
+- **프레임워크(/system, /product(9), /system_ext(11))** vs **벤더(/vendor, /odm)**가 VINTF 경계로 갈립니다. `/vendor`=SoC 벤더 HAL·드라이버, `/odm`=ODM 기기별 오버레이.
+- **HAL은 별도 프로세스**입니다. HIDL(8.0, `/dev/hwbinder`, `hwservicemanager`) → 안정 AIDL(11, 일반 binder + 벤더간은 `/dev/vndbinder`, 일반 `servicemanager`). HIDL은 13에서 폐기.
+- **Mainline**: Google Play 시스템 업데이트가 모듈을 배포. **APEX**는 `apexd`가 부팅 시 `/apex`에 **읽기전용**으로 마운트.
+
+## 질문 3 — 무엇을 신뢰하고 무엇을 신뢰하면 안 되는가
+
+- **벤더 인터페이스는 빌드 경계가 아니라 신뢰 경계입니다.** VINTF(매니페스트=제공 vs 호환성 행렬=요구)가 빌드·부팅 시 호환성을 강제합니다. 침해되거나 버그 있는 벤더 HAL은 자기 **SELinux 도메인**(C23)과 제한된 **링커 네임스페이스**(C33)에 갇혀, 프레임워크로 번지지 못합니다.
+- **VNDK**: 벤더가 링크할 수 있는 안정 시스템 네이티브 라이브러리 집합. 링커 네임스페이스로 강제되어, 벤더 바이너리가 사설 프레임워크 라이브러리를 물리적으로 dlopen하지 못합니다. (Treble과 함께 8.0에 개념 도입, 9에서 강제, **15에서 폐기** → LL-NDK/안정 AIDL로.)
+- **신뢰하면 안 되는 것들**: "Treble = 8.0 실행 모든 기기"(**런치** 기기만 의무, 업그레이드 기기는 면제), "HAL은 여전히 공유 라이브러리"(별도 프로세스), "HIDL이 현역"(AIDL로 이전, 13 폐기), "GSI = 데일리 ROM"(컴플라이언스 도구), "VTS는 GSI가 필요하다"(아니오 — VTS는 **기기 자체 빌드**로 벤더 인터페이스를 검사; GSI가 필요한 건 **CTS-on-GSI**).
+
+## 질문 4 — 입력과 출력은 무엇인가
+
+- **Treble(개념적)**: 입력 = 프레임워크 이미지 + 벤더 이미지. 출력 = VINTF 호환성 통과 시 부팅(불일치면 실패).
+- **Mainline**: 입력 = Play가 배포한 모듈(**APK 또는 APEX**). 출력 = APK는 일반 패키지로, **APEX는 `/apex`에 읽기전용 마운트**(스테이징 후 재부팅에 활성화).
+
+## 질문 5 — 실패하면 어떤 취약점으로 이어지는가
+
+**Mainline/APEX의 보안적 요점**: 미디어 코덱·conscrypt·ART 같은 보안 핵심 부품을 **OEM OTA 없이 플릿 전체에** 패치합니다 — 제가 CVE 시리즈에서 본 그 **패치 갭**을 줄인 구조입니다. APEX는 서명(AVB 페이로드 서명 + APK v3 서명)되고, 페이로드가 dm-verity로 검증되며, **읽기전용** 마운트에 **롤백 방지**가 걸립니다. 그래서 로그(rogue) APEX나 다운그레이드는 서명+롤백이 막습니다.
+
+**벤더 인터페이스의 봉쇄**: 벤더 HAL 버그는 그 HAL의 도메인/네임스페이스에 갇혀 프레임워크로 번지지 않습니다. 안정된 경계를 따라 봉쇄가 **강제 가능**해진 것이 Treble의 보안적 기여입니다.
+
+## 질문 6 — Android 버전에 따라 무엇이 달라졌는가
+
+| 시점 | 달라진 것 |
+|------|----------|
+| Android 8.0 | **Treble**, HIDL HAL, VNDK 개념 |
+| Android 9 | `/product` 파티션, VNDK 강제, **GSI 컴플라이언스**(CTS-on-GSI) |
+| Android 10 | **Mainline·APEX·DSU·dynamic partitions**(C30) |
+| Android 11 | `/system_ext` 파티션, **안정 AIDL HAL** |
+| Android 12 | **ART가 업데이트 모듈**(`com.android.art`) |
+| Android 13 | HIDL **폐기**(신규 HAL은 AIDL) |
+| Android 15 | VNDK **폐기** |
+
+ART 관련 APEX는 10에서 `com.android.runtime`, 12부터 `com.android.art`. 그 외 미디어·conscrypt·tzdata·statsd·**rkpd(C42)** 등이 모듈입니다. Permission Controller 등은 APK로, runtime/tzdata/statsd 등은 APEX로 — **APEX는 앱 실행 전에 필요하거나 네이티브 내용(라이브러리·바이너리)을 담는** 부품용입니다.
+
+## 질문 7 — 소스에서 확인하려면 어디를 봐야 하는가
+
+- `ls /apex`(마운트된 모듈), `pm list packages --apex-only`, `cmd apexservice`.
+- `lshal`(HAL 인스턴스와 transport — **hwbinder**(HIDL binderized)·**passthrough**(in-process HIDL)·**binder**(AIDL)).
+- `cat /vendor/etc/vintf/manifest.xml`(벤더 제공), `getprop ro.build.flavor`(GSI 여부), `getprop ro.apex.*`.
+- **소스**: `source.android.com/docs/core/architecture/{vintf,hidl,aidl,vndk}`, `.../tests/vts`, `.../ota/modular-system`.
+
+## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
+
+- **C23(SELinux)**: Treble이 정책을 plat/vendor로 나눈 것 — 같은 분리의 정책 층 표현.
+- **C33(링커 네임스페이스)**: VNDK를 강제하는 네이티브 층 — 벤더 `.so`가 사설 프레임워크 라이브러리에 못 닿게.
+- **C30(dynamic partitions)**: 이 여러 파티션을 실용적으로 리사이즈 가능하게 만든 것.
+- **C28(Verified Boot)**: chained vbmeta(vbmeta_system/vbmeta_vendor)가 파티션별 키로 독립 서명 — Treble의 서명 층.
+- **C42(rkpd)**: RKP 데몬이 업데이트 가능한 APEX입니다.
+- **CVE 시리즈**: Mainline이 그 패치 갭을 줄였습니다.
+- 다음은 이 파티션들의 **신뢰 관계**를 정리하는 **C32**로 이어집니다.
+
+## 직접 그릴 수 있는 호출 흐름
+
+```
+[ Treble 의 프레임워크/벤더 분리와 그 층별 강제 ]
+
+  /system (프레임워크, Google/OEM)        /vendor + /odm (SoC/ODM)
+        │                                      │
+        └──────── VINTF 경계 ──────────────────┘
+           매니페스트(제공) vs 호환성 행렬(요구) → 빌드·부팅 시 검사
+        │                                      │
+   강제되는 층:
+     · SELinux: plat 정책      ┃  vendor 정책        (C23)
+     · 링커: 시스템 네임스페이스 ┃ 벤더 네임스페이스(VNDK) (C33)
+     · AVB: vbmeta_system      ┃ vbmeta_vendor(별도 키)  (C28)
+     · HAL: AIDL over binder   ┃ /dev/vndbinder (벤더간)
+
+[ Mainline: OEM OTA 를 건너뛰는 패치 ]
+
+Google Play 시스템 업데이트 → 모듈(APK 또는 APEX)
+   │ APEX 면: 스테이징 → 재부팅 시 apexd 가 /apex 에 읽기전용 마운트
+   │          (AVB+APK 서명 · dm-verity · 롤백 방지)
+   ▼
+미디어·ART·conscrypt·rkpd 등이 OEM 없이 플릿 전체 패치 → 패치 갭 축소
+```
+
+## 오개념 판별 문제 5개
+
+1. "Android 8.0을 실행하는 모든 기기는 Treble 벤더 인터페이스를 가진다."
+2. "Treble의 HAL은 폴더만 바뀐 공유 라이브러리다."
+3. "HIDL이 현재 Android HAL의 표준 IDL이다."
+4. "GSI는 OEM 폰에 스톡 AOSP를 올리는 데일리 드라이버 ROM이다."
+5. "VTS를 돌리려면 기기에 GSI를 플래시해야 한다."
+
+<details><summary>판정 기준(펼치기)</summary>
+
+1. **런치** 기기(8.0+로 출시)만 Treble 의무입니다. 8.0으로 업그레이드된 기기는 레거시 모놀리식을 유지할 수 있었습니다.
+2. Treble HAL은 별도 프로세스의 버전된 IDL 인터페이스(HIDL→AIDL)로 binder/hwbinder로 접근합니다. in-process dlopen은 pre-Treble입니다.
+3. AIDL로 이전했습니다 — 안정 AIDL(11), HIDL 폐기(13). 신규 HAL은 AIDL입니다.
+4. GSI는 순수 AOSP `/system` **컴플라이언스/테스트 도구**입니다. OEM 코드가 없어 기기별 기능(일부 카메라·지문·라디오)이 빠질 수 있습니다.
+5. VTS는 **기기 자체 빌드**로 벤더 인터페이스/HAL 적합성을 검사합니다. GSI가 필요한 건 **CTS-on-GSI**입니다.
+</details>
+
+## 서술형 문제 3개
+
+1. Treble의 프레임워크/벤더 분리가 SELinux(C23)·링커 네임스페이스(C33)·AVB(C28)에서 각각 어떻게 표현되는지, 그리고 그것이 왜 하나의 신뢰 경계인지 서술하세요.
+2. Mainline/APEX가 왜 보안 패치 갭을 줄이는지, 그리고 APEX가 어떻게 무결성(서명·dm-verity·읽기전용·롤백)을 보장하는지 서술하세요.
+3. APEX와 APK의 차이(마운트 시점·내용·용도)를 설명하고, 왜 ART/tzdata 같은 부품은 APEX여야 하는지 서술하세요.
+
+## 소스 탐색 과제
+
+- 실기기에서 `ls /apex`와 `pm list packages --apex-only`로 이 기기의 Mainline 모듈을, `lshal`로 HAL 인스턴스와 transport(hwbinder/passthrough/binder)를 확인하세요.
+- `cat /vendor/etc/vintf/manifest.xml`로 벤더가 제공하는 HAL/버전을 보고, VINTF 매니페스트=제공 / 호환성 행렬=요구 구조를 근거로 설명하세요.
+- 이 기기가 GSI인지(`ro.build.flavor`) 확인하세요.
+
+## 블로그 초안 작성 과제
+
+이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+
+1. **모듈 목록**: `/apex`와 `pm list packages --apex-only` 출력으로 이 기기가 실제로 받는 Mainline 부품을 실측.
+2. **HAL transport**: `lshal` 출력으로 HIDL/AIDL 혼재와 transport를 캡처.
+3. **파티션·VINTF**: 파티션 목록과 `vintf` 매니페스트를 캡처해 프레임워크/벤더 경계를 서술.
+4. **패치 갭 서술**: 특정 Mainline 모듈(예: media, conscrypt)이 OEM OTA 없이 패치되는 경로를 CVE 시리즈의 패치 갭과 연결.
+
+각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+
+## 마치며
+
+Project Treble은 프레임워크와 벤더를 안정된 인터페이스로 갈라 "OEM이 SoC 재포팅 없이 프레임워크만 업데이트"를 가능하게 했고, 그 분리는 SELinux(C23)·링커 네임스페이스(C33)·AVB(C28)·파티션(C30)으로 층마다 강제됩니다. Mainline은 한 걸음 더 나아가, 미디어·ART·conscrypt 같은 핵심 부품을 APEX 모듈로 만들어 **Google이 플릿 전체를 OEM OTA 없이 직접 패치**하게 했습니다 — 제가 CVE 시리즈에서 마주한 패치 갭을 구조적으로 줄인 것입니다. 다음은 이 파티션들이 서로 **무엇을 신뢰하고 무엇을 신뢰하면 안 되는가**를 정리하는 **C32**로 이어집니다.
