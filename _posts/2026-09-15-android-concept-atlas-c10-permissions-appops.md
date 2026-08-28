@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C10 - permission·signature 권한·AppOps, UID에 무엇을 허가할까"
+title: "Android Security Concept Atlas C10 | 가상 실습 보고서 — permission·signature 권한·AppOps, UID에 무엇을 허가할까"
 date: 2026-09-15 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Permission, RuntimePermission, SignaturePermission, AppOps, protectionLevel, SpecialAccess, ConceptAtlas, 학습기록]
 excerpt: "C09에서 앱은 UID를 얻어 격리됩니다. 이 편은 그 UID에 '무엇을 허가할까'입니다 - 보호수준 normal(설치시 자동)·dangerous(런타임 A6+)·signature(선언 앱과 같은 서명 키일 때만, C08)·internal(A11+) 네 가지가 부여 방식을 정하고, AppOps가 그 아래에서 op별로 더 잘게 추적·시행하죠(IGNORED는 예외 없이 조용히 빈 데이터를 줍니다). 그리고 시행의 핵심 함정: checkPermission(perm,pid,uid)은 명시된 uid를 검사하지 Binder 호출자를 읽지 않습니다 - 호출자를 푸는 건 *Calling* 변형뿐이라, 자기와 호출자를 헷갈리면 그게 바로 권한 우회 취약점(C17)입니다. Tier 1 앱·패키징 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `javac`, `d8`, `aapt`, `zipalign`, `apksigner verify`, `adb install -r` |
+| 관측 결과 | 증거 앱 APK를 직접 빌드하고 v2/v3 서명을 검증한 뒤 설치했다. Package Manager가 앱을 별도 UID로 등록했다. |
+| 검증 한계 | AAB의 Play 서버 변환과 Play App Signing은 로컬 Google APIs AVD만으로 재현하지 않는다. |
+
+![C10 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/apps.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C10 — permission·signature 권한·AppOps
 > **계층**: Tier 1 (앱·패키징) · **난이도**: 중급 · **선수 개념**: C09(UID), C08(서명)
@@ -124,13 +150,13 @@ C09의 UID에 **권능**을 붙이는 층입니다. C08(signature 권한은 같�
 2. AppOps의 네(다섯) 모드를 설명하고, 특히 `MODE_IGNORED`(조용한 빈 데이터)와 `MODE_ERRORED`(예외)의 차이가 리버싱에서 왜 중요한지 서술하세요.
 3. `checkPermission`(명시 uid) vs `checkCallingPermission`(Binder 호출자)의 차이가 어떻게 권한 우회 취약점이 되는지, C09·C17과 엮어 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 앱에 대해 `dumpsys package <pkg>`로 요청/부여 권한과 install/runtime 구분을 확인하세요.
 - `cmd appops get <pkg>`로 op 모드를 보고, `pm revoke`로 하나 취소한 뒤 대응 op가 어떻게 바뀌는지 관찰하세요.
 - `pm list permissions -g -d`로 dangerous 그룹을 나열하고, SYSTEM_ALERT_WINDOW가 그 목록에 없음(special access)을 확인하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

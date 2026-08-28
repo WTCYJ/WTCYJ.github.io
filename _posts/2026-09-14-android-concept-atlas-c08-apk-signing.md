@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C08 - APK 서명 v1~v4·키 순환, 앱 정체성의 신뢰 뿌리"
+title: "Android Security Concept Atlas C08 | 가상 실습 보고서 — APK 서명 v1~v4·키 순환, 앱 정체성의 신뢰 뿌리"
 date: 2026-09-14 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, APKSigning, v2SigningBlock, KeyRotation, SigningLineage, Janus, MasterKey, apksigner, ConceptAtlas, 학습기록]
 excerpt: "앱의 안정적 정체성은 패키지 이름이 아니라 서명자 인증서입니다 - sharedUserId(C09)·signature 권한(C10)·업데이트가 전부 '같은 키인가'로 결정되죠. v1(JAR 서명)은 열거된 파일 내용만 보호해 ZIP 구조·앞에 붙인 바이트를 못 봤고, 그 갭이 Master Key와 Janus였습니다. v2(A7.0)는 APK Signing Block으로 파일 전체를 서명해 그 클래스를 닫았고, v3(A9)는 proof-of-rotation lineage로 키를 바꿔도 정체성을 잇고, v3.1(A13)은 순환을 SDK로 겨냥하며, v4(A11)는 .idsig Merkle 트리로 스트리밍 설치를 v2/v3 위에 얹습니다. Tier 1 앱·패키징의 신뢰 뿌리 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `javac`, `d8`, `aapt`, `zipalign`, `apksigner verify`, `adb install -r` |
+| 관측 결과 | 증거 앱 APK를 직접 빌드하고 v2/v3 서명을 검증한 뒤 설치했다. Package Manager가 앱을 별도 UID로 등록했다. |
+| 검증 한계 | AAB의 Play 서버 변환과 Play App Signing은 로컬 Google APIs AVD만으로 재현하지 않는다. |
+
+![C08 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/apps.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C08 — APK 서명 v1~v4·키 순환
 > **계층**: Tier 1 (앱·패키징) · **난이도**: 중급 · **선수 개념**: C06(APK/zip), C07(DEX)
@@ -68,7 +94,7 @@ C09에서 sharedUserId가 "같은 서명 키"를 요구한다 했고, C10의 sig
 - `PackageManager.GET_SIGNING_CERTIFICATES`(런타임 서명자 조회).
 - **소스**: `source.android.com/docs/security/features/apksigning`(+v2/v3/v4 하위), `apksig` 라이브러리(블록 ID·해시 구획·lineage).
 
-**주의**: 서명 검증은 아키텍처 무관 → **에뮬레이터/데스크톱에서 `apksigner verify`로 실측 가능**(실기기 불필요).
+**주의**: 서명 검증은 아키텍처와 무관하므로 **host와 Android Emulator에서 `apksigner verify`로 검증할 수 있습니다.**
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -119,13 +145,13 @@ C09에서 sharedUserId가 "같은 서명 키"를 요구한다 했고, C10의 sig
 2. v3 SigningCertificateLineage(proof-of-rotation)가 키를 바꿔도 왜 signature 권한·sharedUserId 연속성을 유지시키는지, v3.1의 rotation-min-sdk가 무엇을 추가하는지 서술하세요.
 3. "검증기는 최고 스킴을 요구하고 v1으로 조용히 폴백하지 않는다"가 왜 전체파일 서명을 의미 있게 만드는지, `X-Android-APK-Signed`의 역할과 함께 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 APK 하나를 `apksigner verify --verbose --print-certs`로 검사해 어느 스킴(v1~v4)이 있는지와 서명자 인증서 SHA-256을 캡처하세요.
 - `unzip -l app.apk "META-INF/*"`로 v1 3종 유무를 확인하고, `.idsig` 동반 파일(v4)이 있는지 보세요.
 - 두 앱이 같은 서명자인지(sharedUserId/서명 권한 공유 가능 여부)를 인증서 해시로 판정하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

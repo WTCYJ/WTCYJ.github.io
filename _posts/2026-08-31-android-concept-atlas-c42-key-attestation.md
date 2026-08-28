@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C42 - Key Attestation과 신뢰의 뿌리, 앱을 믿지 않고 키를 증명하기"
+title: "Android Security Concept Atlas C42 | 가상 실습 보고서 — Key Attestation과 신뢰의 뿌리, 앱을 믿지 않고 키를 증명하기"
 date: 2026-08-31 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, KeyAttestation, RootOfTrust, KeyDescription, RKP, RemoteKeyProvisioning, IDAttestation, X509, ConceptAtlas, 학습기록]
 excerpt: "C40에서 attestation을 요점만 봤다면, 이 글은 그 심화입니다. 원격 서버가 앱도 OS도 믿지 않고, 이 키가 정말 보안 하드웨어 안에 있는지·기기가 잠긴 채 검증 부팅됐는지를 인증서 체인 하나로 확인하는 방법. KeyDescription ASN.1 확장을 어디서 어떻게 읽는지, 왜 리프에 있다고 가정하면 안 되는지, 폐기가 왜 X.509 CRL이 아니라 JSON 상태 목록인지, 그리고 공장 배치 키를 대체하는 RKP의 내부. 마침 2026년 2월부터 P-384 루트로 전환 중이라, 검증기는 두 루트를 다 핀해야 합니다. Concept Atlas의 열세 번째 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | AndroidKeyStore EC 키 생성, attestation challenge, `KeyInfo`, certificate chain 조회 |
+| 관측 결과 | EC 키 생성과 attestation 요청이 성공했고 인증서 체인 길이는 3이었다. 이 AVD의 키 보안 수준은 정확히 `SOFTWARE(0)`였다. |
+| 검증 한계 | TEE·StrongBox·Weaver는 물리 보안 하드웨어가 없는 AVD에서 증명할 수 없다. SOFTWARE 결과를 하드웨어 보안으로 해석하지 않는다. |
+
+![C42 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-keystore.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C42 — key attestation·root of trust
 > **계층**: Tier 7 (하드웨어 기반 보안) · **난이도**: 연구 · **선수 개념**: C40(Keystore·attestation 기초), C28(Verified Boot·RootOfTrust)
-> **성격**: 미학습 → 풀 작성. C40의 attestation을 깊이 파고, C28의 RootOfTrust가 도착하는 자리를 확정합니다.
+> **성격**: 공식 문서·공개 소스 기준 재검토. C40의 attestation을 깊이 파고, C28의 RootOfTrust가 도착하는 자리를 확정합니다.
 
 C40에서 저는 attestation을 요점만 봤습니다 — 인증서 체인, `securityLevel`, C28의 `RootOfTrust`가 실린다는 것까지. 이 글은 그 **심화**입니다. **원격 서버가 앱도 OS도 믿지 않고**, 이 키가 정말 TEE/StrongBox 안에 있는지·기기가 잠긴 채 검증 부팅됐는지를 인증서 체인 하나로 확인하는 방법입니다.
 
-한 문장으로: **키의 속성과 부팅 상태를 하드웨어가 서명해 증명하고, 검증은 앱이 아니라 서버가, 핀된 Google 루트에 대해, 오프디바이스로 한다.** 🔴 미학습이라 처음부터 세웁니다.
+한 문장으로: **키의 속성과 부팅 상태를 하드웨어가 서명해 증명하고, 검증은 앱이 아니라 서버가, 핀된 Google 루트에 대해, 오프디바이스로 한다.** 공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다.
 
 ## 배경 개념 - 자기 보고가 아니라 서명된 증명
 
@@ -144,18 +170,18 @@ KeyDescription ::= SEQUENCE {
 2. `hardwareEnforced`와 `softwareEnforced` 목록의 차이가 왜 이 스키마의 핵심 보안 불변식인지, 잘못된 목록에서 태그를 검증하면 무엇이 뚫리는지 서술하세요.
 3. C28의 `RootOfTrust`가 이 attestation 확장으로 들어와 원격 서버가 "잠긴·검증부팅된 기기"를 확인하는 경로를 설명하고, 그럼에도 이것이 **증명하지 않는 것**(런타임 앱 무결성)은 무엇인지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - `sec-api33` 에뮬에서 `setAttestationChallenge`로 키를 만들고 `getCertificateChain`으로 체인을 뽑아, `openssl asn1parse`로 OID `1.3.6.1.4.1.11129.2.1.17` 확장을 열어 `attestationVersion`·`attestationSecurityLevel`·`RootOfTrust`를 읽으세요. **`securityLevel`이 `Software`로 나옴**과, 리프의 `serialNumber=1`·`CN=Android Keystore Key` 상수를 확인하고, 왜 에뮬에서 하드웨어 보증이 검증되지 않는지 적으세요.
-- 실기기(가능하면 Pixel)에서 같은 절차로 `TrustedEnvironment`/`StrongBox`와 `RootOfTrust`의 `deviceLocked`/`verifiedBootState`를 대조하세요.
+- 공식 Android attestation 문서와 공개 인증서/test vector에서 `TrustedEnvironment`/`StrongBox`, `deviceLocked`와 `verifiedBootState` 형식을 대조하세요. 공개 예시는 로컬 환경의 보증으로 취급하지 않습니다.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
-이 모듈을 **실측 글**로 승격하세요. 환경: 에뮬은 `Software` 레벨(하드웨어 루트 없음)이라 파싱은 되지만 하드웨어 보증은 검증 불가 — 실기기 필요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+이 모듈을 **가상 환경 실측 글**로 승격하세요. Emulator에서 생성한 체인의 실제 security level과 extension을 파싱하고, 하드웨어 Root of Trust는 공식 문서와 공개 test vector로만 비교합니다. 로컬 결과가 `Software`이면 그 사실만 관측값으로 기록하고 TrustedEnvironment/StrongBox 보증을 주장하지 않습니다.
 
 1. **확장 파싱**: 에뮬에서 체인을 뽑아 OID `.17` 확장을 `openssl`로 열고 `securityLevel=Software`·`origin=GENERATED`·`RootOfTrust` 필드를 실제 출력으로.
-2. **레벨 대조**(가능하면): 실기기에서 `TrustedEnvironment`/`StrongBox`와 `deviceLocked=true`/`verifiedBootState=Verified`를 대조.
-3. **검증 규칙 실증**: 챌린지 불일치·`softwareEnforced`의 태그·리프 가정이 왜 우회인지를 파싱한 실물로 서술.
+2. **형식 대조**: 공개 test vector에서 `TrustedEnvironment`/`StrongBox`, `deviceLocked`와 `verifiedBootState`를 읽고 로컬 `Software` 결과와 증거 등급을 분리.
+3. **검증 규칙 실증**: 로컬에서 만든 인증서와 공개 test vector를 이용해 챌린지 불일치, `softwareEnforced` 태그와 leaf 고정 가정이 왜 잘못인지 실제 파싱 결과로 서술.
 4. **루트 전환**: `android.googleapis.com/attestation/root`의 JSON에서 레거시 RSA + 새 P-384 루트가 둘 다 있음을 확인(정적 조회).
 
 각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.

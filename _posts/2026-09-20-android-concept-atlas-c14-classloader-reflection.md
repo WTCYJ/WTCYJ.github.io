@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C14 - ClassLoader·리플렉션·동적 코드 로딩, 정적 분석이 무너지는 곳"
+title: "Android Security Concept Atlas C14 | 가상 실습 보고서 — ClassLoader·리플렉션·동적 코드 로딩, 정적 분석이 무너지는 곳"
 date: 2026-09-20 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ClassLoader, DexClassLoader, InMemoryDexClassLoader, Reflection, HiddenAPI, Packer, DynamicCodeLoading, ConceptAtlas, 학습기록]
 excerpt: "APK를 정적으로 다 뜯었는데 로직이 안 보인다면, 진짜 코드는 런타임에 로드됩니다. Android의 ClassLoader는 전부 BaseDexClassLoader + DexPathList 위의 얇은 껍질이고, 부모위임(parent-first)이 프레임워크 클래스를 단일 정의로 지키죠. 그런데 DexClassLoader는 임의 경로의 dex를, InMemoryDexClassLoader(API 26)는 디스크에 파일도 안 떨구고 ByteBuffer의 dex를 로드합니다 - 내가 분석한 Toss 패커가 Blowfish+SEED로 복호한 dex를 바로 이걸로 실행했죠. 그래서 동적 코드 로딩은 악성코드/패커의 1순위 회피 기법이고, 정적 APK 분석은 stub만 봅니다. 리플렉션은 setAccessible로 언어 접근은 뚫지만 A9+ hidden-API 강제는 못 뚫고요. 내 패커 RE 작업과 직결되는 Tier 2 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.zygote`, `getprop dalvik.vm.usejit`, `ps` |
+| 관측 결과 | `zygote64`와 JIT 활성 상태를 확인했다. 비특권 앱의 전체 프로세스 열람 제한도 함께 관측했다. |
+| 검증 한계 | OAT/VDEX 생성 정책은 빌드와 프로파일 상태에 따라 달라지므로 이 한 번의 캡처를 모든 Android 버전에 일반화하지 않는다. |
+
+![C14 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-runtime.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C14 — ClassLoader·리플렉션·동적 코드 로딩
 > **계층**: Tier 2 (Android Runtime) · **난이도**: 중급 · **선수 개념**: C13(ART), C07(DEX)
@@ -124,13 +150,13 @@ DEX(C13)를 **로드하는 메커니즘**이자, **동적 코드 로딩이 정�
 2. 동적 코드 로딩(패커)이 왜 정적 APK 분석을 무력화하는지, Toss의 복호-후-InMemory 로드를 예로 서술하고, 어떤 동적 관찰이 필요한지 설명하세요.
 3. `setAccessible`(언어 접근)과 A9+ hidden-API 강제(런타임)가 왜 별개 층인지, 리플렉션/JNI 모두에 적용됨과 함께 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - Frida로 `DexClassLoader`/`InMemoryDexClassLoader` 생성자를 후킹해, 어떤 앱이 런타임에 dex를 로드하는지 캡처하세요(양성 앱 대상).
 - `/proc/<pid>/maps`에서 익명 실행 dex 영역을 찾고, 거기서 dex를 덤프해 `baksmali`로 확인하세요.
 - `veridex`로 한 앱의 non-SDK(hidden API) 사용을 스캔하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

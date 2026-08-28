@@ -1,12 +1,32 @@
 ---
 layout: post
-title: "Android Security Concept Atlas — Tier 6: Native·커널"
+title: "Android Security Concept Atlas Tier 6 | 학습 로드맵 — Native·커널"
 date: 2026-10-12 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: learning-roadmap
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ConceptAtlas, Tier6, Kernel, Mitigations, 학습기록]
 excerpt: "EL0에서 EL1로 내려가는 계층입니다. ELF/링커로 네이티브 코드가 실행되고, ioctl이 커널로 가는 문이며, GKI가 커널을 갈라 통일 패치하되 벤더 드라이버는 여전히 벤더 트랙이라 패치 갭이 남고, 완화(PAC/MTE)와 새니타이저가 그 위에서 익스플로잇을 막고 버그를 잡습니다. 내 CVE 시리즈의 EL0→EL1 서사가 여기 완성됩니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 이 로드맵의 실제 검증 기준
+
+이 글은 개별 모듈을 묶는 **학습 로드맵**이다. Tier 6의 공통 기준 실습은 전용 API 33 AVD에서 다음 항목으로 확인했다: `uname -a`, `/proc/cpuinfo`, NDK JNI 빌드, UBSan 패치 전·후 실행. Android 13 기반 Linux 5.15 x86_64 커널을 확인하고, NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다. 범용 AVD에 없는 벤더 드라이버와 KASAN 커널은 실행하지 않았으며, 해당 항목은 공개 소스·설정 분석 결과로 구분한다.
+
+![Tier 6 가상 실습 기준 화면](/assets/img/android-concept-atlas/verified-api33/evidence-kernel.png)
+
+세부 명령·판정은 각 Cxx 보고서와 [전체 원시 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에서 확인할 수 있다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas · Tier 6 — Native·커널 (Domain 7)**
 > 6개 모듈 · 이 계층은 **EL0→EL1 공격 표면과 방어**입니다.

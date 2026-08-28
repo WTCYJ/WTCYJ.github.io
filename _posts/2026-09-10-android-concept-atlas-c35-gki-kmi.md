@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C35 - Android Common Kernel·GKI·KMI, 커널의 제네릭 코어와 벤더 모듈"
+title: "Android Security Concept Atlas C35 | 가상 실습 보고서 — Android Common Kernel·GKI·KMI, 커널의 제네릭 코어와 벤더 모듈"
 date: 2026-09-10 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, GKI, KMI, AndroidCommonKernel, ACK, vendordlkm, vendorboot, KernelModule, PatchGap, ConceptAtlas, 학습기록]
 excerpt: "예전에는 SoC 벤더마다 커널을 포크해 드라이버를 통째로 컴파일해 넣어, 기기마다 서로 다른 커널 바이너리 수천 개가 생겼습니다 - 이게 커널 보안 패치가 느린 구조적 원인이었죠. GKI는 그것을 프레임워크의 Treble처럼 갈랐습니다: Google이 만든 하나의 제네릭 코어 커널(boot.img)과, 벤더 드라이버를 뺀 로더블 모듈(.ko). 둘 사이의 안정 ABI가 KMI라, Google이 코어에 보안 수정을 넣어도 벤더 모듈은 재빌드 없이 계속 로드됩니다. 그런데 벤더 모듈(GPU 등)은 여전히 벤더 트랙으로 패치되니, C36의 패치 갭은 절반만 닫힙니다. Concept Atlas의 스물세 번째 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `uname -a`, `/proc/cpuinfo`, NDK JNI 빌드, UBSan 패치 전·후 실행 |
+| 관측 결과 | Android 13 기반 Linux 5.15 x86_64 커널을 확인하고, NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다. |
+| 검증 한계 | 범용 AVD에 없는 벤더 드라이버와 KASAN 커널은 실행하지 않았으며, 해당 항목은 공개 소스·설정 분석 결과로 구분한다. |
+
+![C35 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-kernel.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C35 — Android Common Kernel·GKI·KMI
 > **계층**: Tier 6 (Native·커널) · **난이도**: 고급 · **선수 개념**: C27(부팅/커널), C31(Treble)
@@ -66,7 +92,7 @@ C36에서 커널 패치 갭이 벤더 드라이버 특유라 했습니다. 그 �
 - 파티션: `boot`(GKI 코어) vs `vendor_boot` vs `vendor_dlkm`(C27/C30).
 - **소스**: `android.googlesource.com/kernel/common`(브랜치), `source.android.com/docs/core/architecture/kernel/{generic-kernel-image,kernel-module-interface}`.
 
-**주의**: 에뮬레이터도 커널이 있어 `uname`은 보이지만, GKI/벤더 모듈 분할의 실체(vendor_dlkm의 벤더 `.ko`)는 실기기에서.
+**주의**: Emulator/Cuttlefish의 `uname`, GKI artifact와 reference module은 확인할 수 있지만 특정 OEM의 `vendor_dlkm` module 구성은 이 환경의 범위 밖입니다.
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -116,13 +142,13 @@ C36에서 커널 패치 갭이 벤더 드라이버 특유라 했습니다. 그 �
 2. KMI가 왜 심볼 이름만이 아니라 struct 레이아웃까지의 ABI여야 하는지(바이너리 호환), 그리고 브랜치별 동결의 의미를 서술하세요.
 3. GKI가 커널 패치 갭의 무엇을 고치고 무엇을 못 고치는지(코어 vs 벤더 모듈)를 C36과 일관되게 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기에서 `uname -r`로 `android<ver>-<lts>`와 KMI 세대를, `ls /vendor/lib/modules`·`lsmod`로 로드된 벤더 `.ko`를 확인하세요.
-- 이 기기가 GKI 2.0(5.10+/A12+)인지 GKI 1.0/비-GKI인지 근거와 함께 판정하세요.
+- Cuttlefish에서 `uname -r`, `ls /vendor/lib/modules`와 `lsmod`를 수집하고, 사용한 kernel build와 공개 GKI artifact의 KMI generation을 대조하세요.
+- 판정은 사용한 가상 image/kernel에만 한정하고 OEM 전체로 일반화하지 않습니다.
 - `boot`(코어) vs `vendor_dlkm`(벤더 모듈) 파티션을 대조해, 코어와 벤더의 패치 트랙 분리를 서술하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

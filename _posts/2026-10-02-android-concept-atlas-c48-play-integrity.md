@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C48 - Play Integrity·앱 무결성, 클라이언트 판정은 왜 무의미한가"
+title: "Android Security Concept Atlas C48 | 가상 실습 보고서 — Play Integrity·앱 무결성, 클라이언트 판정은 왜 무의미한가"
 date: 2026-10-02 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, PlayIntegrity, SafetyNet, AppIntegrity, DeviceIntegrity, Attestation, Magisk, ConceptAtlas, 학습기록]
 excerpt: "Play Integrity(SafetyNet의 후계, SafetyNet은 2025 초 완전 종료)는 앱 바이너리·기기·라이선스가 온전한지 Google이 서명·암호화해 증명해주는 API입니다. 하지만 핵심은 이게 하드 게이트가 아니라 위험 신호이고, 반드시 서버에서 검증해야 한다는 것 - 앱이 자기 무결성을 스스로 보고하게 두면 패치 한 줄로 '다 정상'이라 답하게 만들 수 있으니, 클라이언트 전용 검사는 아무 경계도 아니죠(내가 늘 우회하는 그 클래스). 판정은 세 축(앱 인식·기기 무결성 SET·라이선스)이고, MEETS_STRONG_INTEGRITY만 하드웨어 키증명(C42)에 뿌리를 둬 Magisk/Zygisk 류로도 뚫기 어렵습니다. Tier 8 무결성 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | Android 개인정보·보안·네트워크 설정 캡처, `curl --tlsv1.3`, 패키지·AppOps 조회 |
+| 관측 결과 | 권한·개인정보 통제 화면과 TLS 1.3 HTTP 200 응답을 확인했다. 앱·호스트 네트워크 관측을 분리해 기록했다. |
+| 검증 한계 | Play Integrity의 프로덕션 verdict, 실제 OAuth 공급자, 제3자 SDK 백엔드는 범용 AVD 단독 검증 범위 밖이다. |
+
+![C48 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/privacy.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C48 — Play Integrity·앱 무결성
 > **계층**: Tier 8 (앱 보안 통제) · **난이도**: 중급 · **선수 개념**: C42(키 증명), C08(서명)
@@ -69,7 +95,7 @@ C42에서 하드웨어 키 증명을 봤습니다. 이 편은 그 위에 선 앱
 - **클라만 검증하는 분기**는 디컴파일로 찾아 패치 가능(=취약) — 서버 검증이면 앱 패치로 못 뚫음.
 - **소스/문서**: developer.android.com Play Integrity("Interpret the integrity verdicts", "Decrypt and verify"), C42 하드웨어 증명.
 
-**주의**: Play Integrity는 Google Play services 의존 → 에뮬/de-Googled에선 실측 제약(정품 가상기기는 VIRTUAL). 실판정은 실기기.
+**주의**: Play Integrity는 Google Play services와 server-side verification에 의존합니다. 이 과정에서는 지원되는 Google Play AVD의 가상 환경 label과 locally generated test response만 다루며 hardware-backed verdict를 재현했다고 주장하지 않습니다.
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -120,13 +146,13 @@ C42에서 하드웨어 키 증명을 봤습니다. 이 편은 그 위에 선 앱
 2. 판정 3축(app 인식·device SET·라이선스)의 의미를 각각 서술하고, PLAY_RECOGNIZED가 C08 서명과 어떻게 이어지는지 설명하세요.
 3. BASIC/DEVICE(소프트웨어)와 STRONG(하드웨어 C42)의 우회 난이도 차이를 서술하고, 무결성을 유일 통제로 쓰면 안 되는 이유를 쓰세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - Play Integrity를 쓰는 앱을 디컴파일해 판정 처리 분기가 **클라이언트에서만** 이뤄지는지(패치 가능) 확인하세요(소유/허가 앱).
 - 서버 검증이 있는 흐름과 없는 흐름의 우회 가능성 차이를 서술하세요.
 - 기기별 판정(정품/루팅/가상)이 어떻게 나오는지 개념적으로 정리하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 응답·화면만** 붙입니다.
 

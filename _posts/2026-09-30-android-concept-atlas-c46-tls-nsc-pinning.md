@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C46 - TLS·Network Security Config·pinning, 왜 유저 CA로 프록시가 안 되나"
+title: "Android Security Concept Atlas C46 | 가상 실습 보고서 — TLS·Network Security Config·pinning, 왜 유저 CA로 프록시가 안 되나"
 date: 2026-09-30 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, TLS, NetworkSecurityConfig, CertificatePinning, MITM, Frida, Conscrypt, ConceptAtlas, 학습기록]
 excerpt: "펜테스트에서 Burp CA를 유저 인증서로 설치했는데 앱 트래픽이 안 잡힌 적 있다면, 그건 버그가 아니라 Android 7(API 24)의 설계입니다 - targetSdk 24+ 앱은 유저가 추가한 CA를 기본으로 안 믿고 시스템 저장소만 신뢰하죠. 그래서 인터셉션엔 네 가지 길밖에 없습니다: 옛 타깃 앱, NSC를 고쳐 유저 CA 신뢰(debuggable 한정), 루팅해 시스템 스토어에 CA 넣기, 또는 Frida로 TLS 검증 후킹. 인증서 피닝은 SPKI 해시로 신뢰를 특정 키에 좁혀 rogue CA·프록시를 막지만, 클라이언트 측이라 루팅 기기에선 Frida/objection으로 우회됩니다 - 벽을 높일 뿐 절대는 아니죠. 그리고 최고 수확은 all-trusting TrustManager, 즉 아무 인증서나 받는 자폭 코드고요. 내 인터셉션 작업과 직결되는 Tier 8 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | Android 개인정보·보안·네트워크 설정 캡처, `curl --tlsv1.3`, 패키지·AppOps 조회 |
+| 관측 결과 | 권한·개인정보 통제 화면과 TLS 1.3 HTTP 200 응답을 확인했다. 앱·호스트 네트워크 관측을 분리해 기록했다. |
+| 검증 한계 | Play Integrity의 프로덕션 verdict, 실제 OAuth 공급자, 제3자 SDK 백엔드는 범용 AVD 단독 검증 범위 밖이다. |
+
+![C46 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/privacy.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C46 — TLS·Network Security Config·pinning
 > **계층**: Tier 8 (앱 보안 통제) · **난이도**: 중급 · **선수 개념**: C09(앱), C45(토큰 전송)
@@ -70,7 +96,7 @@ C45에서 bearer 토큰이 TLS 위에서 흘러야 한다 했습니다. 이 편�
 - 인터셉션: 유저 CA로 프록시(24+ 실패) → 루팅 시스템 스토어 CA 또는 **Frida SSL-unpin**(`objection android sslpinning disable`) → Burp로 복호 트래픽 확인.
 - all-trusting: 디컴파일에서 빈 `checkServerTrusted`·무조건 `HostnameVerifier` grep.
 
-**주의**: 인터셉션은 아키텍처 무관이나 유저 CA 미신뢰·시스템 스토어 조작은 **실기기(루팅)/에뮬 세팅** 필요. 대상은 소유/허가 앱 한정.
+**주의**: 인터셉션은 직접 만든 교육용 앱과 Android Emulator에서만 수행합니다. Network Security Configuration의 debug override와 앱 전용 test CA를 사용하며 system trust store 변조는 과정에서 제외합니다.
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -123,13 +149,13 @@ C45에서 bearer 토큰이 TLS 위에서 흘러야 한다 했습니다. 이 편�
 2. 인증서 피닝이 무엇을 좁히고(SPKI) 무엇을 막는지(rogue CA), 그리고 왜 클라이언트 측이라 루팅 기기에서 우회되는지 서술하세요.
 3. all-trusting TrustManager/HostnameVerifier가 왜 고전 MITM 버그이며, TLS 기본값(24+/28+)과 어떻게 다른 실패 모드인지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 소유/허가 앱의 NSC(`res/xml`)와 `targetSdkVersion`을 apktool로 떠서 cleartext/trust-anchors/pin-set 자세를 파악하세요.
 - 유저 CA 프록시가 24+ 앱에서 실패함을 확인하고, 루팅 시스템 스토어 CA 또는 Frida unpin으로 복호에 성공시키세요.
 - 디컴파일에서 빈 `checkServerTrusted`나 무조건 `HostnameVerifier`를 grep하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 캡처·화면만** 붙입니다.
 

@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C31 - Treble·GSI·Mainline·APEX, 프레임워크와 벤더를 가르다"
+title: "Android Security Concept Atlas C31 | 가상 실습 보고서 — Treble·GSI·Mainline·APEX, 프레임워크와 벤더를 가르다"
 date: 2026-09-04 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ProjectTreble, VINTF, VNDK, HIDL, AIDL, GSI, Mainline, APEX, apexd, ConceptAtlas, 학습기록]
 excerpt: "왜 어떤 Android 보안 패치는 OEM 업데이트를 기다리지 않고 Play를 통해 바로 오는가. Project Treble이 프레임워크(/system)와 벤더 구현(/vendor)을 안정된 인터페이스로 갈라 프레임워크만 따로 업데이트할 수 있게 했고, Mainline은 미디어·ART·conscrypt 같은 핵심 부품을 APEX 모듈로 만들어 Google이 플릿 전체를 직접 패치하게 했습니다. 그리고 그 벤더 인터페이스는 빌드 경계가 아니라 신뢰 경계입니다 - 벤더 HAL은 자기 SELinux 도메인과 링커 네임스페이스에 갇힙니다. 제가 CVE 시리즈에서 본 패치 갭을 줄인 구조입니다. Concept Atlas의 열일곱 번째 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.treble.enabled`, `getprop ro.apex.updatable`, `mount`, FBE 속성 |
+| 관측 결과 | Treble/APEX 활성화와 `/data`의 file-based encryption(`file`, `encrypted`)을 확인했다. |
+| 검증 한계 | 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 실제 하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다. |
+
+![C31 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-boot.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C31 — Treble·GSI·Mainline·APEX
 > **계층**: Tier 5 (부팅·업데이트 체인) · **난이도**: 중급 · **선수 개념**: C30(dynamic partitions), C23(SELinux 분할), C33(링커 네임스페이스)
-> **성격**: 미학습 → 풀 작성. 여러 앞 모듈이 참조하던 "플랫폼/벤더 분리"의 본체.
+> **성격**: 공식 문서·공개 소스 기준 재검토. 여러 앞 모듈이 참조하던 "플랫폼/벤더 분리"의 본체.
 
 C23에서 SELinux가 plat/vendor로 나뉜다고, C33에서 링커 네임스페이스가 벤더 라이브러리를 가둔다고, C28에서 vbmeta가 체인 파티션으로 위임된다고 했습니다. 이 모듈이 그 모든 분리의 **본체** — Project Treble입니다.
 
-한 문장으로: **프레임워크(/system)와 벤더 구현(/vendor)을 안정된 인터페이스로 갈라 프레임워크만 따로 업데이트하게 하고, Mainline은 핵심 부품을 APEX 모듈로 만들어 Google이 플릿 전체를 직접 패치하게 한다.** 🔴 미학습이라 처음부터 세웁니다.
+한 문장으로: **프레임워크(/system)와 벤더 구현(/vendor)을 안정된 인터페이스로 갈라 프레임워크만 따로 업데이트하게 하고, Mainline은 핵심 부품을 APEX 모듈로 만들어 Google이 플릿 전체를 직접 패치하게 한다.** 공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다.
 
 ## 배경 개념 - 프레임워크와 벤더의 계약
 
@@ -130,13 +156,13 @@ Google Play 시스템 업데이트 → 모듈(APK 또는 APEX)
 2. Mainline/APEX가 왜 보안 패치 갭을 줄이는지, 그리고 APEX가 어떻게 무결성(서명·dm-verity·읽기전용·롤백)을 보장하는지 서술하세요.
 3. APEX와 APK의 차이(마운트 시점·내용·용도)를 설명하고, 왜 ART/tzdata 같은 부품은 APEX여야 하는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기에서 `ls /apex`와 `pm list packages --apex-only`로 이 기기의 Mainline 모듈을, `lshal`로 HAL 인스턴스와 transport(hwbinder/passthrough/binder)를 확인하세요.
+- Cuttlefish에서 `ls /apex`와 `pm list packages --apex-only`로 Mainline 모듈을 확인하고, 제공되는 경우 `lshal`과 `service list`로 HAL/service transport를 관찰하세요.
 - `cat /vendor/etc/vintf/manifest.xml`로 벤더가 제공하는 HAL/버전을 보고, VINTF 매니페스트=제공 / 호환성 행렬=요구 구조를 근거로 설명하세요.
 - 이 기기가 GSI인지(`ro.build.flavor`) 확인하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

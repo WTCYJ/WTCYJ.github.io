@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C12 - Zygote, 앱 프로세스가 태어나고 권한을 버리는 곳"
+title: "Android Security Concept Atlas C12 | 가상 실습 보고서 — Zygote, 앱 프로세스가 태어나고 권한을 버리는 곳"
 date: 2026-09-19 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Zygote, forkAndSpecialize, SpecializeCommon, seccomp, ASLR, USAP, ConceptAtlas, 학습기록]
 excerpt: "모든 Android 앱 프로세스는 zygote를 fork해서 태어납니다 - 그것도 exec 없이. zygote는 부팅 때 ART 런타임과 프레임워크 클래스를 미리 로드해 둔 따뜻한 템플릿이라, 자식은 그 페이지들을 COW로 물려받아 빨리 뜨고 RAM을 아끼죠. 그런데 보안의 핵심은 specialization입니다: fork 직후 자식은 아직 root인 zygote 정체성이고, 거기서 UID를 앱 UID로 낮추고 SELinux 컨텍스트와 seccomp를 겁니다. 흔한 오해와 달리 seccomp는 UID를 낮추기 *전에* (아직 uid 0일 때) 설치되고 no_new_privs는 일부러 안 걸며, 특권의 마지막 순간은 fork가 아니라 그 UID 드롭 지점이에요. 그리고 모두가 한 zygote에서 갈라지니 ASLR 레이아웃을 공유하는 약점도 여기서 나옵니다. C04 fork 모델의 Android판, Tier 2 런타임 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.zygote`, `getprop dalvik.vm.usejit`, `ps` |
+| 관측 결과 | `zygote64`와 JIT 활성 상태를 확인했다. 비특권 앱의 전체 프로세스 열람 제한도 함께 관측했다. |
+| 검증 한계 | OAT/VDEX 생성 정책은 빌드와 프로파일 상태에 따라 달라지므로 이 한 번의 캡처를 모든 Android 버전에 일반화하지 않는다. |
+
+![C12 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-runtime.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C12 — Zygote·앱 프로세스 생성
 > **계층**: Tier 2 (Android Runtime) · **난이도**: 중급 · **선수 개념**: C04(fork/COW), C09(UID)
@@ -123,13 +149,13 @@ C04에서 fork(COW)/exec의 차이를, C09에서 UID를 봤습니다. Android는
 2. specialization의 순서(마운트/seccomp가 uid 드롭 전, setresuid·caps·SELinux가 마지막)가 왜 보안적으로 중요한지, "특권의 마지막 순간"이 fork가 아닌 이유와 함께 서술하세요.
 3. 공유 ASLR 약점이 어떻게 성립하고(한 zygote·COW·fork 재랜덤화 없음), 그 범위가 왜 "같은 기기·부팅·ABI"로 한정되는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - `ps -A -o PID,PPID,NAME`으로 앱 프로세스들이 `zygote`/`zygote64`를 부모로 두는지 확인하세요.
 - 두 앱의 `/proc/<pid>/smaps`에서 zygote와 COW-공유된 클린 영역(같은 라이브러리 베이스)을 대조하세요.
 - `com_android_internal_os_Zygote.cpp`의 `SpecializeCommon`에서 seccomp가 `setresuid`보다 앞에 오는지 확인하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

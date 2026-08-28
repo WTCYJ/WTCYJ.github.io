@@ -1,26 +1,52 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C39 - TEE·Trusty·시큐어 월드, 같은 코어 위의 두 세계"
+title: "Android Security Concept Atlas C39 | 가상 실습 보고서 — TEE·Trusty·시큐어 월드, 같은 코어 위의 두 세계"
 date: 2026-08-28 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, TrustZone, TEE, Trusty, SecureWorld, SMC, TZASC, GlobalPlatform, KeyMint, Gatekeeper, WidevineL1, pKVM, AVF, ConceptAtlas, 학습기록]
-excerpt: "C05에서 저는 시큐어/논시큐어 상태가 예외 수준과 직교하는 별개의 축이라고 세웠습니다. 이 글은 그 시큐어 월드의 안쪽입니다. 하나의 물리적 CPU 코어가 SMC 한 번으로 두 세계를 오가고, 그 격리를 강제하는 것은 모니터 소프트웨어가 아니라 버스의 NS 비트·TZASC·TZPC라는 하드웨어입니다. 그 안에 KeyMint·Gatekeeper·생체 매처·Widevine L1이 살고, 신뢰의 비대칭(시큐어는 노멀을 보지만 역은 불가) 하나가 그 모든 서비스의 안전과 동시에 가장 위험한 버그 클래스(노멀 입력을 믿는 TA)를 낳습니다. Concept Atlas의 열한 번째 모듈입니다."
+excerpt: "TrustZone의 보안 상태, EL3 monitor, TEE OS와 trusted application의 역할을 구분하고 공유 메모리·SMC·memory controller가 만드는 경계를 공개 Arm·Trusty 자료로 검토합니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | AndroidKeyStore EC 키 생성, attestation challenge, `KeyInfo`, certificate chain 조회 |
+| 관측 결과 | EC 키 생성과 attestation 요청이 성공했고 인증서 체인 길이는 3이었다. 이 AVD의 키 보안 수준은 정확히 `SOFTWARE(0)`였다. |
+| 검증 한계 | TEE·StrongBox·Weaver는 물리 보안 하드웨어가 없는 AVD에서 증명할 수 없다. SOFTWARE 결과를 하드웨어 보안으로 해석하지 않는다. |
+
+![C39 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-keystore.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C39 — TEE·Trusty·시큐어 월드(TrustZone)
-> **계층**: Tier 7 (하드웨어 기반 보안) · **난이도**: 연구 · **선수 개념**: C05(예외 수준; 시큐어/논시큐어 축·EL3 모니터·SMC), C27(부트로더 — 미작성, 최소 맥락만)
-> **성격**: 미학습 → 풀 작성. C40(Keystore)의 선수이자 형제 모듈 — KeyMint TA가 사는 곳입니다.
+> **계층**: Tier 7 (하드웨어 기반 보안) · **난이도**: 연구 · **선수 개념**: C05(예외 수준; 시큐어/논시큐어 축·EL3 모니터·SMC), C27(부트로더·init)
+> **성격**: 공식 문서·공개 소스 기준 재검토. C40(Keystore)의 선수이자 형제 모듈 — KeyMint TA가 사는 곳입니다.
 > **완료 기준**: SMC 한 번이 노멀 월드에서 시큐어 월드로 넘어가는 경로와, 그 격리를 강제하는 하드웨어를 설명할 수 있다.
 
-C05에서 저는 **시큐어/논시큐어 상태가 EL0–EL3 사다리와 직교하는 별개의 축**이라고 세웠습니다 — 다섯 번째 층이 아니라, 각 층이 가질 수 있는 두 상태. 그리고 EL3가 두 세계 사이의 문이라고요. 이 모듈은 그 **시큐어 월드의 안쪽**입니다. C40에서 "커널을 따도 못 빼내는 키"의 그 키가 **어디서** 사는지, 그 어디가 어떻게 격리되는지입니다.
+시큐어/논시큐어 상태는 EL0–EL3 특권 수준과 구분해 이해해야 합니다. 이 글은 EL3 monitor, TEE OS와 trusted application의 역할을 나누고, hardware-backed KeyMint가 어떤 신뢰 경계 안에서 동작하는지 살펴봅니다.
 
-한 문장으로: **하나의 물리적 코어가 두 세계를 시분할하고, 그 격리는 모니터 소프트웨어가 아니라 하드웨어(버스의 NS 비트·메모리 컨트롤러)가 강제한다.** 🔴 미학습 영역이라 처음부터 세웁니다.
+한 문장으로: **하나의 물리적 코어가 두 세계를 시분할하고, 그 격리는 모니터 소프트웨어가 아니라 하드웨어(버스의 NS 비트·메모리 컨트롤러)가 강제한다.** 공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다.
 
 ## 배경 개념 - 두 세계와 그 문
 
 - **시큐어 월드 / 논시큐어 월드**: TrustZone이 만드는 두 실행 상태. EL과 직교하는 별개의 축(`SCR_EL3.NS`).
-- **TEE (Trusted Execution Environment)**: 노멀 월드 OS가 완전히 침해돼도 자기 코드·데이터의 기밀성과 무결성을 지키는 격리 실행 환경.
+- **TEE (Trusted Execution Environment)**: Rich OS와 분리된 실행 환경으로, 정해진 위협 모델 안에서 trusted code와 data의 기밀성·무결성을 보호하도록 설계됩니다. 실제 보장은 TEE와 SoC 구현 및 취약점 상태에 달려 있습니다.
 - **S-EL0 / S-EL1**: 트러스티드 앱(트러스트릿)이 S-EL0, TEE OS가 S-EL1. (S-EL2는 `FEAT_SEL2`/Armv8.4에서만.)
 - **EL3 시큐어 모니터**: 보통 Trusted Firmware-A의 BL31. `SCR_EL3`를 소유하고 월드 전환을 수행하는 **문**. TEE OS(S-EL1)나 TA(S-EL0)가 **아닙니다**.
 - **Trusty**: Google의 오픈소스 TEE OS(AOSP `external/trusty`). 벤더는 QSEE/QTEE·Kinibi·TEEGRIS·OP-TEE로 대체할 수 있습니다.
@@ -74,7 +100,7 @@ C05에서 저는 **시큐어/논시큐어 상태가 EL0–EL3 사다리와 직�
 
 실제 TrustZone 익스 대다수의 근본 원인이 **TA/TEE OS가 노멀 월드 포인터나 길이를 믿는 것**, 또는 TOCTOU(검사 후 노멀 월드가 공유 버퍼를 바꿈)입니다. 이건 제 CVE 시리즈의 결과 겹칩니다 — 8편 블루투스가 "네트워크에서 온 길이 필드를 산술에 그대로" 쓴 것, 9편 Parcel의 write/read 불일치가, 여기서는 **시큐어 월드 경계**에서 벌어지는 것입니다. 신뢰 경계만 바뀌었을 뿐 형태는 같습니다.
 
-**파급(blast radius)**: TEE 침해는 TEE 백업 Keystore/KeyMint 키·Gatekeeper의 PIN throttling·Widevine L1을 무너뜨립니다. 그러나 **StrongBox 키는 얻지 못합니다** — StrongBox는 TrustZone TA가 아니라 AP와 격리된 **별도 보안 프로세서**(Pixel의 Titan M/M2처럼 별도 칩이거나 Qualcomm SPU처럼 온-SoC 보안 유닛)라, TEE(S-EL1)·EL3·메인 SoC 전체가 뚫려도 닿지 않습니다. C05의 계층(SOFTWARE < TEE < StrongBox)이 여기서 결론납니다.
+**파급(blast radius)**: 특정 TEE가 침해되면 그 TEE가 제공하던 KeyMint·Gatekeeper·DRM service의 보장이 약해질 수 있습니다. StrongBox는 TEE와 다른 security level 및 격리 요구사항을 가지므로 같은 TEE 결함의 직접 영향에서 분리될 수 있지만, **전체 SoC 침해에도 반드시 안전하다고 단정할 수는 없습니다.** 평가는 실제 구현과 공격 경로를 기준으로 해야 합니다.
 
 ## 질문 6 — Android/ARM 버전에 따라 무엇이 달라졌는가
 
@@ -168,23 +194,23 @@ Trusty OS (S-EL1)  ──▶  대상 TA (S-EL0, 예: KeyMint)
 
 1. "시큐어 월드는 EL3다"가 왜 틀렸는지, **EL(특권)과 보안 상태(축)의 직교성**으로 설명하고, EL3·S-EL1·S-EL0의 역할을 각각 구분하세요.
 2. "시큐어는 논시큐어를 보지만 역은 불가"라는 비대칭이 왜 설계 규칙인지, 그리고 그것이 TA가 공유 버퍼를 다룰 때 지켜야 하는 규칙(**복사 후 검증·TOCTOU**)으로 어떻게 이어지는지 서술하세요.
-3. TEE 침해의 파급(KeyMint TEE 키·Gatekeeper throttling·Widevine L1)을 나열하고, StrongBox 키가 왜 그 파급에서 살아남는지를 "별도 보안 프로세서"로 설명하세요.
+3. 특정 TEE 침해의 파급을 나열하고, StrongBox가 별도 security level인 이유와 "같은 TEE 결함의 직접 영향에서 분리"와 "어떤 공격에도 생존"이 왜 다른 주장인지 설명하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-실기기에서 **이 기기의 TEE를 식별**하고 근거와 함께 정리하세요.
+Android Emulator/Cuttlefish에서 노출되는 TEE 관련 신호를 수집하고, 확인할 수 없는 구현은 특정하지 않은 채 `Unknown`으로 정리하세요.
 
 - `/dev/trusty-ipc-dev0`(Trusty) 또는 `/dev/tee0`(OP-TEE)의 존재, `getprop ro.hardware.keystore`·`ro.hardware.gatekeeper`, `dmesg | grep -iE "trusty|optee"`를 떠서 이 기기의 TEE 벤더(Trusty/QSEE/Kinibi/TEEGRIS/OP-TEE)를 특정.
 - C40의 attestation 절차로 `securityLevel = TRUSTED_ENVIRONMENT`를 확인해 "이 키가 TEE 뒤에 있다"를 교차 검증.
 - 왜 `sec-api33` 에뮬에는 진짜 TEE가 없어 이 신호들이 안 나오는지(또는 에뮬 전용으로만 나오는지) 근거와 함께 적으세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
-이 모듈을 **실측 글**로 승격하세요. 환경 특성: 에뮬레이터에는 진짜 시큐어 월드가 없어(attestation `SOFTWARE`, `trusty`/`tee` 노드 부재 또는 에뮬 전용) 하드웨어 격리는 관측되지 않습니다 — 실기기가 필요합니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+이 모듈은 **공개 소스 분석 글**로 검증합니다. 일반 AVD에서 attestation level, `/dev` node와 `ro.hardware.*`를 관측하되, 결과가 `SOFTWARE`이거나 TEE node가 없으면 그것을 하드웨어 TEE 부재의 직접 증명으로 과장하지 않습니다. Trusty·TF-A·Arm architecture의 공개 소스와 문서로 호출 경계를 추적하고, 하드웨어 격리는 `가상 환경의 검증 한계`로 남깁니다.
 
-1. **TEE 식별 실측**: 실기기에서 `/dev` 노드·`ro.hardware.*` props·`dmesg`로 이 기기의 TEE를 특정.
-2. **레벨 교차 검증**: C40의 attestation으로 `securityLevel = TRUSTED_ENVIRONMENT`를 캡처.
-3. **벤더 특정**: 위 근거로 Trusty/QSEE/Kinibi/TEEGRIS/OP-TEE 중 무엇인지 귀속.
+1. **가상 환경 관측**: AVD/Cuttlefish의 `/dev` node, `ro.hardware.*`와 허용된 kernel log를 수집하고 확인되지 않은 TEE 종류는 `Unknown`으로 남기기.
+2. **소스 교차 검증**: Trusty IPC driver와 TF-A SMC dispatcher의 공개 소스에서 interface와 world-switch 역할을 확인하기.
+3. **귀속 제한**: 로컬 증거 없이 Trusty/QSEE/Kinibi/TEEGRIS/OP-TEE 중 하나로 단정하지 않기.
 4. **경계 규칙 서술**(개념): 공유 버퍼 TOCTOU와 TA 파서를 근거로 "왜 시큐어 월드가 노멀 월드 입력을 전부 적대적으로 봐야 하는가"를 제 CVE 시리즈(BT 길이 필드·Parcel 불일치)와 나란히 놓아 서술.
 
 각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
@@ -193,4 +219,4 @@ Trusty OS (S-EL1)  ──▶  대상 TA (S-EL0, 예: KeyMint)
 
 C05가 "시큐어/논시큐어는 EL과 직교한다"였다면, C39는 그 시큐어 월드의 안쪽입니다 — 하나의 코어가 SMC 한 번으로 두 세계를 오가고, 격리를 강제하는 것은 모니터가 아니라 버스의 NS 비트·TZASC·TZPC라는 하드웨어이며, 신뢰는 비대칭입니다(시큐어는 노멀을 보지만 역은 불가). 그 안에 KeyMint(C40)·Gatekeeper(C41)·Widevine L1이 살고, 그들의 안전은 **코드가 특별해서가 아니라 위치 때문**입니다.
 
-그리고 그 비대칭이 정확히 가장 위험한 버그 클래스를 낳습니다: TA가 노멀 월드의 포인터·길이를 믿거나, 검증한 공유 버퍼가 뒤에서 바뀌는 것. 제 CVE 시리즈에서 본 "네트워크 길이를 그대로 신뢰"와 같은 결함이, 여기서는 시큐어 월드 경계에서 벌어집니다 — 그리고 그 경계가 뚫려도 **별도 보안 프로세서인 StrongBox는 살아남습니다**. 다음은 그 경계 안에서 사용자 인증을 다루는 **C41(Gatekeeper·Weaver·생체)** 또는 신뢰의 뿌리를 원격까지 잇는 **C42**로 이어집니다. 위의 「블로그 초안 작성 과제」를 마치면 이 모듈이 실측 글로 확정됩니다.
+공유 memory와 command parser는 TEE가 Rich OS의 입력을 받는 핵심 신뢰 경계입니다. pointer·length 검증이나 copy-before-use가 빠지면 memory safety와 TOCTOU 문제가 생길 수 있습니다. StrongBox는 별도 security level로 평가하되 실제 구현과 공격 경로를 확인하지 않고 생존 여부를 단정하지 않습니다. 다음은 **C41(Gatekeeper·Weaver·생체)**와 **C42(key attestation)**로 이어집니다.

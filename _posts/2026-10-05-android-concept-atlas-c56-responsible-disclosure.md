@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C56 - 책임 있는 공개(CVD), 발견을 세상에 안전하게 돌려주기"
+title: "Android Security Concept Atlas C56 | 가상 실습 보고서 — 책임 있는 공개(CVD), 발견을 세상에 안전하게 돌려주기"
 date: 2026-10-05 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, CVD, ResponsibleDisclosure, ProjectZero, CVE, CNA, SecurityBulletin, BugBounty, ConceptAtlas, 학습기록]
 excerpt: "Atlas의 56번째, 마지막 모듈입니다. 여기까지 배운 걸로 버그를 찾았다면 - 그다음은 어떻게 세상에 안전하게 돌려주느냐죠. 조율된 취약점 공개(CVD, '책임 있는 공개'의 현대 용어)는 벤더에 먼저 비공개로 알리고, 고칠 시간을 준 뒤, 수정이 나왔거나 데드라인이 지나면 공개하는 것입니다. 흔한 오해 셋: full disclosure는 블랙햇이 아니라 벤더가 무한정 뭉갤 때를 위한 정당한 트레이드오프고, Project Zero는 90일 데드라인에 14일 유예(30일은 패치 후 채택 창이라 별개)이며, 블로그에 쓴다고 CVE가 생기는 게 아니라 CNA가 배정합니다. Android 플랫폼 버그는 Google Bug Hunters로(공개 issuetracker 아님), 앱 버그는 HackerOne 같은 프로그램으로 - 그리고 좋은 리포트는 재현 가능한 최소 PoC와 정직한 영향입니다. Atlas를 닫는 캡스톤 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | 재현 환경 지문 수집, APK 빌드·서명·설치, Jekyll 빌드, 링크·이미지 감사 |
+| 관측 결과 | 실행 환경·도구 버전·원시 출력을 보존하고 동일 명령을 재실행할 수 있는 증거 앱과 로그를 저장했다. |
+| 검증 한계 | 실제 취약점 악용이나 타인 시스템 검사는 하지 않았다. 공개 연구와 소유한 가상환경의 안전한 관측만 포함한다. |
+
+![C56 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-environment.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C56 — 책임 있는 공개(Coordinated Vulnerability Disclosure)
 > **계층**: Tier 9 (취약점 연구) · **난이도**: 기초 · **선수 개념**: C51, C52, C55
@@ -127,13 +153,13 @@ Atlas의 **마지막 고리**입니다. C51(가진 게 크래시냐 익스플로
 2. 데드라인(단일 벤더 카운트다운)과 엠바고(다자 동기화 보류)의 차이를, 공유 라이브러리(libsoup류) 예로 서술하세요.
 3. 좋은 취약점 리포트의 요건(재현 가능 최소 PoC·정직한 영향·범위 준수)이 왜 유효한 발견을 살리는지, 과대주장/무단테스트의 위험과 함께 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 대상의 `security.txt`/`SECURITY.md`/프로그램 정책을 찾아 범위·safe harbor·타임라인을 정리하세요(테스트 전).
 - Android Security Bulletin 한 편을 열어 CVE·CWE·심각도·패치레벨(-01/-05)·CNA를 판독하세요(C52).
 - 내(또는 공개된) 실제 제보 하나를 CVD 절차 틀로 재서술하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 캡스톤을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 화면·리포트만** 붙입니다(공개 가능 범위에서).
 

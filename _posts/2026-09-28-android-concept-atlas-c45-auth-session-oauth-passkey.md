@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C45 - 인증·세션·OAuth/OIDC·passkey, 토큰과 리다이렉트가 새는 곳"
+title: "Android Security Concept Atlas C45 | 가상 실습 보고서 — 인증·세션·OAuth/OIDC·passkey, 토큰과 리다이렉트가 새는 곳"
 date: 2026-09-28 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, OAuth, OIDC, PKCE, Passkey, WebAuthn, Session, Token, CredentialManager, ConceptAtlas, 학습기록]
 excerpt: "내 reporch OAuth 버그의 교훈이 이 편의 핵심입니다: 계정을 사용자가 바꿀 수 있는 username/email에 묶으면 계정 탈취가 되고, 불변의 sub+iss에 묶어야 하죠. OAuth 2.0은 '무엇을 해도 되는가'(access token)이고 OIDC의 ID token이 '누구인가'인데, access token을 신원 증명으로 쓰는 게 대표적 혼동입니다. 네이티브 앱은 client_secret을 못 숨기니 authorization code + PKCE가 필수고, 커스텀 스킴 리다이렉트는 아무 앱이나 등록해 가로채니 verified App Link + 시스템 브라우저(WebView 금지)로 막습니다. passkey는 rpId(도메인)에 묶여 피싱 저항이 있고, 토큰은 Keystore에 넣지 평문 prefs에 안 넣죠. Tier 8 앱 인증 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | Android 개인정보·보안·네트워크 설정 캡처, `curl --tlsv1.3`, 패키지·AppOps 조회 |
+| 관측 결과 | 권한·개인정보 통제 화면과 TLS 1.3 HTTP 200 응답을 확인했다. 앱·호스트 네트워크 관측을 분리해 기록했다. |
+| 검증 한계 | Play Integrity의 프로덕션 verdict, 실제 OAuth 공급자, 제3자 SDK 백엔드는 범용 AVD 단독 검증 범위 밖이다. |
+
+![C45 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/privacy.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C45 — 인증·세션·OAuth/OIDC·passkey
 > **계층**: Tier 8 (앱 보안 통제) · **난이도**: 중급 · **선수 개념**: C02(인증/인가), C40(Keystore)
@@ -120,13 +146,13 @@ C02(인증 vs 인가)의 **앱 레벨 구현**입니다. 토큰은 Keystore(C40/
 2. 네이티브 앱에서 authorization code + PKCE가 왜 필수이며(client_secret 추출), 커스텀 스킴 가로채기를 어떻게 무력화하는지 서술하세요.
 3. 내 reporch 케이스처럼 계정을 mutable username에 바인딩하면 왜 ATO가 되는지, 불변 sub+iss 바인딩과 대비해 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 한 앱의 OAuth 흐름을 프록시로 떠서 code+PKCE인지·implicit인지, 리다이렉트가 verified App Link인지 커스텀 스킴인지 확인하세요(소유/허가 대상).
 - 토큰이 Keystore 래핑인지 평문 prefs/logcat인지 점검하세요.
 - passkey를 쓰는 앱이면 `assetlinks.json`의 `get_login_creds` relation을 확인하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 캡처·응답만** 붙입니다.
 

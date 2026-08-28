@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C02 - 인증 vs 인가, 혼동이 곧 접근 통제 버그"
+title: "Android Security Concept Atlas C02 | 가상 실습 보고서 — 인증 vs 인가, 혼동이 곧 접근 통제 버그"
 date: 2026-09-26 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Authentication, Authorization, IDOR, BOLA, BFLA, BrokenAccessControl, ConceptAtlas, 학습기록]
 excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린 버그입니다. 인증(AuthN)은 '너 누구야?'를 확인하고, 인가(AuthZ)는 '그래서 이걸 해도 돼?'를 결정하죠 - 완전히 별개 질문인데, '로그인했으니 다 허용'이라 착각하거나 정체성만 확인하고 특정 객체/행위 권한은 안 보면 그게 바로 IDOR(객체수준)·BFLA(함수수준), 곧 Broken Access Control(OWASP 1위)입니다. 내 HSPACE PII 케이스가 정확히 그거였어요 - 세션은 인증했는데 그 레코드가 이 사용자 것인지는 인가 안 함. Android도 똑같습니다: 커널이 각인한 호출자 UID로 '누구'는 위조 불가로 알지만, 그걸로 권한을 검사하는 건 별개고, checkCallingOrSelfPermission의 OrSelf 폴백이면 자기 정체성으로 조용히 통과하죠. Atlas 전체가 이 구분의 실현인, Tier 0 토대 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `id`, `cat /proc/self/attr/current`, `/proc/self/status`, `uname -a` |
+| 관측 결과 | 앱 UID 10174, `untrusted_app` 도메인, `CapEff=0`, `Seccomp=2`, Linux 5.15 커널을 확인했다. |
+| 검증 한계 | AVD가 x86_64이므로 ARM64 EL·PAC·BTI·MTE는 런타임 관측 대신 공개 소스 경로로 판정한다. |
+
+![C02 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C02 — 인증 vs 인가
 > **계층**: Tier 0 (보안·시스템 기초) · **난이도**: 기초 · **선수 개념**: C01
@@ -117,13 +143,13 @@ excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린
 2. 객체수준(IDOR/BOLA)과 함수수준(BFLA) 인가 파손의 차이를, 내 HSPACE PII 케이스를 예로 서술하세요.
 3. Android에서 호출자 UID(AuthN, C22)와 권한 검사(AuthZ, C10)가 왜 별개이며, `checkCallingPermission` vs `*OrSelf*`가 왜 취약 패턴인지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 한 API/앱 기능에 대해 진단 질문 쌍(정체성 확인? AND 이 객체 인가?)을 적용해, 인가가 빠진 곳을 찾으세요(소유/허가 대상).
 - Android 앱의 exported 컴포넌트를 비특권 앱으로 호출해, 권한 가드 없이 도달되는지(AuthZ 부재) 확인하세요.
 - 코드에서 `checkCallingPermission`과 `checkCallingOrSelfPermission` 사용을 구분해 후자의 위험을 서술하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 화면·응답만** 붙입니다.
 

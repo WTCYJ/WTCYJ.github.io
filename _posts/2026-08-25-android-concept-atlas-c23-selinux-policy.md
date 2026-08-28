@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C23 - SELinux 정책 언어, 라벨을 보던 데서 규칙을 읽는 데로"
+title: "Android Security Concept Atlas C23 | 가상 실습 보고서 — SELinux 정책 언어, 라벨을 보던 데서 규칙을 읽는 데로"
 date: 2026-08-25 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, SELinux, SEAndroid, TypeEnforcement, domain, neverallow, MLS, MCS, seapp_contexts, AVC, Treble, CIL, sepolicy, MAC, DAC, ConceptAtlas, 학습기록]
 excerpt: "1~4주차에서 앱 격리가 UID와 SELinux 두 겹이라고 명령 출력으로 확인했고, 15~16주차에서는 ps -Z로 프로세스 라벨을 봤습니다. 그런데 그때 저는 '경계를 재려다 세 번 틀렸다'고 적었습니다. 라벨은 봤지만 그 라벨을 지배하는 정책을 읽지 못했기 때문입니다. 이 글은 그 정책 언어를 다룹니다. allow 규칙의 문법, domain과 type이 같은 것이라는 사실, neverallow가 런타임이 아니라 컴파일 시점 단언이라는 것, 그리고 같은 untrusted_app 도메인을 쓰는 두 앱을 실제로 갈라놓는 것이 타입이 아니라 네 번째 필드(MLS 카테고리)라는 것. Concept Atlas의 여덟 번째 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `id`, `cat /proc/self/attr/current`, `/proc/self/status` |
+| 관측 결과 | 서로 다른 UID, `untrusted_app` SELinux 컨텍스트, 0 capability, seccomp 필터를 앱 프로세스 내부에서 확인했다. |
+| 검증 한계 | 정책 우회나 샌드박스 탈출은 수행하지 않았고, 접근 거부는 실패가 아니라 격리 통제가 작동한 대조군이다. |
+
+![C23 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C23 — SELinux domain·type·allow·neverallow
 > **계층**: Tier 4 (플랫폼 격리) · **난이도**: 고급 · **선수 개념**: C05(예외 수준; SELinux는 EL1 커널 LSM), C09(UID·appid·샌드박스)
@@ -121,7 +147,7 @@ u:r:untrusted_app:s0:c145,c256,c512,c768
 - **C09(UID·appid)**: `seapp_contexts`가 UID/서명 세계를 SELinux 타입 세계로 잇습니다.
 - **C31/C32(Treble·파티션 신뢰)**: 정책의 플랫폼/벤더 분할이 곧 파티션 신뢰의 정책적 표현입니다.
 - **C37(완화)**: `neverallow ... execmem`은 W^X 강제를 정책 층에서 못 박은 것입니다.
-- 다음은 **C26(샌드박스 vs SELinux 역할 구분)**(진단 대체 예정)이나 부팅 체인으로 이어집니다.
+- 다음은 [**C26(샌드박스 vs SELinux 역할 구분)**](/posts/android-concept-atlas-c26-uid-sandbox-vs-selinux/)이나 부팅 체인으로 이어집니다.
 
 ## 직접 그릴 수 있는 호출 흐름
 
@@ -192,20 +218,20 @@ u:r:untrusted_app:s0:c145,c256,c512,c768   ← ps -Z 로 보이는 그 문자열
 2. `neverallow`가 런타임이 아니라 컴파일/CTS 시점 단언이라는 사실이, OEM/벤더가 스스로에게 위험한 `allow`를 추가하지 못하게 하는 데 왜 결정적인지 서술하세요.
 3. 미디어/블루투스 EL0 침해(제 CVE 시리즈)가 SELinux로 "그 도메인이 접근 가능한 타입 집합"에 어떻게 갇히는지, 그리고 `permissive` 도메인이 그 가둠을 어떻게 무력화하는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-기기(또는 에뮬레이터)에서 다음을 수행하고 정리하세요. **SELinux는 아키텍처와 무관하므로 x86 에뮬(`sec-api33`)에서도 대부분 됩니다** — PAC/MTE와 달리 실기기가 꼭 필요하지 않습니다.
+Android Emulator 또는 Cuttlefish에서 다음을 수행하고 정리하세요. **SELinux 정책과 label 관찰은 x86_64 에뮬레이터(`sec-api33`)에서도 대부분 가능합니다.**
 
 - `ps -A -Z | grep untrusted_app`로 서로 다른 두 앱이 **같은 도메인인데 카테고리 꼬리가 다름**을 확인하세요 — 그 꼬리가 앱-대-앱 샌드박스입니다.
 - `sepolicy-analyze <policy> permissive`로 permissive 도메인 목록을, `sesearch -A -s untrusted_app -t app_data_file -c file`로 실제 확장된 권한 집합을 뽑으세요(대상은 바이너리 정책).
 - `dmesg | grep avc` 거부 한 줄을 골라 `scontext`/`tcontext`/`tclass`/`{ perm }`로 **어떤 `allow`가 빠졌는지**(또는 어떤 `mlsconstrain`인지)를 역산해, "정책 한 줄을 읽고 허용/거부를 예측한다"는 완료 기준을 채우세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 앞의 세 모듈(C05·C37·C33)과 달리 이 주제는 **`sec-api33` 에뮬로 대부분 실측 가능**합니다(SELinux는 x86에도 있음). 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 
 1. **라벨 실측**: `getenforce`·`id -Z`·`ps -A -Z`·`ls -Z` 출력을 실제 화면으로. 15~16주차에서 라벨만 봤던 것을 이제 네 필드로 분해해 설명.
-2. **앱-대-앱 격리를 실물로**: 앱 두 개를 설치해 카테고리 꼬리가 다름을 캡처하고, 한 앱에서 다른 앱의 데이터 접근을 시도해 실패를 보이기.
+2. **앱-대-앱 격리를 실제 출력으로**: 교육용 앱 두 개를 에뮬레이터에 설치해 카테고리 꼬리가 다름을 캡처하고, 한 앱에서 다른 앱의 데이터 접근을 시도해 실패를 보이기.
 3. **정책 한 줄 읽기(완료 기준)**: `sesearch`로 `untrusted_app`의 allow 엣지 하나를 뽑아, 주체·대상 타입·클래스·권한으로 소리 내어 읽기.
 4. **거부 귀속**: 위 2의 접근 시도가 남긴 `avc: denied`(또는 억제됐다면 `dontaudit` 때문임을 확인)를 캡처하고, 그것이 allow 부재인지 `mlsconstrain`인지 귀속.
 
@@ -215,4 +241,4 @@ u:r:untrusted_app:s0:c145,c256,c512,c768   ← ps -Z 로 보이는 그 문자열
 
 15~16주차에서 저는 라벨을 보고도 경계를 세 번 틀리게 쟀습니다. 라벨은 정책의 **결과**일 뿐, 규칙 자체가 아니었기 때문입니다. 이제 그 규칙을 읽습니다 — `allow 주체 대상:클래스 권한;`이 원자이고, 기본은 거부이며, `neverallow`는 런타임이 아니라 빌드/CTS 시점에 OEM의 손을 묶는 가드레일이고, 무엇보다 **같은 `untrusted_app`을 쓰는 두 앱을 실제로 갈라놓는 것은 타입이 아니라 네 번째 필드(MLS 카테고리)**입니다.
 
-이걸 알면 제 CVE 시리즈가 새로 읽힙니다. 미디어/블루투스 EL0 침해는 SELinux로 그 도메인의 allow 엣지에 갇히고, 커널(EL1) 탈출만이 그 가둠을 벗어납니다(C05). 정책이 곧 공격 표면이라, `permissive` 벤더 도메인 하나가 그 가둠을 조용히 없앱니다. 다음은 이 격리를 UID 샌드박스와 나란히 놓는 **C26**, 또는 이 모든 것이 부팅 때 어떻게 실리는지의 부팅 체인으로 이어집니다. 위의 「블로그 초안 작성 과제」를 마치면 이 모듈이 실측 글로 확정됩니다.
+이걸 알면 제 CVE 시리즈가 새로 읽힙니다. 미디어/블루투스 EL0 침해는 SELinux로 그 도메인의 allow 엣지에 갇히고, 커널(EL1) 탈출만이 그 가둠을 벗어납니다(C05). 정책이 곧 공격 표면이라, `permissive` 벤더 도메인 하나가 그 가둠을 조용히 없앱니다. 다음은 이 격리를 UID 샌드박스와 나란히 놓는 **C26**, 또는 이 모든 것이 부팅 때 어떻게 실리는지의 부팅 체인으로 이어집니다. 이 문서는 위 실행 보고서와 원시 로그를 기준으로 검증 상태를 관리합니다.

@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C49 - 서드파티 SDK·SBOM·공급망, SDK는 앱의 권한을 그대로 물려받는다"
+title: "Android Security Concept Atlas C49 | 가상 실습 보고서 — 서드파티 SDK·SBOM·공급망, SDK는 앱의 권한을 그대로 물려받는다"
 date: 2026-10-03 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ThirdPartySDK, SupplyChain, SBOM, SPDX, CycloneDX, DependencyConfusion, SDKRuntime, ConceptAtlas, 학습기록]
 excerpt: "앱에 넣은 광고·분석·크래시 SDK는 내 코드와 격리돼 있지 않습니다 - 같은 프로세스, 같은 UID, 앱의 모든 권한을 그대로 물려받죠. 사용자가 날씨 앱에 위치 권한을 줬다면, 그 앱에 박힌 SDK 15개에도 준 겁니다. 그래서 악성이거나 나중에 침해된 SDK 하나가 그걸 품은 수천 개 앱을 한꺼번에 뚫는 공급망 공격이 되고요(event-stream·Joker의 교훈). 게다가 개발자가 직접 고른 SDK 몇 개 아래로 전이 의존성 트리가 훨씬 크게 실리니, SBOM으로 실제 무엇이 들어갔는지 목록화해야 CVE를 추적할 수 있습니다. 격리 방법은 isolatedProcess(C25)와 Privacy Sandbox의 SDK Runtime뿐인데, 일반 SDK는 그냥 인프로세스 풀권한으로 돕니다. 내 의존성 감사 작업과 직결되는 Tier 8 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | Android 개인정보·보안·네트워크 설정 캡처, `curl --tlsv1.3`, 패키지·AppOps 조회 |
+| 관측 결과 | 권한·개인정보 통제 화면과 TLS 1.3 HTTP 200 응답을 확인했다. 앱·호스트 네트워크 관측을 분리해 기록했다. |
+| 검증 한계 | Play Integrity의 프로덕션 verdict, 실제 OAuth 공급자, 제3자 SDK 백엔드는 범용 AVD 단독 검증 범위 밖이다. |
+
+![C49 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/privacy.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C49 — 서드파티 SDK·SBOM·공급망
 > **계층**: Tier 8 (앱 보안 통제) · **난이도**: 연구 · **선수 개념**: C06(APK/deps), C09(UID)
-> **성격**: 미학습 편.
+> **성격**: 공식 문서·공개 소스 기준 재검토.
 
 C09에서 앱이 UID로 격리된다 했습니다. 그런데 그 UID **안에는** 격리가 없습니다 — 앱에 넣은 SDK는 내 코드와 같은 UID·권한을 씁니다. 그 함의가 이 편입니다.
 
-한 문장으로: **서드파티 SDK는 앱과 같은 프로세스·UID·전체 권한으로 돌아, 하나가 침해되면 그걸 품은 모든 앱이 뚫린다.** 🔴이지만 핵심에 집중합니다.
+한 문장으로: **in-process 서드파티 SDK는 일반적으로 host 앱의 UID와 허용된 권한 범위에서 실행되므로, SDK 결함과 공급망 침해가 host 앱의 데이터와 기능으로 이어질 수 있습니다.** 별도 프로세스·SDK Runtime 같은 예외도 함께 구분합니다.
 
 ## 배경 개념
 
@@ -124,13 +150,13 @@ C09에서 앱이 UID로 격리된다 했습니다. 그런데 그 UID **안에는
 2. 전이 의존성 트리가 왜 미감사 표면인지, event-stream/dependency-confusion을 예로 서술하고 SBOM·dependency verification이 무엇을 막는지 설명하세요.
 3. 하나의 침해된 SDK가 왜 O(N) 앱 규모의 공격이 되는지, Joker 같은 사례와 함께 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 소유/허가 앱을 apktool로 열어 패키지 prefix·`lib/<abi>`·병합 매니페스트로 임베디드 SDK를 열거하세요.
 - (소스 있으면) `./gradlew :app:dependencies`로 전이 트리를 떠서 직접 선언과의 차이(미감사 표면)를 확인하세요.
 - Exodus로 앱의 트래커를 조회하고, 각 SDK가 앱의 어떤 권한을 상속하는지 정리하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 출력·화면만** 붙입니다.
 

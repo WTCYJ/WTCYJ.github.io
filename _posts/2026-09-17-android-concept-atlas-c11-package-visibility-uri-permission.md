@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C11 - package visibility·URI permission, 서로를 보고 데이터를 넘기는 법"
+title: "Android Security Concept Atlas C11 | 가상 실습 보고서 — package visibility·URI permission, 서로를 보고 데이터를 넘기는 법"
 date: 2026-09-17 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, PackageVisibility, URIPermission, FileProvider, ContentProvider, queries, ConfusedDeputy, ConceptAtlas, 학습기록]
 excerpt: "앱이 다른 앱을 '보는' 것과 다른 앱에 데이터를 '넘기는' 것은 둘 다 UID 경계(C09)를 건너는 일이라 통제됩니다. Android 11부터 설치 앱 목록 열거는 조용히 필터링되고(targetSdk 30 게이트, 예외가 아니라 빈 목록), 특정 앱을 보려면 <queries>를 선언하거나 QUERY_ALL_PACKAGES를 들어야 하죠. 데이터 공유는 전체 권한을 주는 대신 content:// URI 하나에만 임시로 위임하는 URI 권한(FLAG_GRANT_READ/WRITE)으로 - file:// 대신 FileProvider를 쓰는 이유입니다. 그리고 여기 confused-deputy가 삽니다: 악성 발신자가 URI를 피해자 자신의 사적 프로바이더로 겨누면 피해자가 제 파일을 대신 읽어 넘기죠. 내 WebView/딥링크 작업과 직결되는 Tier 1 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `javac`, `d8`, `aapt`, `zipalign`, `apksigner verify`, `adb install -r` |
+| 관측 결과 | 증거 앱 APK를 직접 빌드하고 v2/v3 서명을 검증한 뒤 설치했다. Package Manager가 앱을 별도 UID로 등록했다. |
+| 검증 한계 | AAB의 Play 서버 변환과 Play App Signing은 로컬 Google APIs AVD만으로 재현하지 않는다. |
+
+![C11 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/apps.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C11 — package visibility·URI permission
 > **계층**: Tier 1 (앱·패키징) · **난이도**: 중급 · **선수 개념**: C10(권한), C09(UID)
@@ -117,12 +143,12 @@ C10에서 권한은 UID에 부여된다 했습니다. 그런데 앱이 서로를
 2. URI 권한이 "전체 프로바이더 권한"이 아니라 "한 URI 임시 위임"임을, 프로바이더 opt-in·임시/영속 수명과 함께 서술하세요.
 3. confused-deputy(자기 파일 대리 읽기) 패턴이 어떻게 성립하는지, C47(WebView/딥링크)·C09(UID)와 엮어 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 앱의 매니페스트에서 `<queries>`와 `<provider android:exported/grantUriPermissions>`를 확인하고, `dumpsys package <pkg>`의 `queries`와 대조하세요.
 - 파일 공유 앱 하나가 `file://` 대신 `content://`(FileProvider)를 쓰는지, `<paths>` 설정이 지나치게 넓지 않은지 점검하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

@@ -1,16 +1,42 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C29 - 롤백 방지·롤백 인덱스, 서명된 옛 이미지를 막는 층"
+title: "Android Security Concept Atlas C29 | 가상 실습 보고서 — 롤백 방지·롤백 인덱스, 서명된 옛 이미지를 막는 층"
 date: 2026-09-29 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, RollbackProtection, AntiRollback, RollbackIndex, AVB, RPMB, KeyMint, ConceptAtlas, 학습기록]
 excerpt: "검증 부팅(C28)은 이미지가 진짜인지 확인하지만, 벤더가 예전에 정당하게 서명한 '오래된' 이미지도 여전히 진짜입니다 - 그래서 서명만 보면 몇 달 전의, 이미 패치된 취약점을 담은 빌드도 그냥 부팅되죠. 롤백 방지는 그 다운그레이드를 막는 별개 층입니다: 이미지의 롤백 인덱스가 RPMB 같은 변조증거 저장소의 최소값보다 작으면 부팅을 거부하고, 성공 부팅 후 그 최소값을 앞으로만 올리죠. 핵심 뉘앙스 - 이미지의 인덱스는 그 빌드의 고정값이라 연속 빌드가 같은 값일 수 있고, 단조로 오르는 건 저장된 최소값이며, 월단위 다운그레이드 방지는 사실 AVB가 아니라 KeyMint의 os_patchlevel 바인딩이 담당합니다. 내 부팅/펌웨어 작업과 맞닿는 Tier 5 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.treble.enabled`, `getprop ro.apex.updatable`, `mount`, FBE 속성 |
+| 관측 결과 | Treble/APEX 활성화와 `/data`의 file-based encryption(`file`, `encrypted`)을 확인했다. |
+| 검증 한계 | 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 실제 하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다. |
+
+![C29 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-boot.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C29 — 롤백 방지·롤백 인덱스
 > **계층**: Tier 5 (부팅·업데이트 체인) · **난이도**: 고급 · **선수 개념**: C28(AVB/vbmeta)
-> **성격**: 미학습 편 — 초점 좁은 모듈.
+> **성격**: 공식 문서·공개 소스 기준 재검토 — 초점 좁은 모듈.
 
 C28에서 AVB가 이미지의 진위를 증명한다 했습니다. 그런데 **벤더가 예전에 서명한 오래된 이미지도 여전히 진짜**입니다 — 그 다운그레이드를 막는 별개 층이 이 편입니다.
 
@@ -70,7 +96,7 @@ C28에서 AVB가 이미지의 진위를 증명한다 했습니다. 그런데 **�
 - key attestation 확장 필드(osPatchLevel·bootPatchLevel·verified boot state)로 원격 탐지.
 - **소스**: AOSP `external/avb/README.md`(AVB 2.0), Trusty secure storage, KeyMint HAL Tag 정의, `source.android.com/docs/security/features/verifiedboot`.
 
-**주의**: x86 에뮬레이터엔 RPMB/실 보안저장소가 없어 롤백 방지 실체는 **실기기**에서. `avbtool info_image`로 인덱스 필드는 어디서든 확인 가능.
+**주의**: 일반 x86_64 AVD에서는 hardware-backed rollback index storage를 검증할 수 없습니다. `avbtool info_image`로 metadata를 분석하고 Cuttlefish의 가상 동작을 관찰하되, RPMB 보증은 `가상 환경의 검증 한계`로 남깁니다.
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -122,13 +148,13 @@ C28에서 AVB가 이미지의 진위를 증명한다 했습니다. 그런데 **�
 2. 이미지의 롤백 인덱스(빌드 고정값)와 저장된 최소값(단조 비감소)의 차이, 그리고 forward-only 래칫이 A/B(C30)와 어떻게 조율되는지 서술하세요.
 3. AVB 롤백 인덱스(드물게)와 KeyMint `os_patchlevel` 바인딩(월단위)이 어떻게 역할을 나누는지, C42 원격 탐지와 함께 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - `avbtool info_image --image vbmeta.img`로 `Rollback Index`/`Rollback Index Location`을 확인하세요.
 - `getprop`으로 `ro.boot.vbmeta.*`·`verifiedbootstate`를 떠서 검증부팅 상태를 보세요.
-- (실기기) key attestation 레코드의 osPatchLevel/bootPatchLevel을 확인해, 이것이 다운그레이드 원격 탐지에 어떻게 쓰이는지 서술하세요.
+- 공개 key attestation test vector의 `osPatchLevel`/`bootPatchLevel`을 파싱해 downgrade 탐지에 쓰이는 방식을 서술하고, 로컬 환경의 보증과 혼동하지 마세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

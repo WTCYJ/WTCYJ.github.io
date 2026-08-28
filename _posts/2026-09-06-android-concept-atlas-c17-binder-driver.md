@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C17 - Binder 드라이버, node와 handle과 하나의 ioctl"
+title: "Android Security Concept Atlas C17 | 가상 실습 보고서 — Binder 드라이버, node와 handle과 하나의 ioctl"
 date: 2026-09-06 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Binder, binderdriver, node, handle, transaction, SingleCopy, ThreadPool, BadBinder, binderfs, ConceptAtlas, 학습기록]
 excerpt: "15~16주차에서 저는 'Binder 경계는 두 겹'이라고 관측했지만, 그 경계 안쪽의 드라이버는 읽지 않았습니다. 이 글은 그 내부입니다. 모든 Binder 통신은 /dev/binder 문자 장치의 ioctl 하나로 다중화되고, 커널 드라이버가 서로 못 믿는 프로세스들 사이의 유일한 브로커가 됩니다. 서버가 소유한 node와 클라이언트가 쥔 handle은 완전히 다른 것이고, 데이터는 딱 한 번만 복사되며, 커널이 발신자의 UID를 위조 불가능하게 도장 찍습니다 - 그게 권한 검사의 근거죠. 그리고 이 드라이버는 앱이 ioctl 하나로 닿는 Android 최대 커널 공격 표면입니다. Concept Atlas의 열아홉 번째 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `ls -l /dev/{binder,hwbinder,vndbinder}`, `service list` |
+| 관측 결과 | binderfs의 세 Binder 노드와 255개 서비스 등록을 확인했다. |
+| 검증 한계 | 벤더 전용 HAL 트랜잭션이나 취약한 서비스 호출은 범용 AVD에 없으므로 공개 인터페이스·소스 분석으로 제한한다. |
+
+![C17 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-binder.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C17 — Binder driver·handle·node·transaction
 > **계층**: Tier 3 (IPC·프레임워크) · **난이도**: 고급 · **선수 개념**: C04(프로세스·시스템콜), C12(Zygote)
@@ -120,13 +146,13 @@ excerpt: "15~16주차에서 저는 'Binder 경계는 두 겹'이라고 관측했
 2. 커널이 발신자 euid/pid를 도장 찍는 것이 왜 권한 검사(C22)의 위조 불가 근거인지, 그리고 그것이 왜 유저스페이스에서 스푸핑되지 않는지 서술하세요.
 3. Bad Binder(CVE-2019-2215)가 왜 EL0→EL1 커널 LPE인지(C05)와, binder 드라이버가 왜 큰 커널 공격 표면인지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기/에뮬에서 `ls -l /dev/binder*`로 세 도메인 장치를, `ls -l /proc/<pid>/fd`(예: `system_server`·앱·HAL 프로세스)로 각 프로세스가 어느 binder 도메인에 참여하는지 확인하세요.
+- Android Emulator/Cuttlefish에서 `ls -l /dev/binder*`로 제공되는 binder device를 확인하고, 접근 권한이 허용되는 범위에서 `/proc/<pid>/fd` 또는 `dumpsys`로 프로세스별 binder 참여를 관찰하세요.
 - 가능하면 `/sys/kernel/debug/binder/transactions`나 `dumpsys` 일부로 활성 트랜잭션/노드를 관측하세요.
 - 커널 소스 `binder_transaction()`에서 `sender_euid`가 어디서 오는지 한 곳 인용하세요(위조 불가의 근거).
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

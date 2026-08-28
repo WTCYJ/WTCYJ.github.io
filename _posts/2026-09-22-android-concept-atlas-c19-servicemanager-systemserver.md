@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C19 - servicemanager·system_server, 서비스의 신뢰 앵커와 특권 호스트"
+title: "Android Security Concept Atlas C19 | 가상 실습 보고서 — servicemanager·system_server, 서비스의 신뢰 앵커와 특권 호스트"
 date: 2026-09-22 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, servicemanager, system_server, Binder, handle0, ContextManager, AMS, ConceptAtlas, 학습기록]
 excerpt: "Binder는 핸들을 쥐어야 통신하는데, 아무 핸들도 없는 프로세스는 어떻게 첫 서비스를 찾을까요? handle 0 - servicemanager입니다. init이 zygote보다 먼저 띄우는 이 작은 데몬이 BINDER_SET_CONTEXT_MGR로 컨텍스트 매니저가 되어, 이름→binder 레지스트리 역할을 하죠(addService/getService). 그리고 그 위에서 조회되는 서비스 대부분 - AMS·PMS·WMS - 은 zygote가 fork한 하나의 특권 프로세스 system_server(UID 1000)에 삽니다. 그래서 system_server 코드실행 버그는 프레임워크 전체 장악급이지만, root는 아니고 SELinux 도메인에 갇혀 있죠. 누가 어떤 서비스를 등록/조회할 수 있는지는 service_contexts가 SELinux로 가릅니다. Tier 3 IPC의 신뢰 앵커 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `ls -l /dev/{binder,hwbinder,vndbinder}`, `service list` |
+| 관측 결과 | binderfs의 세 Binder 노드와 255개 서비스 등록을 확인했다. |
+| 검증 한계 | 벤더 전용 HAL 트랜잭션이나 취약한 서비스 호출은 범용 AVD에 없으므로 공개 인터페이스·소스 분석으로 제한한다. |
+
+![C19 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-binder.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C19 — servicemanager·system_server
 > **계층**: Tier 3 (IPC·프레임워크) · **난이도**: 고급 · **선수 개념**: C17(Binder), C12(zygote)
@@ -115,13 +141,13 @@ Binder 네임스페이스의 **부트스트랩**(servicemanager) + 프레임워�
 2. system_server가 왜 고가치 표적이면서도 "root가 아니다"인지, UID 1000·SELinux 도메인·호스트하는 서비스로 서술하세요.
 3. 서비스 도달성의 이중 게이트(`service_contexts` SELinux find + 서비스 자체 호출자 검사)가 무엇을 각각 막는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - `service list`로 등록된 서비스와 인터페이스를 떠서 프레임워크 Binder 공격면을 지도화하세요.
 - `ps -A | grep system_server`로 그 UID(1000)와, 그것이 부모(zygote)에서 fork됐음을 확인하세요.
 - `/dev/binder`·`/dev/vndbinder`·`/dev/hwbinder`의 존재와 각 `*service_contexts`를 대조하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

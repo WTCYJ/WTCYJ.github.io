@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C03 - 최소권한·완전중재·심층방어, Atlas가 실증해온 설계 원칙"
+title: "Android Security Concept Atlas C03 | 가상 실습 보고서 — 최소권한·완전중재·심층방어, Atlas가 실증해온 설계 원칙"
 date: 2026-09-27 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, LeastPrivilege, CompleteMediation, DefenseInDepth, FailSafeDefaults, ReferenceMonitor, SaltzerSchroeder, ConceptAtlas, 학습기록]
 excerpt: "이 Atlas의 거의 모든 모듈은 사실 몇 개의 오래된 설계 원칙(Saltzer & Schroeder 1975)의 사례입니다. 앱마다 UID를 주고 capability를 0으로 만드는 건 최소권한, SELinux가 매 접근을 검사하는 건 완전중재, 규칙이 없으면 거부하는 건 fail-safe defaults, UID+SELinux+seccomp를 겹치는 건 심층방어(이건 현대 원칙이지 S&S 8개엔 없음)죠. Reference monitor는 '항상 호출됨+변조불가+검증가능' 세 속성으로 정의되고요. 중요한 뉘앙스 - 완전중재는 stale 인가/권한 캐싱 버그를 막지 고전 TOCTOU 레이스는 원자성이 따로 필요하고, Binder는 프레임워크로 가는 주 매개 채널이지 유일한 문은 아닙니다. Atlas 전체를 하나의 원칙 지도로 묶는 Tier 0 토대 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `id`, `cat /proc/self/attr/current`, `/proc/self/status`, `uname -a` |
+| 관측 결과 | 앱 UID 10174, `untrusted_app` 도메인, `CapEff=0`, `Seccomp=2`, Linux 5.15 커널을 확인했다. |
+| 검증 한계 | AVD가 x86_64이므로 ARM64 EL·PAC·BTI·MTE는 런타임 관측 대신 공개 소스 경로로 판정한다. |
+
+![C03 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C03 — 최소권한·완전중재·심층방어(설계 원칙)
 > **계층**: Tier 0 (보안·시스템 기초) · **난이도**: 기초 · **선수 개념**: C01, C02
@@ -121,13 +147,13 @@ excerpt: "이 Atlas의 거의 모든 모듈은 사실 몇 개의 오래된 설�
 2. reference monitor의 세 속성을 서술하고, 왜 "완전중재+economy 두 원칙의 합성"이라 하면 부정확한지(변조 불가) 설명하세요.
 3. 완전중재가 막는 것(stale 인가)과 막지 못하는 것(고전 TOCTOU 레이스)을 구분해, 후자에 왜 원자성이 필요한지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 이 Atlas의 다섯 모듈을 골라, 각각이 어느 원칙(최소권한/완전중재/fail-safe/심층방어/…)의 사례인지 매핑하세요.
 - Android에서 fail-safe defaults의 증거 셋(SELinux deny-by-default, non-exported 기본, 미요청 권한)을 각각 실측 명령으로 확인하세요.
 - 과거 원칙 위반(예: shared-UID, 모놀리식 벤더 특권)과 그 개선(C09/C25/C31)을 대응시키세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

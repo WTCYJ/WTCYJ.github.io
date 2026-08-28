@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C36 - 벤더 드라이버·HAL 공격 표면, EL0에서 EL1로 가는 다리"
+title: "Android Security Concept Atlas C36 | 가상 실습 보고서 — 벤더 드라이버·HAL 공격 표면, EL0에서 EL1로 가는 다리"
 date: 2026-09-09 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, VendorDriver, GPU, MaliKbase, KGSL, Adreno, KernelLPE, PatchGap, MindTheGap, baseband, ConceptAtlas, 학습기록]
 excerpt: "제 CVE 시리즈의 미디어·블루투스 버그는 EL0에서 멈췄습니다. 그것을 커널 장악으로 올리는 두 번째 단계가 벤더 드라이버 LPE입니다. Android 커널 익스플로잇의 대다수는 코어 커널이 아니라 SoC/OEM의 out-of-tree 드라이버 - 특히 GPU - 에서 나옵니다. 렌더링 때문에 평범한 앱조차 GPU 노드를 열 수 있어서, 샌드박스와 거대한 복잡한 커널 드라이버 사이에 아무 권한 게이트가 없기 때문입니다. 그리고 그 수정은 SoC 벤더→OEM을 거쳐 느리게 오는 '패치 갭'에 걸립니다. Treble/GKI가 플랫폼은 분리했지만 벤더 드라이버 전달은 고치지 못한 그 지점입니다. Concept Atlas의 스물두 번째 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `uname -a`, `/proc/cpuinfo`, NDK JNI 빌드, UBSan 패치 전·후 실행 |
+| 관측 결과 | Android 13 기반 Linux 5.15 x86_64 커널을 확인하고, NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다. |
+| 검증 한계 | 범용 AVD에 없는 벤더 드라이버와 KASAN 커널은 실행하지 않았으며, 해당 항목은 공개 소스·설정 분석 결과로 구분한다. |
+
+![C36 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-kernel.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C36 — vendor driver·HAL 공격 표면
 > **계층**: Tier 6 (Native·커널) · **난이도**: 연구 · **선수 개념**: C34(ioctl), C20(HAL), C32(벤더 파티션), C05(EL0→EL1)
-> **성격**: 미학습 → 풀 작성. 내 CVE 시리즈의 "EL0 버그 → 커널 장악"의 그 EL1 단계.
+> **성격**: 공식 문서·공개 소스 기준 재검토. 내 CVE 시리즈의 "EL0 버그 → 커널 장악"의 그 EL1 단계.
 
 제 CVE 시리즈의 미디어(4·7편)·블루투스(8편) 버그는 EL0에서 멈췄습니다 — 샌드박스된 유저스페이스 프로세스 안이지 커널이 아니었습니다(C37). 그것을 **커널 장악으로 올리는 두 번째 단계**가 이 모듈입니다.
 
-한 문장으로: **Android 커널 익스플로잇의 대다수는 코어 커널이 아니라 SoC/OEM의 out-of-tree 벤더 드라이버 — 특히 GPU — 에서 나오고, 렌더링 때문에 평범한 앱이 GPU 노드를 열 수 있어 샌드박스와 커널 사이에 권한 게이트가 없다.** 🔴 미학습이라 처음부터 세웁니다.
+한 문장으로: **Android 커널 익스플로잇의 대다수는 코어 커널이 아니라 SoC/OEM의 out-of-tree 벤더 드라이버 — 특히 GPU — 에서 나오고, 렌더링 때문에 평범한 앱이 GPU 노드를 열 수 있어 샌드박스와 커널 사이에 권한 게이트가 없다.** 공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다.
 
 ## 배경 개념 - 벤더 코드가 곧 공격 표면
 
@@ -141,13 +167,13 @@ Arm/Qualcomm 수정 ──(몇 달)──▶ SoC 벤더 ──▶ OEM ──▶ 
 2. GPU 드라이버가 왜 유독 앱 도달 가능한 EL0→EL1 표적인지(렌더링·`untrusted_app` 접근·복잡도)와, 두 층(HAL/드라이버)의 차이를 서술하세요.
 3. "패치 갭"이 왜 벤더 특유인지, Treble/GKI가 무엇을 고치고 무엇을 못 고치는지, 그리고 그것이 제 CVE 시리즈의 EL0→EL1 서사와 어떻게 맞물리는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기에서 `ls -Z /dev`로 GPU 노드(`/dev/mali0` 또는 `/dev/kgsl-3d0`)의 `gpu_device` 라벨을, sepolicy로 `untrusted_app`의 접근을 확인하세요(C34 절차).
+- Cuttlefish/QEMU가 제공하는 가상 device node와 SELinux label을 `ls -Z /dev`로 확인하고, 공개 AOSP/vendor kernel source의 device node 및 sepolicy 선언과 비교하세요. `/dev/mali0`·`/dev/kgsl-3d0`가 존재한다고 가정하지 않습니다.
 - 최근 몇 달치 **Android Security Bulletin**에서 "Arm/Qualcomm components" 절을 열어 벤더 드라이버 CVE 비율과 in-the-wild 악용 플래그를 세어 보세요(스크립트로 집계 — 제 24주 교훈: 집계는 스크립트가).
 - Project Zero "Mind the Gap"에서 패치 갭의 구체 사례(CVE-2022-33917/36449)를 확인하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측/조사 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 출력·화면만** 붙입니다.
 

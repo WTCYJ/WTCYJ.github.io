@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C24 - seccomp·namespaces·cgroups·capabilities, 샌드박스를 겹겹이 두르는 층"
+title: "Android Security Concept Atlas C24 | 가상 실습 보고서 — seccomp·namespaces·cgroups·capabilities, 샌드박스를 겹겹이 두르는 층"
 date: 2026-09-24 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, seccomp, capabilities, namespaces, cgroups, AppFreezer, DefenseInDepth, ConceptAtlas, 학습기록]
 excerpt: "앱 샌드박스의 1차 경계는 UID(C09)와 SELinux(C23)지만, 그 위에 리눅스 컨테이너 프리미티브가 겹겹이 얹힙니다: 앱 프로세스는 capability를 하나도 안 가지고(root의 힘을 ~40비트로 쪼갠 것 중 0개), seccomp-bpf가 시스템 콜을 allowlist로 걸러 커널 공격 표면을 줄이며(C36), mount 네임스페이스가 저장소 뷰를 가릅니다. 중요한 뉘앙스 - caps를 비우는 건 setuid 같은 '합법적' 권한 상승만 막지, 커널 메모리 손상 익스플로잇(cred 구조체 덮어쓰기)은 못 막습니다. 그래서 이건 대체가 아니라 심층방어 층이죠. seccomp는 포인터를 못 읽어 경로가 아니라 시스템 콜 번호로만 거르고, cgroups는 보안이 아니라 자원·앱 프리저용입니다. Tier 4 플랫폼 격리 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `id`, `cat /proc/self/attr/current`, `/proc/self/status` |
+| 관측 결과 | 서로 다른 UID, `untrusted_app` SELinux 컨텍스트, 0 capability, seccomp 필터를 앱 프로세스 내부에서 확인했다. |
+| 검증 한계 | 정책 우회나 샌드박스 탈출은 수행하지 않았고, 접근 거부는 실패가 아니라 격리 통제가 작동한 대조군이다. |
+
+![C24 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C24 — seccomp·namespaces·cgroups·capabilities
 > **계층**: Tier 4 (플랫폼 격리) · **난이도**: 고급 · **선수 개념**: C04(시스템콜), C09(UID), C23(SELinux)
-> **성격**: 미학습 편.
+> **성격**: 공식 문서·공개 소스 기준 재검토.
 
 C09에서 UID DAC를, C23에서 SELinux MAC를 봤습니다. 이 편은 그 **1차 경계 위에 겹겹이 얹히는 리눅스 컨테이너 프리미티브** — 앱 샌드박스를 완성하는 심층방어 층입니다.
 
-한 문장으로: **앱 샌드박스는 UID+SELinux(1차) 위에 capability 비움·seccomp 필터·mount 네임스페이스를 겹친 것이고, cgroups는 보안이 아니라 자원 관리다.** 🔴이지만 핵심에 집중합니다.
+한 문장으로: **앱 샌드박스는 UID와 SELinux 위에 capability 제한·seccomp filter·mount namespace 등을 겹치며, cgroup은 주로 자원 관리와 accounting을 담당합니다.** 각 기법의 목적과 한계를 분리해 살펴봅니다.
 
 ## 배경 개념
 
@@ -118,13 +144,13 @@ C09에서 UID DAC를, C23에서 SELinux MAC를 봤습니다. 이 편은 그 **1�
 2. caps를 비우는 것이 왜 커널 메모리 손상 익스플로잇을 막지 못하는지(cred 덮어쓰기), 그래서 왜 SELinux·seccomp 표면축소가 함께 필요한지 서술하세요.
 3. seccomp가 "포인터맹"이라 무엇을 못 하고(경로/버퍼), 그래서 왜 SELinux와 짝을 이루는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 앱의 `/proc/<pid>/status`에서 `CapEff`(=0)과 `Seccomp`(=2)를 확인하세요.
 - 두 앱의 `/proc/<pid>/ns/mnt`(다름)와 `ns/net`(같음)을 대조해 mount ns만 분리됨을 확인하세요.
 - 시스템 데몬 하나의 caps(`getcap`/`status`)를 앱(0)과 비교해 최소권한을 관찰하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

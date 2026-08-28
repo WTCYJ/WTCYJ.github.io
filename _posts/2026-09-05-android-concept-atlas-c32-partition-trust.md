@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C32 - system·vendor·product·odm의 신뢰 관계"
+title: "Android Security Concept Atlas C32 | 가상 실습 보고서 — system·vendor·product·odm의 신뢰 관계"
 date: 2026-09-05 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Partitions, Treble, coredomain, VendorInterface, TrustBoundary, SELinux, AVB, ConceptAtlas, 학습기록]
 excerpt: "한 기기 안의 파티션들은 서로 다른 주체가 만들고 서명합니다 - system은 Google/OEM, vendor는 SoC 벤더, odm은 기기 통합자. 그래서 '한 기기니 다 같은 신뢰'가 아니라, 파티션마다 신뢰 수준과 방향이 다릅니다. 프레임워크는 벤더 입력을 OS 무결성에 대해 맹신하면 안 되고, 벤더는 프레임워크 내부에 닿지 못하며, 둘 사이의 유일한 인가된 통로가 벤더 인터페이스입니다. 이 신뢰 지도가 SELinux 도메인·링커 네임스페이스·체인 vbmeta로 어떻게 강제되는지 정리합니다. Concept Atlas의 열여덟 번째 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.treble.enabled`, `getprop ro.apex.updatable`, `mount`, FBE 속성 |
+| 관측 결과 | Treble/APEX 활성화와 `/data`의 file-based encryption(`file`, `encrypted`)을 확인했다. |
+| 검증 한계 | 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 실제 하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다. |
+
+![C32 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-boot.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C32 — system/vendor/product/odm 신뢰 관계
 > **계층**: Tier 5 (부팅·업데이트 체인) · **난이도**: 중급 · **선수 개념**: C31(Treble), C23(SELinux plat/vendor), C28(chained vbmeta), C33(링커 네임스페이스)
@@ -113,13 +139,13 @@ C31이 프레임워크와 벤더를 **갈랐다**면, C32는 그 갈라진 조�
 2. `coredomain`과 벤더 도메인 사이의 직접 IPC를 막는 neverallow(C23)와 링커 네임스페이스(C33)가 함께 어떻게 벤더 인터페이스를 **유일한 통로**로 만드는지 서술하세요.
 3. 봉쇄된 벤더 HAL이 그럼에도 왜 위험한 공격 표면인지(커널 도달)를 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기에서 `ls -Z`로 `/system`·`/vendor`·`/product`·`/odm`의 파티션별 SELinux 타입을 비교하고, `sepolicy-analyze`로 `coredomain` 도메인과 벤더 도메인의 경계(neverallow)를 확인하세요.
+- Cuttlefish에서 `ls -Z`로 `/system`·`/vendor`·`/product`·`/odm`의 SELinux type을 비교하고, host-side `sepolicy-analyze`로 `coredomain`과 vendor domain의 경계 및 neverallow를 확인하세요.
 - `avbtool info_image`로 vbmeta_system과 vbmeta_vendor가 **서로 다른 키**로 체인됨을 확인하세요(C28 절차).
 - 이 세 층(SELinux·링커·AVB)이 같은 프레임워크/벤더 선을 어떻게 강제하는지 근거와 함께 정리하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. C23·C28·C31·C33의 실측을 **하나의 신뢰 지도**로 엮는 종합 편입니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

@@ -1,16 +1,42 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C05 - ARM64 예외 수준과 메모리 보호, 격리는 어느 층에서 강제되는가"
+title: "Android Security Concept Atlas C05 | 가상 실습 보고서 — ARM64 예외 수준과 메모리 보호, 격리는 어느 층에서 강제되는가"
 date: 2026-08-22 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ARM64, AArch64, ExceptionLevel, EL0, EL1, EL2, EL3, TrustZone, TEE, MMU, PAN, PXN, PAC, BTI, MTE, ASLR, pKVM, Keystore, 신뢰경계, ConceptAtlas, 학습기록]
 excerpt: "24주 스터디 내내 '경계는 한 겹이 아니다'라고 적었지만, 정작 그 경계들이 CPU의 어느 특권 층에서 강제되는지는 짚지 않았습니다. ARM64에는 EL0부터 EL3까지 네 개의 예외 수준이 있고, 앱 샌드박스와 SELinux는 둘 다 EL1에서, Keystore 키는 EL3 너머 시큐어 월드에서 강제됩니다. 이 사다리를 세워두면 '커널 익스는 왜 SELinux까지 같이 무너뜨리는가', '루트를 따도 왜 키는 못 빼는가'가 한 그림으로 정리됩니다. Concept Atlas의 다섯 번째 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `id`, `cat /proc/self/attr/current`, `/proc/self/status`, `uname -a` |
+| 관측 결과 | 앱 UID 10174, `untrusted_app` 도메인, `CapEff=0`, `Seccomp=2`, Linux 5.15 커널을 확인했다. |
+| 검증 한계 | AVD가 x86_64이므로 ARM64 EL·PAC·BTI·MTE는 런타임 관측 대신 공개 소스 경로로 판정한다. |
+
+![C05 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C05 — ARM64 예외 수준과 메모리 보호
 > **계층**: Tier 0 (시스템 기초) · **난이도**: 중급 · **선수 개념**: C04(프로세스·가상메모리·시스템 콜)
-> **성격**: 개념 지도 편. 뒤의 「블로그 초안 작성 과제」에서 실측 글로 승격합니다.
+> **성격**: 개념 해설과 가상 실습 실행 보고서를 함께 제공하는 검증본입니다.
 > **완료 기준**: EL 전이 한 개와 W^X 위반을 실기 근거로 설명할 수 있다.
 
 24주 스터디를 마치고 CVE 열 건을 재현하는 동안, 저는 "경계는 한 겹이 아니다"라는 문장을 여러 번 적었습니다. 15~16주차에서는 Binder 경계가 두 겹이라고 했고, 1~4주차에서는 앱 격리가 UID와 SELinux 두 겹이라고 명령 출력으로 확인했습니다. 그런데 정작 **그 경계들이 CPU의 어느 특권 층에서 강제되는가**는 한 번도 짚지 않았습니다. "커널이 막는다", "SELinux가 막는다"라고만 적었지, 그 둘이 같은 층인지 다른 층인지 몰랐습니다.
@@ -123,7 +149,7 @@ PAC/BTI/MTE는 여기서는 **어디에 앉는지만** 짚고 지나갑니다(�
 - `arch/arm64/include/asm/uaccess.h` — `uaccess_enable/disable`가 PSTATE.PAN을 토글하는 지점
 - `arch/arm64/kernel/cpufeature.c` — 기능 탐지와 `CPU features: detected:` dmesg 줄
 
-**실기기/에뮬레이터에서 직접 관측**
+**Android Emulator 또는 ARM64 Cuttlefish/QEMU에서 직접 관측**
 - `adb shell cat /proc/cpuinfo` → `Features` 줄. PAC가 있으면 **`paca`·`pacg`**, BTI는 `bti`, MTE는 `mte`로 나옵니다.
 - 주의: **`pan`과 `pauth`는 `/proc/cpuinfo`에서 찾으면 안 됩니다.** PAN은 애초에 유저스페이스 HWCAP이 아니고, PAC의 문자열은 `pauth`가 아니라 `paca`/`pacg`입니다. PAN 여부는 `dmesg | grep -i "cpu features"`의 `Privileged Access Never` 줄이나 커널 config로 판정합니다.
 - `adb shell zcat /proc/config.gz | grep -E "PAN|PXN|RANDOMIZE|CFI|SHADOW_CALL|STRICT_KERNEL_RWX"` (config.gz가 켜져 있으면)
@@ -207,22 +233,22 @@ TEE OS(S-EL1) → KeyMint TA(S-EL0) ──── 평문 키는 오직 이 두 �
 2. 당신의 CVE 재현들(미디어 정수 결함, 블루투스 버퍼)은 어느 예외 수준에서 실행됩니까? 그것이 왜 "커널 장악"이 아니라 "발판"인지, 커널(EL1)에 닿으려면 무엇이 더 필요한지 서술하세요.
 3. PAN과 PXN이 각각 막는 것을 구분하고, 각각이 실패했을 때 되살아나는 고전 익스플로잇 기법(사용자 포인터 역참조 / ret2usr)을 연결하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-실기기 또는 에뮬레이터(API 33)에서 다음을 수행하고 근거와 함께 한 문단으로 정리하세요.
+Android Emulator 또는 Cuttlefish(API 33 이상)에서 다음을 수행하고 근거와 함께 한 문단으로 정리하세요. ARM64 전용 feature가 필요하면 ARM64 QEMU나 공개 CPU feature 자료를 사용합니다.
 
 - `adb shell cat /proc/cpuinfo`의 `Features` 줄과 `adb shell dmesg | grep -i "cpu features"`(권한이 없으면 커널 config)를 떠서, 이 기기가 (a) PAN을 쓰는지, (b) `paca`/`pacg`(PAC)·`bti`·`mte`가 있는지 판정하세요.
 - **왜 `pan`과 `pauth` 문자열을 `/proc/cpuinfo`에서 찾으면 안 되는지** 근거와 함께 적으세요.
 - Linux `arch/arm64/include/asm/pgtable-prot.h`에서 `PTE_PXN` 또는 `PTE_UXN`이 사용자/커널 매핑 pgprot 정의에 들어가는 한 곳을 인용하고, 그것이 질문 5의 "정책은 소프트웨어, 강제는 하드웨어"를 어떻게 뒷받침하는지 한 줄로 연결하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 개념 모듈을 **실측 글**로 승격하세요. 제 블로그 원칙대로, 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 증적으로 붙입니다(위의 사다리 그림은 개념 설명용이고, 발행본에는 실측 캡처가 들어가야 합니다).
 
 1. **앱이 EL0임을 간접 확인**: 테스트 앱에서 syscall 하나를 일으키고 `strace`(또는 가능한 관측)로 `SVC`가 발생하는 지점을 잡아, "앱의 유일한 특권 호출은 SVC"를 실측으로 보이기.
 2. **이 기기의 메모리 보호 프리미티브 목록 캡처**: 소스 탐색 과제의 `/proc/cpuinfo`·`dmesg`·config 출력을 실제 화면으로.
 3. **같은 `SVC`가 EL1 커널로 트랩되는 지점**을 커널 소스에서 지목(진입 벡터/`el0_sync`).
-4. **Keystore 키 한 개 생성 후 key attestation**으로 "이 키가 TEE 뒤에 있다"(security level=TRUSTED_ENVIRONMENT/STRONGBOX)를 실제 출력으로 확인 — 질문 3의 비대칭을 실물로 증명.
+4. **Keystore 키 한 개 생성 후 key attestation**으로 "이 키가 TEE 뒤에 있다"(security level=TRUSTED_ENVIRONMENT/STRONGBOX)를 실제 출력으로 확인 — 질문 3의 비대칭을 가상 환경에서 검증.
 
 각 단계는 명령 출력 또는 실제 스크린샷으로만 증적화하고, 재현 불가능하거나 확인 못 한 항목은 "못 한 것"으로 분리해 남기세요.
 
@@ -230,4 +256,4 @@ TEE OS(S-EL1) → KeyMint TA(S-EL0) ──── 평문 키는 오직 이 두 �
 
 24주 동안 저는 "경계는 한 겹이 아니다"를 관찰로 여러 번 확인했지만, 그 경계들이 CPU의 어느 층에서 강제되는지는 모른 채였습니다. 이제 그 층이 EL0/EL1/EL2/EL3라는 사다리로 정리됩니다. 앱 샌드박스와 SELinux가 **같은 EL1**에서 강제되기에 커널 탈출 하나가 둘을 함께 무너뜨리고, Keystore 키는 **EL3 너머**에 있기에 그 커널 탈출로도 못 빼냅니다. 제가 재현한 버그들의 위치(EL0 코덱·블루투스, EL0 논리 결함인 CVE-2022-20425)도 이 사다리 위에서 "발판이냐 커널 장악이냐"가 분명해집니다.
 
-다음은 이 사다리 위에서 커널 하드닝(C37)과 SELinux 정책 언어(C23)로 갈라집니다. 위의 「블로그 초안 작성 과제」를 마치면 이 개념 모듈이 실측 글로 확정됩니다.
+다음은 이 사다리 위에서 커널 하드닝(C37)과 SELinux 정책 언어(C23)로 갈라집니다. 이 문서는 위 실행 보고서와 원시 로그를 기준으로 검증 상태를 관리합니다.

@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C38 - ASan·HWASan·KASAN·UBSan, 버그를 프로덕션 전에 잡는 탐지기들"
+title: "Android Security Concept Atlas C38 | 가상 실습 보고서 — ASan·HWASan·KASAN·UBSan, 버그를 프로덕션 전에 잡는 탐지기들"
 date: 2026-09-11 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ASan, HWASan, KASAN, UBSan, AddressSanitizer, MemorySafety, Fuzzing, IntSan, ConceptAtlas, 학습기록]
 excerpt: "내가 퍼징으로 OOB를 잡을 때 크래시를 진단 가능한 리포트로 바꿔준 게 ASan이고, 미디어 코덱의 정수 언더플로→OOB 버그가 바로 이들이 겨냥하는 클래스입니다. ASan은 1/8 섀도 메모리 + 리드존(인접 오버플로) + 격리(UAF)로, HWASan은 arm64 TBI 상위바이트 태그로 같은 버그를 더 싼 메모리로, KASAN은 그걸 커널로 가져가 벤더 드라이버 버그를(C36) 잡습니다. 그런데 이건 전부 완화(장벽)가 아니라 탐지기입니다 - 테스트·퍼징에서 버그를 찾을 뿐, 유저 폰에 실리는 건 MTE·GWP-ASan·최소 IntSan뿐이죠. C37의 '탐지기 vs 장벽'을 도구 층위에서 마무리하는, Atlas의 스물네 번째 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `uname -a`, `/proc/cpuinfo`, NDK JNI 빌드, UBSan 패치 전·후 실행 |
+| 관측 결과 | Android 13 기반 Linux 5.15 x86_64 커널을 확인하고, NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다. |
+| 검증 한계 | 범용 AVD에 없는 벤더 드라이버와 KASAN 커널은 실행하지 않았으며, 해당 항목은 공개 소스·설정 분석 결과로 구분한다. |
+
+![C38 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-kernel.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C38 — ASan·HWASan·KASAN·UBSan
 > **계층**: Tier 6 (Native·커널) · **난이도**: 고급 · **선수 개념**: C37(완화·MTE), C33(네이티브)
@@ -67,7 +93,7 @@ C37의 "탐지기 vs 장벽" 이분법에서 **탐지기 쪽의 실제 도구들
 - 커널: `CONFIG_KASAN`·`CONFIG_KASAN_SW_TAGS`·`CONFIG_KASAN_HW_TAGS` + **syzkaller** 퍼징.
 - **소스**: `clang.llvm.org/docs/{AddressSanitizer,HardwareAssistedAddressSanitizerDesign}.html`, `source.android.com/docs/security/test/{hwasan,memory-safety}`.
 
-**주의**: 이건 소스 빌드·퍼징 환경 이야기입니다. 실기기·에뮬레이터의 일반 빌드에는 이 계측이 없습니다(그래서 탐지기).
+**주의**: sanitizer는 계측해 빌드한 target에서만 동작합니다. 일반 release image에 자동으로 존재한다고 가정하지 말고, host-side harness 또는 sanitizer-enabled Cuttlefish/QEMU build를 사용합니다.
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -117,12 +143,12 @@ C37의 "탐지기 vs 장벽" 이분법에서 **탐지기 쪽의 실제 도구들
 2. HWASan이 TBI 상위바이트 태그로 어떻게 ASan보다 싼 메모리로 전체 디바이스 계측을 가능케 하고, 왜 탐지가 확률적인지 서술하세요.
 3. "탐지기 vs 프로덕션 완화" 구분에서, 유저 폰에 실제로 실리는 것(MTE/GWP-ASan/Scudo/IntSan)과 실리지 않는 것(ASan/HWASan/KASAN)을 C37과 일관되게 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 네 퍼징 하네스(libFuzzer/AFL) 하나를 `-fsanitize=address`로 빌드해 ASan 리포트의 리드존/격리 메시지를 캡처하세요.
 - 그 OOB/UAF가 리드존형인지 UAF형인지 리포트로 판정하고, HWASan(`-fsanitize=hwaddress`)에서 같은 버그의 태그-불일치 리포트와 대조하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 리포트·화면만** 붙입니다.
 

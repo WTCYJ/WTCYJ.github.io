@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C09 - UID·sharedUserId·앱 샌드박스, 격리의 1차 경계"
+title: "Android Security Concept Atlas C09 | 가상 실습 보고서 — UID·sharedUserId·앱 샌드박스, 격리의 1차 경계"
 date: 2026-09-13 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, UID, appId, sharedUserId, Sandbox, DAC, isolatedProcess, PackageManager, ConceptAtlas, 학습기록]
 excerpt: "Android 앱 샌드박스의 심장은 권한 대화상자도 SELinux 라벨도 아니라, 리눅스 커널의 UID 기반 DAC입니다 - 설치 때 PackageManager가 앱마다 고유 UID(appId, 10000~19999)를 주고, /data/data/<pkg>를 그 UID 소유로 만들면, 커널이 open/stat마다 소유 UID를 확인해 다른 앱이 못 읽게 막죠. 멀티유저는 uid=userId×100000+appId로 같은 앱을 프로필별로 가릅니다. sharedUserId는 같은 키로 서명한 앱들을 한 UID로 묶던 레거시(A10 폐기)라 샌드박스를 넓히고, isolatedProcess는 99000~99999의 버려지는 UID로 가장 좁힙니다. DAC·SELinux MAC·seccomp는 별개의 세 층 - 이걸 뭉뚱그리지 않는 게 이 편의 핵심입니다. C04 위에 정체성을 얹는 Atlas의 밑변 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `javac`, `d8`, `aapt`, `zipalign`, `apksigner verify`, `adb install -r` |
+| 관측 결과 | 증거 앱 APK를 직접 빌드하고 v2/v3 서명을 검증한 뒤 설치했다. Package Manager가 앱을 별도 UID로 등록했다. |
+| 검증 한계 | AAB의 Play 서버 변환과 Play App Signing은 로컬 Google APIs AVD만으로 재현하지 않는다. |
+
+![C09 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/apps.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C09 — UID·sharedUserId·앱 샌드박스
 > **계층**: Tier 1 (앱·패키징) · **난이도**: 중급 · **선수 개념**: C04(프로세스), C05(EL)
@@ -119,13 +145,13 @@ C04에서 Android 앱이 평범한 Linux 프로세스라 했습니다. 이 편�
 2. 멀티유저/워크프로필 격리가 `uid = userId×100000 + appId`로 어떻게 실현되는지, 같은 appId가 왜 프로필별로 다른 커널 uid가 되는지 서술하세요.
 3. sharedUserId가 왜 샌드박스를 넓히고(한 앱 침해→그룹 전체) 왜 비가역적인지, isolatedProcess와 대비해 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 앱 하나에 대해 `dumpsys package <pkg>`로 `userId=`(appId)·`dataDir`·`sharedUser=`를 확인하고, `ps -A`에서 그 앱의 `u0_aXX`를 대조하세요.
 - `packages.xml`(또는 `packages.list`)에서 한 sharedUserId 그룹을 찾아, 같은 appId를 공유하는 앱들을 나열하세요.
 - 시스템 프로세스(uid 1000)와 셸(2000)이 `ps`에서 심볼릭 이름으로 나오는지 확인하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

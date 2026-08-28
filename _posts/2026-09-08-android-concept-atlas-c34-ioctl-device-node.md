@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C34 - ioctl과 device node, 앱이 커널에 명령하는 채널"
+title: "Android Security Concept Atlas C34 | 가상 실습 보고서 — ioctl과 device node, 앱이 커널에 명령하는 채널"
 date: 2026-09-08 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ioctl, devicenode, fileoperations, chardevice, GPU, kbase, KGSL, SELinuxioctl, PAN, ConceptAtlas, 학습기록]
 excerpt: "C17에서 Binder가 ioctl 하나로 다중화된다고 했습니다. 그 ioctl이 무엇인지가 이 모듈입니다. /dev의 특수 파일을 open하면 fd가 드라이버 코드에 연결되고, ioctl은 드라이버가 스스로 정의하는 명령 채널 - 커널이 그 인자의 뜻을 모르는 불투명한 RPC입니다. 그래서 각 드라이버의 ioctl 핸들러는 공격자 입력을 EL1에서 파싱하는, Android 최대 로컬 커널 공격 표면입니다. 특히 GPU 드라이버는 렌더링 때문에 평범한 앱조차 열 수 있어 EL0→EL1 상승의 주 표적이 됩니다. 제 CVE 시리즈의 EL0 버그가 커널로 올라가는 바로 그 자리. Concept Atlas의 스물한 번째 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `uname -a`, `/proc/cpuinfo`, NDK JNI 빌드, UBSan 패치 전·후 실행 |
+| 관측 결과 | Android 13 기반 Linux 5.15 x86_64 커널을 확인하고, NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다. |
+| 검증 한계 | 범용 AVD에 없는 벤더 드라이버와 KASAN 커널은 실행하지 않았으며, 해당 항목은 공개 소스·설정 분석 결과로 구분한다. |
+
+![C34 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-kernel.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C34 — ioctl·device node (Binder=ioctl)
 > **계층**: Tier 6 (Native·커널) · **난이도**: 고급 · **선수 개념**: C17(Binder 드라이버), C05(EL0/EL1·PAN)
-> **성격**: 미학습 → 풀 작성.
+> **성격**: 공식 문서·공개 소스 기준 재검토.
 
 C17에서 Binder가 `ioctl(BINDER_WRITE_READ)` 하나로 다중화된다고 했습니다. 그 **ioctl 자체**가 무엇인지가 이 모듈입니다 — 그리고 왜 그것이 Android 최대 로컬 커널 공격 표면인지.
 
-한 문장으로: **/dev의 특수 파일을 열면 fd가 드라이버 코드에 연결되고, ioctl은 커널이 뜻을 모르는 불투명한 드라이버 RPC라, 각 드라이버 핸들러가 EL0의 공격자 입력을 EL1에서 파싱한다.** 🔴 미학습이라 처음부터 세웁니다.
+한 문장으로: **/dev의 특수 파일을 열면 fd가 드라이버 코드에 연결되고, ioctl은 커널이 뜻을 모르는 불투명한 드라이버 RPC라, 각 드라이버 핸들러가 EL0의 공격자 입력을 EL1에서 파싱한다.** 공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다.
 
 ## 배경 개념 - /dev의 특수 파일이 곧 커널 코드
 
@@ -126,13 +152,13 @@ VFS: (major,minor) → cdev → file_operations 설치
 2. GPU 드라이버가 왜 유독 앱 도달 가능한 EL0→EL1 표적인지(렌더링·untrusted_app 접근·복잡도)와, `isolated_app`과의 차이를 서술하세요.
 3. PAN이 막는 것과 막지 못하는 것을 구분하고, 그래서 왜 드라이버 저자가 여전히 모든 size/bounds/포인터 검사를 책임지는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기/에뮬에서 `ls -l /dev`로 문자/블록 장치와 major,minor를, `ls -Z /dev`로 노드별 SELinux 타입을 확인하세요. GPU 노드(`/dev/mali0` 또는 `/dev/kgsl-3d0`)와 `/dev/binder`의 타입을 대조하세요.
+- Android Emulator/Cuttlefish에서 `ls -l /dev`와 `ls -Z /dev`로 가상 character/block device, major/minor와 SELinux type을 확인하세요. OEM GPU node를 가정하지 말고 실제로 제공된 goldfish/virtio/binder device만 기록합니다.
 - 앱 프로세스를 `strace`(가능하면)해 `ioctl(fd, 0x…, …)`의 인코딩된 request를 관측하고, 매크로(`_IOWR('b',1,…)`)로 디코딩하세요.
 - 커널 `security/selinux/hooks.c`의 `ioctl_has_perm`에서 xperm이 어느 비트로 필터하는지 한 곳 인용하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

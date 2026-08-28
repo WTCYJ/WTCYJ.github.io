@@ -1,21 +1,47 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C41 - Gatekeeper·Weaver·생체, 누가 잠금을 여는가"
+title: "Android Security Concept Atlas C41 | 가상 실습 보고서 — Gatekeeper·Weaver·생체, 누가 잠금을 여는가"
 date: 2026-08-30 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Gatekeeper, Weaver, Biometrics, BiometricPrompt, HardwareAuthToken, SyntheticPassword, SecureUserID, Throttling, TitanM, ConceptAtlas, 학습기록]
-excerpt: "C39는 시큐어 월드가 어디인지, C40은 그 안의 키가 무엇을 지키는지였습니다. C41은 그 키의 잠금을 누가 여는가입니다. Gatekeeper가 TEE 안에서 PIN을 검증하고, 재부팅으로도 시계 조작으로도 풀리지 않는 throttle로 저엔트로피 PIN을 지키며, Weaver가 그 throttle을 별도 보안 요소로 옮겨 OEM조차 우회 못 하게 만듭니다. 생체는 클래스(Strong만 Keystore를 엽니다)로 갈리고, 성공하면 위조 불가능한 HardwareAuthToken이 KeyMint로 건너갑니다. 그리고 왜 정상 PIN 변경이 auth-bound 키를 죽이지 않는지 — synthetic password가 그 답입니다. 하드웨어 보안 삼부작의 마지막, Concept Atlas의 열두 번째 모듈입니다."
+excerpt: "Gatekeeper와 Weaver의 LSKF 검증·rate limiting 역할, 생체 인증 등급, HardwareAuthToken과 Keystore authorization의 연결을 구현 전제와 함께 구분합니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | AndroidKeyStore EC 키 생성, attestation challenge, `KeyInfo`, certificate chain 조회 |
+| 관측 결과 | EC 키 생성과 attestation 요청이 성공했고 인증서 체인 길이는 3이었다. 이 AVD의 키 보안 수준은 정확히 `SOFTWARE(0)`였다. |
+| 검증 한계 | TEE·StrongBox·Weaver는 물리 보안 하드웨어가 없는 AVD에서 증명할 수 없다. SOFTWARE 결과를 하드웨어 보안으로 해석하지 않는다. |
+
+![C41 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-keystore.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C41 — Gatekeeper·Weaver·biometrics
 > **계층**: Tier 7 (하드웨어 기반 보안) · **난이도**: 고급 · **선수 개념**: C39(TEE·시큐어 월드), C40(Keystore·HAT·SID)
-> **성격**: 미학습 → 풀 작성. 하드웨어 보안 삼부작(C39·C40·C41)의 마지막.
+> **성격**: 공식 문서·공개 소스 기준 재검토. 하드웨어 보안 삼부작(C39·C40·C41)의 마지막.
 > **완료 기준**: 사용자 인증이 auth-bound 키의 HAT·SID로 이어지는 경로와, throttle이 재부팅·시계 조작으로 풀리지 않는 이유를 설명할 수 있다.
 
 C39는 시큐어 월드가 **어디**인지였고, C40은 그 안의 키가 **무엇**을 지키는지였습니다. C41은 그 키의 잠금을 **누가 여는가**입니다. C40에서 인증 바인딩 키가 요구하던 그 HardwareAuthToken(HAT)과 Secure User ID(SID)가 **어디서 오는지** — 그 출처가 이 모듈입니다.
 
-한 문장으로: **사용자 확인(PIN·생체)은 TEE 안에서 이뤄지고, 그 성공의 증거인 HAT은 시큐어 월드 키로 서명돼 커널이 위조할 수 없으며, throttle은 재부팅으로도 시계 조작으로도 풀리지 않는다.** 🔴 미학습 영역이라 처음부터 세웁니다.
+한 문장으로: **Gatekeeper/Weaver와 biometric secure component가 발급한 HAT을 KeyMint가 검증함으로써 authentication-bound key 사용을 gate하며, 보장 수준은 각 HAL과 secure environment 구현에 달려 있습니다.**
 
 ## 배경 개념 - 잠금 지식과 생체를 증거로 바꾸기
 
@@ -23,7 +49,7 @@ C39는 시큐어 월드가 **어디**인지였고, C40은 그 안의 키가 **�
 - **Gatekeeper**: LSKF를 검증하는 TEE 트러스티드 앱(S-EL0, C39). enroll→패스워드 핸들, verify→HAT.
 - **Secure User ID (SID)**: 자격증명에 묶이는 무작위 64비트 값. auth-bound 키가 여기 묶입니다(C40).
 - **HardwareAuthToken (HAT)**: 인증 성공의 증거. 시큐어 월드에서 공유한 HMAC 키로 서명돼 KeyMint가 검증합니다.
-- **Weaver**: throttle을 **별도 보안 요소(SE)**로 옮긴 서비스(Titan M/M2).
+- **Weaver**: LSKF 검증과 rate limiting에 사용하는 slot 기반 HAL입니다. dedicated SE뿐 아니라 TEE에도 구현될 수 있습니다.
 - **Synthetic Password (SP)**: 자격증명이 **여는** 고엔트로피 비밀. 자격증명이 아니라 SP가 키에 묶입니다.
 
 ## 질문 1 — 이 개념은 Android 전체 구조에서 어디에 있는가
@@ -156,7 +182,7 @@ KeyMint 검증 → auth-per-use 면 begin() 챌린지 일치까지 → 연산
 2. 카운터는 RPMB(재생 방지)에 남아 재부팅으로 안 풀리고, 타임아웃은 **서스펜드 중에도 도는 보안 단조 시계**로 재므로 노멀 월드 시계 조작이 안 먹습니다.
 3. **Class 3(Strong)만** Keystore 키를 열고 CryptoObject를 지원합니다. Class 2(Weak)·Class 1(Convenience)은 UI 잠금해제는 되지만 키는 못 엽니다.
 4. HAT의 HMAC 키는 시큐어 월드에서만 공유됩니다(`ISharedSecret`). 커널은 연산을 요청할 순 있어도 인증을 위조하지 못합니다.
-5. Weaver는 SE가 있어야 합니다(Titan급) — 없는 기기는 Gatekeeper TEE throttle로 대체. 그리고 정상 PIN 변경은 현재 핸들과 함께 enroll해 **SID를 유지**하므로 키가 살아남습니다(제거/리셋에서만 회전).
+5. Weaver는 dedicated SE 또는 TEE에 구현될 수 있습니다. Gatekeeper와 Weaver의 역할 분담은 Android version과 구현에 따라 달라집니다. 기존 credential을 확인한 정상 변경은 SID를 유지할 수 있지만 credential 제거·신뢰할 수 없는 재등록은 SID와 auth-bound key 유효성에 영향을 줍니다.
 </details>
 
 ## 서술형 문제 3개
@@ -165,27 +191,27 @@ KeyMint 검증 → auth-per-use 면 begin() 챌린지 일치까지 → 연산
 2. Synthetic Password가 왜 정상 PIN 변경 시 데이터 재암호화 없이 SID를 유지하는지(= C40의 "변경은 키를 안 죽인다"의 근원)를 **디커플링**으로 설명하세요.
 3. 생체 클래스가 modality(지문/얼굴)가 아니라 **SAR/IAR**로 정해지는 이유와, 왜 Class 3만 Keystore를 여는지(그리고 클래스 다운그레이드 요청이 왜 키를 못 건드리는지) 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-실기기에서 다음을 수행하고 근거와 함께 정리하세요.
+Android Emulator에서 다음을 수행하고 근거와 함께 정리하세요. Weaver·StrongBox·hardware authenticator 보증은 로컬에서 재현하지 않고 공식 인터페이스와 공개 test 자료로만 분석합니다.
 
 - `BiometricManager.canAuthenticate(BIOMETRIC_STRONG)`와 `(BIOMETRIC_WEAK)`를 각각 호출해 **같은 기기가 다르게 답하는지** 확인하고, `dumpsys biometric`으로 센서의 광고 강도(Strong/Weak/Convenience)를 대조.
 - `dumpsys lock_settings`(또는 HAL 인스턴스 목록)로 이 기기가 **Weaver(SE)**를 쓰는지 확인하고, 그것이 왜 SE 기반 throttle의 신호인지 적으세요.
 - 왜 `sec-api33` 에뮬에서는 이 신호들이 소프트웨어/부재로 나오는지(진짜 TEE/SE/생체 하드웨어 없음) 근거와 함께 적으세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
-이 모듈을 **실측 글**로 승격하세요. 환경 특성: 에뮬은 전부 소프트웨어(소프트 Gatekeeper/KeyMint, Weaver/SE·StrongBox 없음, goldfish 생체) — TEE/SE/클래스 보증은 실기기 필요. 지문은 `adb -e emu finger touch <id>`. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+이 모듈을 **가상 환경 실측 글**로 승격하세요. Emulator의 화면 잠금·생체 모의 입력·인증 바인딩 키 동작을 관측하고, Gatekeeper/KeyMint security level을 실제 출력으로 구분합니다. Weaver·SE·StrongBox와 biometric class의 하드웨어 보증은 공식 문서와 공개 CTS/VTS 코드만으로 분석하며 로컬 실측으로 주장하지 않습니다. 지문 입력은 `adb -e emu finger touch <id>`를 사용합니다.
 
 1. **클래스 대조**: `canAuthenticate(STRONG)` vs `(WEAK)` 결과와 `dumpsys biometric` 센서 강도를 실제 출력으로.
 2. **사용 게이팅 실측**: `setUserAuthenticationRequired(true)` 키를 만들어 잠금 해제 전 사용 시 `UserNotAuthenticatedException`, 해제 후 성공을 캡처.
 3. **SID 회전 대조**: 새 지문을 등록한 뒤 생체-바인딩 키가 `KeyPermanentlyInvalidatedException`이 나는 것과, PIN을 변경한 뒤 자격증명-바인딩 키가 **살아남는** 것을 대조.
-4. **Weaver 유무**: 실기기(가능하면 Pixel)와 에뮬에서 Weaver HAL/SE 사용 여부를 대조.
+4. **Weaver 경계**: Emulator에서 노출되는 HAL·service를 확인하고, Weaver가 없거나 확인되지 않으면 `Unknown/Not provided by this environment`로 기록한 뒤 공개 AIDL/HIDL·CTS 소스와 비교.
 
 각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
 
 ## 마치며
 
-하드웨어 보안 삼부작이 여기서 닫힙니다. C39가 시큐어 월드(어디서), C40이 키 블롭(무엇을 지키나)이었다면, C41은 그 잠금을 여는 **인증**입니다. Gatekeeper가 TEE 안에서 PIN을 검증하고, 재부팅·시계로도 못 푸는 throttle이 저엔트로피 PIN을 지키며, Weaver가 그 throttle을 별도 SE로 옮겨 OEM조차 우회 못 하게 합니다. 생체는 스푸핑 저항(SAR)으로 클래스가 갈리고 **Class 3만** 키를 열며, 성공의 증거인 HAT은 시큐어 월드 키로 서명돼 커널이 위조하지 못합니다.
+이 계층의 핵심은 인증 UI 자체가 아니라 secure component가 발급한 HAT과 KeyMint authorization의 연결입니다. Gatekeeper와 Weaver는 LSKF 검증·rate limiting 역할을 나눌 수 있고 Weaver는 SE 또는 TEE에 구현될 수 있습니다. 생체 class와 HAT 검증도 각 구현의 security requirement와 threat model 안에서 평가해야 합니다.
 
-그리고 두 가지를 분명히 해야 합니다: 인증은 키의 **사용**을 게이팅할 뿐 **추출**이 아니고(C40), 정상 PIN 변경이 키를 죽이지 않는 이유는 **synthetic password**가 자격증명과 키를 떼어놨기 때문입니다. 다음은 이 모든 것이 원격까지 증명되는 자리인 **C42(key attestation·신뢰의 뿌리)**, 또는 synthetic password가 디스크 키를 파생하는 **C43(FBE·Direct Boot)**로 이어집니다. 위의 「블로그 초안 작성 과제」를 마치면 이 모듈이 실측 글로 확정됩니다.
+그리고 두 가지를 분명히 해야 합니다: 인증은 키의 **사용**을 게이팅할 뿐 **추출**이 아니고(C40), 정상 PIN 변경이 키를 죽이지 않는 이유는 **synthetic password**가 자격증명과 키를 떼어놨기 때문입니다. 다음은 이 모든 것이 원격까지 증명되는 자리인 **C42(key attestation·신뢰의 뿌리)**, 또는 synthetic password가 디스크 키를 파생하는 **C43(FBE·Direct Boot)**로 이어집니다. 이 문서는 위 실행 보고서와 원시 로그를 기준으로 검증 상태를 관리합니다.

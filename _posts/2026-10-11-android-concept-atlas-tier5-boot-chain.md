@@ -1,12 +1,32 @@
 ---
 layout: post
-title: "Android Security Concept Atlas — Tier 5: 부팅·업데이트 체인"
+title: "Android Security Concept Atlas Tier 5 | 학습 로드맵 — 부팅·업데이트 체인"
 date: 2026-10-11 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: learning-roadmap
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ConceptAtlas, Tier5, VerifiedBoot, AVB, 학습기록]
 excerpt: "전원 첫 바이트부터의 신뢰 사슬입니다. Boot ROM이 부트로더를, 부트로더가 커널을(AVB), 각 단계가 다음을 검증하며, 롤백 방지가 '서명됐지만 낡은' 이미지를 막고, A/B·Treble·파티션 신뢰가 업데이트와 벤더 분리를 실현합니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 이 로드맵의 실제 검증 기준
+
+이 글은 개별 모듈을 묶는 **학습 로드맵**이다. Tier 5의 공통 기준 실습은 전용 API 33 AVD에서 다음 항목으로 확인했다: `getprop ro.treble.enabled`, `getprop ro.apex.updatable`, `mount`, FBE 속성. Treble/APEX 활성화와 `/data`의 file-based encryption(`file`, `encrypted`)을 확인했다. 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 실제 하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다.
+
+![Tier 5 가상 실습 기준 화면](/assets/img/android-concept-atlas/verified-api33/evidence-boot.png)
+
+세부 명령·판정은 각 Cxx 보고서와 [전체 원시 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에서 확인할 수 있다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas · Tier 5 — 부팅·업데이트 체인 (Domain 2)**
 > 6개 모듈 · 이 계층은 **전원부터의 신뢰 사슬**입니다.

@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C27 - Boot ROM·부트로더·boot.img·init, 실리콘에서 첫 프로세스까지"
+title: "Android Security Concept Atlas C27 | 가상 실습 보고서 — Boot ROM·부트로더·boot.img·init, 실리콘에서 첫 프로세스까지"
 date: 2026-09-03 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, BootROM, Bootloader, ABL, fastboot, bootimg, initboot, vendorboot, init, FirstStageInit, GKI, ConceptAtlas, 학습기록]
 excerpt: "전원을 누른 순간부터 첫 Android 프로세스가 뜨기까지 무슨 일이 벌어지는가. 신뢰는 소프트웨어가 아니라 실리콘에 구워진 Boot ROM에서 시작하고, 부트로더 단계들이 서로를 검증하며 올라가, 마침내 커널과 init이 뜹니다. 그 부트 이미지는 헤더 버전마다 다른 것을 담고(GKI에서는 커널만 boot.img에, init은 init_boot에), init은 세 번 자기를 재실행하며 파일시스템을 마운트하고 SELinux를 켜고 서비스를 띄웁니다. 이 모듈은 C28·C39·C23의 시작점입니다. Concept Atlas의 열여섯 번째 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.treble.enabled`, `getprop ro.apex.updatable`, `mount`, FBE 속성 |
+| 관측 결과 | Treble/APEX 활성화와 `/data`의 file-based encryption(`file`, `encrypted`)을 확인했다. |
+| 검증 한계 | 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 실제 하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다. |
+
+![C27 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-boot.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C27 — Boot ROM·bootloader·boot.img·init
 > **계층**: Tier 5 (부팅·업데이트 체인) · **난이도**: 고급 · **선수 개념**: C05(ARM64 예외 수준·EL3)
-> **성격**: 미학습 → 풀 작성. C28(Verified Boot)·C39(TEE)·C23(SELinux)의 **뒤늦게 채운 선수 모듈**.
+> **성격**: 공식 문서·공개 소스 기준 재검토. C28(Verified Boot)·C39(TEE)·C23(SELinux)의 **뒤늦게 채운 선수 모듈**.
 
 C28·C39·C23·C40을 쓰면서 이 모듈(C27)이 그 선수인데 아직 안 썼다고 여러 번 적었습니다. 이제 그 밑바닥을 채웁니다 — **전원을 누른 순간부터 첫 Android 프로세스가 뜨기까지**입니다.
 
-한 문장으로: **신뢰는 소프트웨어가 아니라 실리콘의 Boot ROM에서 시작해, 부트로더 단계들이 서로를 검증하며 올라가고, 커널과 init이 세 번 자기를 재실행하며 파일시스템·SELinux·서비스를 세운다.** 🔴 미학습이라 처음부터 세웁니다.
+한 문장으로: **신뢰는 소프트웨어가 아니라 실리콘의 Boot ROM에서 시작해, 부트로더 단계들이 서로를 검증하며 올라가고, 커널과 init이 세 번 자기를 재실행하며 파일시스템·SELinux·서비스를 세운다.** 공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다.
 
 ## 배경 개념 - 실리콘에서 시작하는 신뢰
 
@@ -66,7 +92,7 @@ C28·C39·C23·C40을 쓰면서 이 모듈(C27)이 그 선수인데 아직 안 �
 ## 질문 5 — 실패하면 어떤 취약점으로 이어지는가
 
 - **부트로더 파서 버그**: 가장 위험한 pre-OS 공격 표면. OS·SELinux·dm-verity·커널 **아래**에서 코드 실행.
-- **언락(`fastboot flashing unlock`)**: AVB 강제를 끄고, **강제 데이터 와이프**(userdata 삭제)를 인터록으로 겁니다 — 언락으로 기존 데이터를 조용히 노출하지 못하게.
+- **bootloader 잠금 상태**: 잠금 상태 변화는 AVB 신뢰 모델에 영향을 주며 일반적으로 사용자 데이터 초기화 같은 보호 절차와 결합됩니다. 이 시리즈에서는 실제 단말 상태를 변경하지 않고 공개 문서와 가상 이미지의 상태 값만 분석합니다.
 - **init/rc 오설정**: 과특권 서비스, 잘못된 SELinux 도메인.
 - **전이적 신뢰**: Boot ROM(RoT) → 부트로더(각자 다음 검증) → AVB가 boot/init_boot/vendor_boot 검증(C28) → 커널 → init이 SELinux 로드(C23) + first-stage-mount dm-verity. **어느 한 단계가 깨지면 위 전부가 무효.**
 
@@ -81,7 +107,7 @@ C28·C39·C23·C40을 쓰면서 이 모듈(C27)이 그 선수인데 아직 안 �
 - **init 3단계**: first_stage(`FirstStageMain`, 의사 파일시스템 + first-stage mount + dm-verity) → 재실행 `selinux_setup`(`SetupSelinux`/`LoadPolicy`, 정책 로드·enforcing) → 재실행 `second_stage`(property service + `.rc` 서비스; `class_start main`으로 zygote).
 - **소스**: `source.android.com/docs/core/architecture/{bootloader,partitions/generic-boot,partitions/vendor-boot-partitions}`, AOSP `system/core/init`(`first_stage_init.cpp`·`init.cpp`·`selinux.cpp`).
 
-**주의**: 에뮬레이터는 벤더 부트로더 단계가 없습니다 — `unpack_bootimg`·`.rc`·`ro.boot.*`는 보이지만 실제 부트 ROM 체인은 실기기에서만.
+**주의**: 일반 AVD는 OEM Boot ROM과 vendor bootloader chain을 재현하지 않습니다. `unpack_bootimg`, init rc와 `ro.boot.*`는 관측할 수 있지만 silicon Root of Trust는 공개 사양 수준의 `가상 환경 검증 한계`입니다.
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -141,13 +167,13 @@ Boot ROM/PBL(EL3, 시큐어) ─검증→ XBL(EL3): DRAM 초기화 + 시큐어 �
 2. init이 세 단계로 자기를 재실행하며 각 단계가 하는 일(마운트/dm-verity·SELinux·property·서비스)을 순서대로 설명하고, PID 1이 유지되는 이유를 서술하세요.
 3. 부트로더가 왜 "신뢰 코드"가 아니라 공격 표면인지, 그리고 언락이 왜 데이터 와이프를 강제하는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기(또는 팩토리 이미지)에서 `boot.img`/`init_boot`/`vendor_boot`를 뽑아 `unpack_bootimg.py`로 **헤더 버전**과 각 파티션 내용을 확인하고, 이 기기가 GKI 레이아웃(커널만 boot.img)인지 판정하세요.
+- 공개 AOSP/Cuttlefish 이미지의 `boot.img`/`init_boot`/`vendor_boot`를 `unpack_bootimg.py`로 열어 **header version**과 각 파티션 내용을 확인하고 GKI layout 여부를 판정하세요.
 - `getprop | grep ^\[ro.boot`로 부트로더가 넘긴 값들, `/system/etc/init/*.rc`로 Android Init Language 예시를 확인하세요.
 - 왜 에뮬에서는 벤더 부트로더 체인(PBL/XBL/ABL)이 안 보이는지 근거와 함께 적으세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

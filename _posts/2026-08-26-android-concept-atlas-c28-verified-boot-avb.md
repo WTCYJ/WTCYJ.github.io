@@ -1,16 +1,42 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C28 - Verified Boot·vbmeta·dm-verity, 실리콘에서 커널까지 이어지는 신뢰"
+title: "Android Security Concept Atlas C28 | 가상 실습 보고서 — Verified Boot·vbmeta·dm-verity, 실리콘에서 커널까지 이어지는 신뢰"
 date: 2026-08-26 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, VerifiedBoot, AVB, vbmeta, dmverity, RootOfTrust, RollbackProtection, KeyAttestation, avbtool, Bootloader, Treble, ConceptAtlas, 학습기록]
-excerpt: "15~16주차에서 저는 'Verified Boot는 에뮬레이터에서 안 보인다'고 한 줄 적고 지나갔습니다. 그게 왜 안 보였는지, 실기기에서는 무엇이 어떻게 동작하는지가 이 글의 주제입니다. 실리콘에 구워진 키 해시에서 시작해 부트로더가 vbmeta 서명을 검증하고, 그 vbmeta가 dm-verity의 해시 트리 루트를 보증하고, 마침내 그 부팅 상태가 Keystore attestation으로 원격 서버까지 전달되는 하나의 신뢰 사슬. 그리고 그 모든 것이 왜 '잠긴 부트로더'라는 전제 위에서만 의미가 있는지. Concept Atlas의 아홉 번째 모듈입니다."
+excerpt: "Verified Boot의 신뢰 사슬을 공개 이미지와 avbtool로 분석합니다. vbmeta 서명, Hash·Hashtree descriptor, dm-verity와 rollback metadata를 구분하고, 에뮬레이터에서 검증할 수 없는 하드웨어 Root of Trust는 명확한 한계로 남깁니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.treble.enabled`, `getprop ro.apex.updatable`, `mount`, FBE 속성 |
+| 관측 결과 | Treble/APEX 활성화와 `/data`의 file-based encryption(`file`, `encrypted`)을 확인했다. |
+| 검증 한계 | 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 실제 하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다. |
+
+![C28 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-boot.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C28 — AVB·vbmeta·dm-verity
 > **계층**: Tier 5 (부팅·업데이트 체인) · **난이도**: 고급 · **선수 개념**: C05(ARM64 예외수준; EL3 시큐어 모니터·신뢰의 뿌리), C08(APK 서명 스킴)
-> **성격**: 미학습 → 풀 작성. 선수 C27(부트 ROM·부트로더 — 아직 미작성)의 맥락은 이 글이 스스로 서도록 최소한만 깝니다.
+> **성격**: 공식 문서·공개 소스 기준 재검토. 선수 C27(부트 ROM·부트로더)의 맥락은 이 글이 스스로 서도록 최소한만 깝니다.
 > **완료 기준**: vbmeta 서명 체인을 도식화하고 dm-verity 해시 트리 검증을 설명할 수 있다.
 
 15~16주차에서 저는 "Verified Boot는 에뮬레이터에서 안 보인다"고 한 줄 적고 지나갔습니다. 그때는 그게 **왜** 안 보이는지 몰랐습니다. 이 모듈이 그 답입니다. 그리고 그 답은 Android 부팅 체인 전체(Domain 2)의 앵커이자, C05의 "EL3 너머 신뢰의 뿌리"와 C40의 attestation이 실제로 걸려 있는 자리입니다.
@@ -25,7 +51,7 @@ excerpt: "15~16주차에서 저는 'Verified Boot는 에뮬레이터에서 안 �
 - **dm-verity**: 큰 읽기전용 파티션(system 등)을 블록 단위로 검증하는 커널 device-mapper. 머클(해시) 트리를 쓰고, 그 루트가 vbmeta 안에 있습니다.
 - **롤백 방지**: 서명된 **구버전** 이미지로 되돌리는 다운그레이드 공격을 막는 단조 증가 인덱스.
 
-🔴 미학습 영역이라 처음부터 세웁니다. 여덟 질문으로 조립합니다.
+공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다. 여덟 질문으로 조립합니다.
 
 ## 질문 1 — 이 개념은 Android 전체 구조에서 어디에 있는가
 
@@ -99,9 +125,9 @@ excerpt: "15~16주차에서 저는 'Verified Boot는 에뮬레이터에서 안 �
 **호스트에서(기기 없이도 가능)**
 - `avbtool info_image --image vbmeta.img` → 알고리즘·rollback index·flags(정상 0x0, `HASHTREE_DISABLED`/`VERIFICATION_DISABLED` 확인)와 각 디스크립터(Hash/Hashtree/Chain Partition/Prop/Kernel Cmdline). `boot.img`에 돌리면 끝의 `AvbFooter` 덕에 Hash 디스크립터가, `system` 관련엔 Hashtree 디스크립터가 보입니다. `avbtool verify_image`로 사슬 검증.
 
-**실기기에서**
+**Cuttlefish/QEMU와 공개 이미지에서**
 - `getprop ro.boot.verifiedbootstate`(green/yellow/orange/red), `ro.boot.flash.locked`(1/0), `ro.boot.veritymode`(enforcing/logging), `ro.boot.vbmeta.digest`(부트로더가 실제 검증한 vbmeta 해시). `cat /proc/cmdline`.
-- `fastboot getvar unlocked` / `current-slot`, `fastboot flashing get_unlock_ability`.
+- 공개 이미지의 `vbmeta.img`를 `avbtool info_image`로 분석하고, Cuttlefish에서 제공되는 `ro.boot.*` 속성을 실제 출력으로 확인합니다. 실제 단말의 잠금 해제 가능 여부를 조회하거나 변경하지 않습니다.
 - `ls -l /dev/block/dm-*`로 verity 매핑된 파티션 확인 — 있으면 hashtree가 런타임에 강제 중, 있어야 할 파티션에 없으면 `--disable-verity` 흔적.
 
 **소스·문서**
@@ -190,18 +216,18 @@ Boot ROM ──검증──▶ 부트로더 단계들 ──검증──▶ 최�
 2. HASH 디스크립터와 HASHTREE 디스크립터를 구분하고, 왜 `system`은 부팅 때 전체를 해시하지 않고 dm-verity로 읽을 때마다 검증하는지 서술하세요.
 3. 부팅 상태 색(GREEN/YELLOW/ORANGE/RED)이 로컬 경고 화면을 넘어 원격 서버까지 신뢰되는 경로(attestation `RootOfTrust`)를 서술하고, 왜 침해된 OS가 GREEN을 위조하지 못하는지 설명하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기나 **공식 팩토리 이미지**에서 `vbmeta.img`와 `boot.img`(그리고 가능하면 system 관련)를 뽑아, 호스트에서 `avbtool info_image`로 디스크립터 종류(Hash vs Hashtree vs Chain Partition)·`rollback index`·`flags`·알고리즘을 읽으세요. Hash와 Hashtree 출력을 나란히 놓고 차이를 확인.
-- 실기기가 있으면 `getprop ro.boot.verifiedbootstate`·`ro.boot.flash.locked`·`ro.boot.vbmeta.digest`와 `ls -l /dev/block/dm-*`로 잠금·verity 상태를 캡처하고, **왜 `sec-api33` 에뮬에서는 이게 안 보이는지**(잠금 상태·RoT 부재)를 근거와 함께 적으세요.
+- **공개 AOSP 또는 공식 배포 이미지**의 `vbmeta.img`와 `boot.img`를 호스트에서 `avbtool info_image`로 열어 descriptor 종류(Hash·Hashtree·Chain Partition), `rollback index`, `flags`와 알고리즘을 읽으세요.
+- Cuttlefish를 부팅할 수 있으면 `getprop ro.boot.verifiedbootstate`·`ro.boot.vbmeta.digest`와 `/dev/block/dm-*`를 캡처하고, 일반 AVD에서 같은 신호가 빠질 수 있는 이유를 가상화된 Root of Trust의 한계로 설명하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 환경 특성을 먼저 명시합니다: `sec-api33` 에뮬은 사실상 언락 + 퓨즈 RoT 없음이라 **강제가 보이지 않습니다**(15~16주차 관찰의 진짜 원인 = 빌드가 아니라 잠금 상태·RoT 부재). 그러나 **`avbtool info_image`는 호스트에서 아무 이미지에나 돌릴 수 있으므로 구조 자체는 실측 가능**합니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 
-1. **구조 실측**: 공식 팩토리 이미지의 `vbmeta.img`·`boot.img`·system 관련을 뽑아 `avbtool info_image` 출력으로 Hash·Hashtree·Chain Partition 디스크립터를 실제로 보이기.
-2. **잠금·verity 상태**: 실기기(가능하면)에서 `ro.boot.*` props와 `/dev/block/dm-*`로 잠금 상태와 dm-verity 매핑을 캡처.
-3. **두 전략 대조**: HASH 디스크립터(boot)와 HASHTREE 디스크립터(system) 출력을 나란히 붙여 "로드 후 통째 vs 읽을 때마다 블록"을 실물로.
+1. **구조 실측**: 공개 이미지의 `vbmeta.img`·`boot.img`·system 관련 이미지를 `avbtool info_image`로 열어 Hash·Hashtree·Chain Partition descriptor를 실제 출력으로 보이기.
+2. **가상 부팅 상태**: Cuttlefish/QEMU의 `ro.boot.*` 속성과 `/dev/block/dm-*`로 제공되는 Verified Boot·dm-verity 신호를 캡처하고, 하드웨어 보증과 같다고 주장하지 않기.
+3. **두 전략 대조**: HASH descriptor(boot)와 HASHTREE descriptor(system) 출력을 나란히 붙여 "전체 이미지 digest"와 "블록 단위 검증"의 차이를 실제 산출물로 설명하기.
 4. **attestation 다리**(가능하면): 하드웨어 attestation 인증서를 하나 뽑아 `RootOfTrust`의 `verifiedBootState`를 읽어 부팅 상태 색과 연결.
 
 각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
@@ -210,4 +236,4 @@ Boot ROM ──검증──▶ 부트로더 단계들 ──검증──▶ 최�
 
 15~16주차의 "에뮬레이터에선 안 보인다"는 한 줄은, 사실 이 모듈 전체를 압축하고 있었습니다 — **AVB의 모든 보장이 잠긴 부트로더와 하드웨어 신뢰의 뿌리를 전제**하기 때문에, 그것이 없는 에뮬레이터에서는 아무것도 강제되지 않았던 것입니다. 신뢰는 퓨즈된 키 **해시**에서 시작해(전체 키가 아니라), 부트로더가 vbmeta 서명을 검증하고, 그 vbmeta가 dm-verity의 루트 해시를 보증하고, 마침내 부팅 상태가 TEE 서명 attestation으로 원격까지 전달됩니다.
 
-그리고 그 범위는 분명합니다: AVB는 **부팅시점·정지상태의 무결성과 롤백 방지**이지, 런타임 방어도 기밀성도 아닙니다. 커널을 따면(C05의 EL0→EL1) 살아있는 시스템은 여전히 넘어가고, 데이터 기밀성은 C43(FBE)의 몫입니다. 다음은 이 부팅 상태가 실제로 키에 서명돼 나가는 자리인 **C40(Keystore·KeyMint·StrongBox)**, 또는 롤백 방지를 더 깊이 보는 **C29**로 이어집니다. 위의 「블로그 초안 작성 과제」를 마치면 이 모듈이 실측 글로 확정됩니다.
+그리고 그 범위는 분명합니다: AVB는 **부팅시점·정지상태의 무결성과 롤백 방지**이지, 런타임 방어도 기밀성도 아닙니다. 커널을 따면(C05의 EL0→EL1) 살아있는 시스템은 여전히 넘어가고, 데이터 기밀성은 C43(FBE)의 몫입니다. 다음은 이 부팅 상태가 실제로 키에 서명돼 나가는 자리인 **C40(Keystore·KeyMint·StrongBox)**, 또는 롤백 방지를 더 깊이 보는 **C29**로 이어집니다. 이 문서는 위 실행 보고서와 원시 로그를 기준으로 검증 상태를 관리합니다.

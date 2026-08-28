@@ -1,16 +1,42 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C04 - 프로세스·가상메모리·시스템 콜, 모든 격리가 딛고 선 밑변"
+title: "Android Security Concept Atlas C04 | 가상 실습 보고서 — 프로세스·가상메모리·시스템 콜, 모든 격리가 딛고 선 밑변"
 date: 2026-09-12 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Process, VirtualMemory, Syscall, mm_struct, taskstruct, fork, exec, clone, vDSO, seccomp, ConceptAtlas, 학습기록]
 excerpt: "Android 앱은 특별한 무언가가 아니라 평범한 Linux 프로세스입니다 - 주소공간(mm_struct) 하나 + 스레드(task_struct) 여럿, EL0에서 도는. 그리고 앱 간 격리는 커널이 매번 검사하는 소프트웨어 장치가 아니라, 프로세스마다 다른 페이지 테이블(TTBR0_EL1)을 MMU가 걷는 하드웨어입니다. 시스템 콜은 SVC 한 방으로 EL0→EL1을 넘고(x8=번호, x0-x5=인자), fork는 COW 복제, exec는 이미지 교체 - zygote는 그 fork를 exec 없이 씁니다. C05·C09·C12·C34가 전부 이 위에 서 있는, Atlas의 밑변 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `id`, `cat /proc/self/attr/current`, `/proc/self/status`, `uname -a` |
+| 관측 결과 | 앱 UID 10174, `untrusted_app` 도메인, `CapEff=0`, `Seccomp=2`, Linux 5.15 커널을 확인했다. |
+| 검증 한계 | AVD가 x86_64이므로 ARM64 EL·PAC·BTI·MTE는 런타임 관측 대신 공개 소스 경로로 판정한다. |
+
+![C04 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C04 — 프로세스·가상메모리·시스템 콜
 > **계층**: Tier 0 (보안·시스템 기초) · **난이도**: 기초 · **선수 개념**: 없음(밑변)
-> **성격**: 미학습 편 — 다만 경험 많은 독자를 위한 압축 리프레셔.
+> **성격**: 공식 문서·공개 소스 기준 재검토 — 다만 경험 많은 독자를 위한 압축 리프레셔.
 
 C05에서 EL0/EL1을 다뤘고, C09에서 UID 샌드박스를, C34에서 ioctl(=시스템 콜)을 다룹니다. 그 셋이 전부 **"프로세스가 주소공간을 갖고 EL0에서 돌며 SVC로 커널을 부른다"**는 이 밑변 위에 서 있습니다.
 
@@ -116,12 +142,12 @@ C05에서 EL0/EL1을 다뤘고, C09에서 UID 샌드박스를, C34에서 ioctl(=
 2. arm64에서 시스템 콜이 EL0→EL1을 넘는 경로(x8/x0-x5, SVC, sys_call_table, x0/-errno)를 서술하고, seccomp와 vDSO가 그 경로를 각각 어떻게 바꾸는지 설명하세요.
 3. 앱 간 격리가 "소프트웨어 검사"가 아니라 "프로세스별 페이지 테이블 + MMU"라는 하드웨어임을 서술하고, 이것이 C05·C09와 어떻게 이어지는지 쓰세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 앱의 `/proc/<pid>/maps`를 떠서 text/lib/heap/stack/anon 영역과 권한(r-x/rw-)을 분류하고, `smaps`로 zygote와 COW-공유된 클린 페이지를 식별하세요.
 - `strace`로 앱이 아닌 셸 바이너리 하나의 시스템 콜을 떠서 `SVC` 번호(x8)와 인자를 관찰하고, seccomp에 막히는 호출이 있는지 확인하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

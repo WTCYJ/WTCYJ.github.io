@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C06 - APK·AAB·Split APK, 설치 단위와 발행 포맷"
+title: "Android Security Concept Atlas C06 | 가상 실습 보고서 — APK·AAB·Split APK, 설치 단위와 발행 포맷"
 date: 2026-09-16 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, APK, AAB, AppBundle, SplitAPK, PlayAppSigning, bundletool, AXML, ConceptAtlas, 학습기록]
 excerpt: "리버서가 앱을 분석할 때 처음 여는 게 APK인데, 그건 사실 ZIP 하나입니다 - AXML로 컴파일된 매니페스트, classes.dex, resources.arsc, lib/<abi>/, META-INF. 그런데 요즘 Play 앱은 개발자가 .aab(App Bundle)를 올리면 Play가 기기별로 split APK를 생성·서명하죠. 핵심 함정 셋: AAB는 설치되는 게 아니라 발행 포맷이고, 한 앱이 base + config split + 동적 기능으로 여러 APK로 설치되며(전부 같은 키·한 UID이라 base만 분석하면 코드를 놓친다), Play App Signing이면 기기에 실리는 서명 키는 개발자가 아니라 Google이 쥡니다. Tier 1 앱·패키징의 토대 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `javac`, `d8`, `aapt`, `zipalign`, `apksigner verify`, `adb install -r` |
+| 관측 결과 | 증거 앱 APK를 직접 빌드하고 v2/v3 서명을 검증한 뒤 설치했다. Package Manager가 앱을 별도 UID로 등록했다. |
+| 검증 한계 | AAB의 Play 서버 변환과 Play App Signing은 로컬 Google APIs AVD만으로 재현하지 않는다. |
+
+![C06 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/apps.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C06 — APK·AAB·Split APK
 > **계층**: Tier 1 (앱·패키징) · **난이도**: 기초 · **선수 개념**: 없음(패키징 토대)
@@ -119,13 +145,13 @@ C08(서명)·C07(DEX)·C09(UID)가 전부 "APK"라는 단위를 전제합니다.
 2. 한 앱이 여러 split으로 설치될 때 "한 패키지·한 UID·같은 키"라는 불변식이 왜 보안적으로 중요한지, 그리고 정적 분석이 왜 모든 split을 당겨야 하는지 서술하세요.
 3. Play App Signing이 배포 서명 키를 개발자에서 Google로 옮기는 것이 신뢰 모델(C49)에 어떤 변화인지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 앱에 `adb shell pm path <pkg>`로 base와 모든 split 경로를 나열하고, `dumpsys package <pkg>`의 `splits=`와 대조하세요.
 - 한 APK를 `apktool`로 풀어 `AndroidManifest.xml`이 AXML임을(텍스트 grep 실패) 확인하고, exported 컴포넌트를 나열하세요.
 - `unzip -l`로 `classes.dex`·`resources.arsc`·`lib/<abi>/`·`META-INF/`를 식별하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

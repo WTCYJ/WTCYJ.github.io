@@ -1,21 +1,47 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C40 - Keystore·KeyMint·StrongBox, 커널을 따도 못 빼내는 키"
+title: "Android Security Concept Atlas C40 | 가상 실습 보고서 — Keystore·KeyMint·StrongBox와 키의 보안 수준"
 date: 2026-08-27 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Keystore, KeyMint, Keymaster, StrongBox, TEE, KeyAttestation, RKP, HardwareAuthToken, Gatekeeper, keystore2, TitanM, ConceptAtlas, 학습기록]
-excerpt: "C05에서 저는 '커널을 완전히 장악해도 Keystore 개인키는 추출하지 못한다'고 적었습니다. 이 글은 그 비대칭의 실체입니다. 키는 시큐어 월드 안에서 태어나 절대 나오지 않고, 앱은 디바이스에 묶인 암호화 블롭(핸들)만 쥡니다. 그리고 그 위에 세 층의 신뢰(SOFTWARE < TEE < StrongBox), 인증 바인딩 키를 위조 불가능하게 만드는 HardwareAuthToken, 그리고 C28의 부팅 상태를 원격 서버까지 서명해 보내는 key attestation이 얹힙니다. 그런데 '하드웨어 백업'이 '루팅돼도 안전'을 뜻하지는 않습니다 — 추출과 사용은 다른 문제니까요. Concept Atlas의 열 번째 모듈입니다."
+excerpt: "Android Keystore API, keystore2와 KeyMint의 역할을 구분하고 Software·TrustedEnvironment·StrongBox security level에 따라 key material과 authorization을 어디서 보호하는지 정리합니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | AndroidKeyStore EC 키 생성, attestation challenge, `KeyInfo`, certificate chain 조회 |
+| 관측 결과 | EC 키 생성과 attestation 요청이 성공했고 인증서 체인 길이는 3이었다. 이 AVD의 키 보안 수준은 정확히 `SOFTWARE(0)`였다. |
+| 검증 한계 | TEE·StrongBox·Weaver는 물리 보안 하드웨어가 없는 AVD에서 증명할 수 없다. SOFTWARE 결과를 하드웨어 보안으로 해석하지 않는다. |
+
+![C40 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-keystore.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C40 — Keystore·KeyMint·StrongBox
 > **계층**: Tier 7 (하드웨어 기반 보안) · **난이도**: 고급 · **선수 개념**: C05(예외 수준; EL3 너머 시큐어 월드의 키 추출 비대칭), C39(TEE·Trusty — 형제 모듈)
-> **성격**: 미학습 → 풀 작성. Domain 8(하드웨어 보안)의 첫 삽.
+> **성격**: 공식 문서·공개 소스 기준 재검토. Domain 8(하드웨어 보안)의 첫 삽.
 > **완료 기준**: 키 생성 요청이 시큐어 월드(TEE/StrongBox)에 도달하는 경로를 추적할 수 있다.
 
-C05에서 저는 결정적 비대칭 하나를 세웠습니다: 앱 샌드박스와 SELinux는 둘 다 EL1에서 강제되어 커널 탈출 하나로 함께 무너지지만, **Keystore 개인키는 EL3 너머 시큐어 월드에 있어 커널을 완전히 장악해도 추출하지 못한다.** 이 모듈은 그 비대칭의 실체입니다. 그리고 C28의 `verifiedBootState`가 실제로 키에 서명돼 원격 서버까지 나가는 자리이기도 합니다.
+Hardware-backed Keystore는 raw key material을 Android user/kernel space 밖의 secure component에 두도록 설계됩니다. 그러나 Software/Keystore security level의 key에는 같은 추출 저항을 적용할 수 없으므로 실제 level과 authorization을 먼저 확인해야 합니다.
 
-한 문장으로: **키는 시큐어 월드 안에서 태어나 절대 나오지 않고, 앱은 디바이스에 묶인 암호화 블롭(핸들)만 쥔다.** 이게 전부의 뿌리입니다. 🔴 미학습 영역이라 처음부터 세웁니다.
+한 문장으로: **Android Keystore key의 보호 위치와 non-exportability는 security level, key type과 authorization에 따라 달라지므로 `KeyInfo`와 attestation으로 실제 보장을 확인해야 합니다.**
 
 ## 배경 개념 - 키를 손에 쥐지 않는 저장소
 
@@ -23,7 +49,7 @@ C05에서 저는 결정적 비대칭 하나를 세웠습니다: 앱 샌드박스
 - **KeyMint (구 Keymaster)**: 시큐어 월드 안에서 실제 키를 만들고 쓰는 HAL. Android 12에 Keymaster에서 KeyMint로 개명·재설계되며 HIDL→AIDL로 바뀌었습니다.
 - **keystore2**: 노멀 월드(EL0)의 Rust 데몬. 앱과 KeyMint 사이를 중개하고 **암호화된 블롭만** 저장합니다.
 - **키 블롭**: 시큐어 월드의 루트 키로 감싼(디바이스에 묶인) 암호문. 오프디바이스에선 무용지물입니다.
-- **보안 레벨 3단**: `SOFTWARE`(OS 안, 하드웨어 없음) < `TRUSTED_ENVIRONMENT`(온-SoC TEE) < `STRONGBOX`(AP와 격리된 전용 보안 프로세서 — Pixel의 Titan M2처럼 별도 칩이거나 Qualcomm SPU처럼 온-SoC 보안 유닛).
+- **Security level**: `SOFTWARE`/`KEYSTORE`, `TRUSTED_ENVIRONMENT`, `STRONGBOX`는 key와 authorization을 어느 경계가 enforce하는지 나타냅니다. 단순 숫자 서열로만 보지 말고 algorithm 지원, performance와 threat model을 함께 확인합니다.
 
 ## 질문 1 — 이 개념은 Android 전체 구조에서 어디에 있는가
 
@@ -40,7 +66,7 @@ C05에서 저는 결정적 비대칭 하나를 세웠습니다: 앱 샌드박스
 keystore2 데몬 (EL0, Rust, uid=AID_KEYSTORE)   ← 암호화 블롭만 저장, 키는 없음
    │ KeyMint AIDL HAL
    ▼
-KeyMint 트러스티드 앱 (시큐어 EL0)  ── 또는 ──▶  StrongBox 보안 요소(별도 칩)
+KeyMint secure implementation(구현별 TEE 배치) ─ 또는 ─▶ StrongBox secure element
    (트러스티드 OS 커널은 S-EL1: Trusty/QSEE/Kinibi)
 ```
 
@@ -48,8 +74,8 @@ KeyMint 트러스티드 앱 (시큐어 EL0)  ── 또는 ──▶  StrongBox 
 
 ## 질문 3 — 무엇을 신뢰하고 무엇을 신뢰하면 안 되는가
 
-- **키 블롭 모델**: 키는 시큐어 월드 안에서 **생성**되고, Android에는 시큐어 월드 루트 키로 감싼 **암호화 블롭 + 핸들**로만 돌아옵니다. 원본 개인키는 노멀 월드 메모리에 **한 번도** 들어오지 않습니다. 사용할 때도 블롭을 다시 내려보내면 시큐어 월드가 안에서 풀어 서명·복호하고, **결과만** 올라옵니다 — 키는 절대. 그래서 `getEncoded()`는 `null`입니다.
-- **세 신뢰 레벨과 태그 분리**: 모든 키의 인증 목록은 **하드웨어-강제** 태그(TEE/SE가 보장, 커널 침해로 못 뚫음)와 **소프트웨어-강제** 태그(OS가 추적만)로 나뉩니다. 어떤 태그가 믿을 만한지는 그것이 **어느 목록에 있느냐**로 정해집니다.
+- **Key blob model**: hardware-backed KeyMint key는 secure implementation에서 생성하거나 안전하게 import되고 opaque key blob으로 참조됩니다. AndroidKeyStore의 non-exportable private/secret key는 일반적으로 `getEncoded()`가 `null`이지만 public key와 Software level key까지 같은 문장으로 일반화하지 않습니다.
+- **Authorization enforcement 분리**: attestation의 authorization list는 security level별 enforcement 위치를 보여줍니다. `hardwareEnforced`라고 해서 구현 취약점까지 배제되는 것은 아니며, 해당 secure component가 침해되지 않았다는 전제가 붙습니다.
 - **신뢰하면 안 되는 것들**:
   - **"하드웨어 백업 = 루팅돼도 안전"** — 아닙니다. 추출은 못 해도 **사용 오라클**은 됩니다(질문 5).
   - **`importKey`** — 원본 키가 노멀 월드 RAM에 한 번은 뜹니다(`generateKey`나 `importWrappedKey`가 그것을 피함).
@@ -73,10 +99,10 @@ KeyMint 트러스티드 앱 (시큐어 EL0)  ── 또는 ──▶  StrongBox 
 
 여기가 C05 비대칭의 정밀한 결론입니다.
 
-- **커널/루트(EL1) 침해가 할 수 있는 것 vs 없는 것**: 접근 권한이 있는 동안 그 키를 **서명/복호 오라클로 쓸 수 있지만**, **원본 키를 추출하지는 못합니다.** 원본은 `TRUSTED_ENVIRONMENT`/`STRONGBOX`를 절대 안 떠나기 때문입니다. 즉 완전한 EL1 장악 = 일시적 **사용**, 영구적 **절도**가 아님.
+- **OS/kernel compromise의 범위**: hardware-backed raw key 추출 저항은 유지될 수 있지만, 공격자는 app identity·UI·authorization 흐름을 장악해 key operation을 오용할 수 있습니다. secure component 자체의 결함이나 side channel까지 배제하는 절대 보장은 아닙니다.
 - **기밀성 ≠ 사용 통제 (핵심 구분)**: "추출 불가"는 "아무나 못 씀"이 아닙니다. 인증 바인딩이 **안 된** 하드웨어 키는, 침해된 기기에서 적절한 앱 UID/keystore 접근을 가진 자가 **자유로이 사용**합니다. 사용을 막는 건 오직 인증 바인딩입니다.
 - **인증 바인딩이 커널에 견디는 이유**: `setUserAuthenticationRequired` 키는 사용 전 사용자 인증을 요구하고, 그 증거인 **HardwareAuthToken(HAT)**은 Gatekeeper(PIN/암호 TA)·생체 TA와 KeyMint TA 사이에서 부팅 시 `ISharedSecret`으로 합의한 **HMAC 키로 서명**됩니다. KeyMint TA가 연산 전 그 MAC을 검증하므로 **검사가 시큐어 월드를 안 떠나고**, 커널은 불투명한 토큰을 전달만 할 뿐 **위조하지 못합니다**. 인증-매-사용 모드는 `begin()`이 준 연산별 챌린지가 HAT에 있어야 해 재생도 막습니다.
-- **StrongBox는 TEE 침해도 견딥니다**: 별도 칩(별도 CPU/RAM/저장)이라, TEE(S-EL1)나 EL3 모니터, 심지어 메인 SoC 전체가 뚫려도 StrongBox 키는 안 나옵니다.
+- **StrongBox는 별도 security level입니다**: TEE KeyMint와 다른 isolation·tamper-resistance 요구사항을 가지지만, 구체적인 구현을 보지 않고 "메인 SoC 전체 침해에도 무조건 안전"이라고 주장하지 않습니다.
 - **잔존 공격 표면**: keystore2 브로커를 통한 **use-oracle/confused-deputy**(승인된 앱 UID 사칭), **보안 레벨 다운그레이드**(레벨을 고정 안 하면 `SOFTWARE`로), SE/TEE의 **사이드채널**. 그리고 **attestation은 키의 속성과 부팅 상태를 증명하지 런타임 앱 무결성은 증명하지 않습니다**(그건 Play Integrity, C48).
 
 여기서 제 Toss 분석과 대조됩니다. 거기서 그 앱은 **스스로** 다단계 패커(Blowfish+SEED)로 키를 굴렸습니다 — 앱 프로세스(EL0) 안에서요. 그 방식은 이 모든 하드웨어 보증이 **전혀 없습니다**: 프로세스 메모리를 덤프하면 키가 나옵니다. Keystore가 대체하려는 게 정확히 그것입니다.
@@ -178,17 +204,17 @@ KeyMint TA: HAT 의 MAC 검증 → (인증-매-사용이면 begin() 챌린지 �
 2. "기밀성(추출 불가)"과 "사용 통제"가 왜 다른 것인지, 그리고 인증 바인딩 키의 `HardwareAuthToken`을 왜 커널이 위조하지 못하는지(부팅 시 공유한 HMAC) 서술하세요.
 3. C28의 `verifiedBootState`가 이 모듈의 key attestation으로 어떻게 이어져 원격 서버가 "하드웨어 백업 + GREEN 잠금"을 검증하는지, 그리고 attestation이 증명하지 **않는** 것(앱 무결성)은 무엇인지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - `sec-api33` 에뮬에서 `KeyGenParameterSpec`으로 키 하나를 `setAttestationChallenge`와 함께 생성하고, `KeyStore.getCertificateChain(alias)`로 체인을 뽑아 `openssl asn1parse`(또는 `x509 -text`)로 OID `1.3.6.1.4.1.11129.2.1.17` KeyDescription을 파싱하세요. **`securityLevel`이 `SOFTWARE`, `origin`이 `GENERATED`로 나옴**을 확인하고, 왜 에뮬에서 `SOFTWARE`인지(진짜 TEE/StrongBox 없음) 근거와 함께 적으세요.
-- 실기기(가능하면 Pixel)에서 같은 절차로 `TRUSTED_ENVIRONMENT`/`STRONGBOX`와 `RootOfTrust`의 `verifiedBootState`를 대조하세요.
+- Android Keystore 공식 문서와 공개 attestation 예제를 이용해 `TRUSTED_ENVIRONMENT`/`STRONGBOX` 형식을 비교하세요. 이것은 로컬 에뮬레이터의 하드웨어 보증을 증명하는 실험이 아님을 표시합니다.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
-이 모듈을 **실측 글**로 승격하세요. 환경 특성: `sec-api33` 에뮬은 **`SOFTWARE` 레벨만** 보고합니다(진짜 TEE/StrongBox 없음) → 하드웨어 보증은 실기기 필요(StrongBox=Pixel 3+ Titan). 다만 API·블롭 모델·attestation 파싱은 에뮬에서도 실측 가능합니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+이 모듈을 **가상 환경 실측 글**로 승격하세요. `sec-api33`에서 보고된 security level을 먼저 관측하고, `SOFTWARE`라면 그 범위 안에서 API·비추출성·인증 요구와 attestation 파싱만 검증합니다. TEE/StrongBox 하드웨어 보증은 공식 문서와 공개 인증서 예제로만 설명하고 로컬 관측으로 주장하지 않습니다.
 
 1. **블롭 모델 실측**: 키를 생성하고 `PrivateKey.getEncoded()`가 `null`임을, 그리고 attestation 체인의 `securityLevel=SOFTWARE`·`origin=GENERATED`를 실제 출력으로.
-2. **레벨 대조**(가능하면): 실기기에서 같은 키로 `TRUSTED_ENVIRONMENT`/`STRONGBOX`와 `RootOfTrust`를 대조.
+2. **형식 대조**: 공식 문서와 공개 attestation 예제에서 `TRUSTED_ENVIRONMENT`/`STRONGBOX` 및 `RootOfTrust` 필드를 비교하고, 로컬 `SOFTWARE` 결과와 증거 등급을 분리.
 3. **사용 통제 실측**: `setUserAuthenticationRequired(true)` 키를 만들어 잠금 해제 없이 사용 시 `UserNotAuthenticatedException`이 나는 것을 캡처.
 4. **오라클 대 절도 구분**: 위 실측으로 "블롭은 있어도 원본은 없다 / 인증 바인딩이 사용을 막는다"를 글로 귀속.
 
@@ -200,4 +226,4 @@ C05의 한 문장 — "커널을 따도 Keystore 키는 못 빼낸다" — 이 �
 
 그러나 범위는 정확해야 합니다: **하드웨어 백업은 "추출 불가"이지 "사용 불가"가 아닙니다.** 루팅된 기기에서 인증 바인딩 안 된 키는 오라클로 쓰이고, attestation은 키의 속성을 증명하지 앱의 무결성을 증명하지 않습니다. 제 Toss 분석의 앱-자작 키 관리는 이 보증이 전혀 없었고, Keystore는 정확히 그 공백을 메우려는 설계였습니다.
 
-이로써 Atlas Top 5(C05·C37·C28·C23·C40)가 모두 나왔습니다. 다음은 인증의 출처인 **C41(Gatekeeper·Weaver·생체)**, 또는 attestation을 더 깊이 보는 **C42**로 이어집니다. 위의 「블로그 초안 작성 과제」를 마치면 이 모듈이 실측 글로 확정됩니다.
+이로써 Atlas Top 5(C05·C37·C28·C23·C40)가 모두 나왔습니다. 다음은 인증의 출처인 **C41(Gatekeeper·Weaver·생체)**, 또는 attestation을 더 깊이 보는 **C42**로 이어집니다. 이 문서는 위 실행 보고서와 원시 로그를 기준으로 검증 상태를 관리합니다.

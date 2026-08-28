@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C16 - JIT/AOT와 분석 결과 차이, 정적으로 보이는 것 ≠ 실제 실행"
+title: "Android Security Concept Atlas C16 | 가상 실습 보고서 — JIT/AOT와 분석 결과 차이, 정적으로 보이는 것 ≠ 실제 실행"
 date: 2026-09-21 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ART, JIT, AOT, Interpreter, ArtMethod, Deoptimization, Frida, ConceptAtlas, 학습기록]
 excerpt: "같은 메서드가 인터프리트로도, JIT 네이티브로도, AOT 네이티브로도 돕니다 - 실행 형태는 고정된 속성이 아니라 런타임 상태죠. 중요한 건 세 모드가 같은 DEX의 컴파일이라 의미가 동일하다는 것: 두 실행의 행동 차이가 'JIT됐기 때문'인 경우는 없습니다. 그래서 로직은 DEX 정적 분석으로 완전하고, '정적으로 보이는 것 ≠ 실제 실행'의 진짜 원인은 JIT/AOT가 아니라 동적 코드 로딩(C14)·리플렉션·JNI(C15)입니다. 계측의 함정도 여기 있어요: ArtMethod 엔트리포인트를 갈아끼우는 것만으론 부족합니다 - 인라인된 호출은 엔트리포인트를 안 읽으니까요. 그래서 견고한 후킹은 deopt로 인터프리터로 되돌립니다. 내 패커 RE 방법론의 뼈대이자 Tier 2를 닫는 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.zygote`, `getprop dalvik.vm.usejit`, `ps` |
+| 관측 결과 | `zygote64`와 JIT 활성 상태를 확인했다. 비특권 앱의 전체 프로세스 열람 제한도 함께 관측했다. |
+| 검증 한계 | OAT/VDEX 생성 정책은 빌드와 프로파일 상태에 따라 달라지므로 이 한 번의 캡처를 모든 Android 버전에 일반화하지 않는다. |
+
+![C16 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-runtime.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C16 — JIT/AOT와 분석 결과 차이
 > **계층**: Tier 2 (Android Runtime) · **난이도**: 중급 · **선수 개념**: C13(ART), C14(DCL)
@@ -67,7 +93,7 @@ C13의 컴파일 모드가 **분석·계측에 주는 차이**입니다. C14(DCL
 - Frida `Java.use`/`Java.perform`(ArtMethod 레벨 훅, 필요시 deopt), `/proc/<pid>/maps`(JIT/익명 실행 영역), 복호 후 메모리 dex 덤프(C14).
 - **소스**: AOSP `art/runtime/art_method.h`(엔트리포인트), `art/runtime/instrumentation.cc`(Deoptimize), `art/runtime/interpreter/`(nterp).
 
-**주의**: 아키텍처 무관 개념이지만 **JIT/AOT 네이티브는 대상 ISA** → x86 에뮬레이터와 arm64 실기기의 컴파일 코드는 다름. ART 레벨 후킹·DEX 분석은 어디서든.
+**주의**: JIT/AOT native code는 target ISA에 종속됩니다. x86_64 AVD와 ARM64 Cuttlefish/QEMU의 compiled code를 구분하고 ART·DEX 수준의 결론과 섞지 않습니다.
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -119,13 +145,13 @@ C13의 컴파일 모드가 **분석·계측에 주는 차이**입니다. C14(DCL
 2. "정적으로 보이는 것 ≠ 실제 실행"의 진짜 원인이 JIT/AOT가 아니라 DCL/리플렉션/JNI임을, packed 앱을 예로 서술하세요.
 3. ArtMethod 엔트리포인트 스왑이 왜 인라인 때문에 불충분하고, deopt가 왜 모드 독립성의 실제 보증인지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 한 앱의 `dumpsys package <pkg>` 컴파일 필터를 확인하고, `cmd package compile -m speed -f`로 바꾼 뒤 차이를 관찰하세요.
 - Frida로 한 메서드를 후킹할 때 deopt가 트리거되는지(인터프리터로 되돌아가는지) 확인하고, 인라인 가능성이 높은 작은 메서드에서 훅이 견고한지 비교하세요.
 - `/proc/<pid>/maps`에서 JIT 코드 캐시(익명 실행 영역)를 찾으세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

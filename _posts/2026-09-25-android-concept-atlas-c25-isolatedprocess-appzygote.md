@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C25 - isolatedProcess·app zygote, 최강 인앱 샌드박스"
+title: "Android Security Concept Atlas C25 | 가상 실습 보고서 — isolatedProcess·app zygote, 최강 인앱 샌드박스"
 date: 2026-09-25 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, isolatedProcess, appZygote, ZygotePreload, Sandbox, WebViewRenderer, isolatedapp, ConceptAtlas, 학습기록]
 excerpt: "위험한 코드(파서, 웹 렌더러)를 돌려야 할 때 Android가 주는 가장 강한 인앱 샌드박스가 isolatedProcess입니다. android:isolatedProcess=true 서비스는 앱의 UID가 아니라 버려지는 격리 UID로, isolated_app이라는 훨씬 빡빡한 SELinux 도메인에서 돌죠 - 앱의 사적 데이터도, 대부분의 시스템 서비스도, 네트워크도, GPU도 못 건드리고, 유일한 통로는 자신을 띄운 앱으로 돌아가는 Binder 하나뿐입니다. 설계 원칙이 '이 코드는 어차피 뚫린다고 가정하고, 뚫려도 쓸모없는 프로세스로 만든다'예요. Chrome/WebView 렌더러가 이걸로 돕니다. app zygote(A10+)는 그런 격리 워커를 여럿 싸게 찍어내는 최적화고요. C24의 프리미티브를 극단으로 조인 Tier 4 마무리 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `id`, `cat /proc/self/attr/current`, `/proc/self/status` |
+| 관측 결과 | 서로 다른 UID, `untrusted_app` SELinux 컨텍스트, 0 capability, seccomp 필터를 앱 프로세스 내부에서 확인했다. |
+| 검증 한계 | 정책 우회나 샌드박스 탈출은 수행하지 않았고, 접근 거부는 실패가 아니라 격리 통제가 작동한 대조군이다. |
+
+![C25 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C25 — isolatedProcess·app zygote
 > **계층**: Tier 4 (플랫폼 격리) · **난이도**: 고급 · **선수 개념**: C09(UID), C12(zygote), C24(격리층)
-> **성격**: 미학습 편.
+> **성격**: 공식 문서·공개 소스 기준 재검토.
 
 C24에서 seccomp·caps·SELinux가 앱 샌드박스를 겹겹이 두른다 했습니다. 이 편은 그것을 **극단으로 조인** 최강 인앱 샌드박스 — 위험한 코드를 "어차피 뚫린다"고 가정하고 담는 그릇입니다.
 
-한 문장으로: **isolatedProcess는 버려지는 격리 UID·isolated_app 도메인에서 돌며 앱으로 돌아가는 Binder 하나 말고는 아무것도 못 건드리는, 뚫려도 쓸모없는 워커다.** 🔴이지만 핵심에 집중합니다.
+한 문장으로: **`isolatedProcess`는 일반 앱 UID와 분리된 ephemeral UID와 제한된 SELinux domain에서 동작해 침해 범위를 줄이지만, Binder 연결과 서비스 구성에 따라 남는 권한을 별도로 검토해야 합니다.**
 
 ## 배경 개념
 
@@ -123,13 +149,13 @@ C24에서 seccomp·caps·SELinux가 앱 샌드박스를 겹겹이 두른다 했�
 2. isolatedProcess와 `android:process=":x"` 분리의 차이(UID·데이터 공유)를 서술하세요.
 3. app zygote가 무엇을 최적화하고 왜 샌드박스를 약화하지 않는지, WebView 렌더러 사용을 예로 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 에뮬레이터에서 WebView 페이지를 띄우고 `ps -AZ | grep u0_i`로 격리 렌더러와 그 SELinux 컨텍스트(`isolated_app`)를 확인하세요.
 - 그 격리 UID가 99000–99999(시스템 zygote) 또는 90000–98999(app zygote) 중 어디인지 판정하세요.
 - 일반 앱(`u0_aXX`)과 격리(`u0_iXX`)의 접근 가능 서비스 차이를 서술하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C43 - 파일 기반 암호화와 Direct Boot, 잠금 전과 후의 두 저장소"
+title: "Android Security Concept Atlas C43 | 가상 실습 보고서 — 파일 기반 암호화와 Direct Boot, 잠금 전과 후의 두 저장소"
 date: 2026-09-01 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, FBE, FileBasedEncryption, fscrypt, DirectBoot, DeviceEncrypted, CredentialEncrypted, MetadataEncryption, dmdefaultkey, SyntheticPassword, ConceptAtlas, 학습기록]
-excerpt: "C28이 무결성(부팅된 게 진짜인가)이었다면, C43은 그 짝인 기밀성(정지 상태 데이터가 안 읽히는가)입니다. 파일 기반 암호화는 옛 전체 디스크 암호화를 대체하며 데이터를 두 등급으로 나눕니다 - 자격증명 없이 부팅 직후 읽히는 Device-Encrypted, 첫 잠금해제 후에만 열리는 Credential-Encrypted. 그래서 알람과 전화는 잠금 전에도 뜨고(Direct Boot), 메시지 본문은 잠금해제까지 암호문으로 남습니다. 그리고 CE 키는 PIN을 KDF에 넣은 게 아니라 자격증명과 온디바이스 하드웨어 둘 다를 요구해, 뽑아낸 플래시 이미지는 오프라인으로 못 뚫습니다. Concept Atlas의 열네 번째 모듈입니다."
+excerpt: "Android FBE의 system/user DE·CE storage class와 Direct Boot를 구분하고, credential·synthetic password·KeyMint·metadata encryption이 정지 상태 데이터 보호에 기여하는 범위를 정리합니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | AndroidKeyStore EC 키 생성, attestation challenge, `KeyInfo`, certificate chain 조회 |
+| 관측 결과 | EC 키 생성과 attestation 요청이 성공했고 인증서 체인 길이는 3이었다. 이 AVD의 키 보안 수준은 정확히 `SOFTWARE(0)`였다. |
+| 검증 한계 | TEE·StrongBox·Weaver는 물리 보안 하드웨어가 없는 AVD에서 증명할 수 없다. SOFTWARE 결과를 하드웨어 보안으로 해석하지 않는다. |
+
+![C43 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-keystore.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C43 — FBE(파일 기반 암호화)·Direct Boot
 > **계층**: Tier 7 (하드웨어 기반 보안) · **난이도**: 중급 · **선수 개념**: C40(KeyMint), C41(synthetic password → CE 키)
-> **성격**: 미학습 → 풀 작성. C28(무결성)의 짝인 정지 상태 **기밀성**.
+> **성격**: 공식 문서·공개 소스 기준 재검토. C28(무결성)의 짝인 정지 상태 **기밀성**.
 
 C28은 "부팅된 게 진짜인가"라는 **무결성**이었습니다. C43은 그 짝인 **기밀성** — "정지 상태(꺼지거나 잠긴) 데이터가 안 읽히는가"입니다. 그리고 C41에서 synthetic password가 파생한다던 그 **CE 키**가 실제로 무엇을 여는지가 여기입니다.
 
-한 문장으로: **데이터를 자격증명 없이 부팅 직후 읽히는 DE와 첫 잠금해제 후에만 열리는 CE로 나누고, CE는 자격증명과 온디바이스 하드웨어를 둘 다 요구해 뽑아낸 플래시로는 못 연다.** 🔴 미학습이라 처음부터 세웁니다.
+한 문장으로: **FBE는 서로 다른 storage class의 key를 독립적으로 unlock하며, CE 접근은 사용자 credential과 platform key hierarchy에 연결되지만 보호 강도는 구현과 credential 품질에 달려 있습니다.**
 
 ## 배경 개념 - 파일마다 다른 키
 
@@ -41,7 +67,7 @@ C28은 "부팅된 게 진짜인가"라는 **무결성**이었습니다. C43은 �
 - **CE는 2요소입니다**: 자격증명이 SP를 열고(scrypt로 늘린 LSKF), 그 SP는 KeyMint 키로 봉인되며, 무차별 대입은 Gatekeeper/Weaver가 하드웨어에서 throttle합니다. **자격증명만으로도(특정 기기 없이), 플래시만으로도(자격증명 없이)** CE 데이터가 안 열립니다.
 - **신뢰하면 안 되는 것들**:
   - **"FBE면 디스크에 평문이 없다"** — FBE는 파일 **메타데이터**(디렉터리 구조·크기·권한·타임스탬프)를 평문으로 남깁니다. 그걸 덮는 게 별도의 dm-default-key(질문 5).
-  - **"CE 키는 PIN을 KDF에 넣은 것"** — 아닙니다. 온디바이스 KeyMint + throttle을 거쳐야 하므로 **오프라인 병렬 브루트포스가 불가**합니다.
+  - **"CE key는 PIN을 한 번 KDF에 넣은 값일 뿐"** — synthetic password, Gatekeeper/Weaver rate limiting과 KeyMint binding을 빠뜨린 설명입니다. 다만 offline attack 저항을 절대값으로 단정하지 말고 실제 구현과 credential entropy를 함께 평가합니다.
   - **"DE는 평문이라 먼저 읽힌다"** — DE도 암호화돼 있습니다. 자격증명에 게이팅되지 않을 뿐입니다.
   - **"실행 중 기기도 지켜준다"** — 아닙니다. FBE는 **정지 상태** 기밀성이고, 실행/잠금해제 후 기기는 키가 RAM에 있습니다.
   - **"FBE = 무결성"** — 무결성은 C28(AVB)입니다. FBE는 기밀성으로, 서로 직교합니다.
@@ -135,8 +161,8 @@ CE 마운트 → ACTION_BOOT_COMPLETED → 일반 앱 데이터 사용 가능
 
 <details><summary>판정 기준(펼치기)</summary>
 
-1. FBE는 **파일마다** 클래스 마스터 키에서 파생한 키로 암호화합니다(HKDF). 단일 볼륨 한 키는 FDE(대체됨)입니다.
-2. DE도 하드웨어 바인딩 키로 **완전히 암호화**돼 있습니다. 자격증명에 게이팅되지 않아 먼저 읽힐 뿐이라, 비밀을 두면 안 됩니다.
+1. FBE는 서로 다른 encryption policy와 key hierarchy를 사용합니다. fscrypt policy version과 filesystem·Android version에 따라 derivation details가 달라질 수 있으므로 한 방식으로 고정하지 않습니다.
+2. DE는 credential 입력 전 사용할 수 있는 storage class입니다. `/data`에는 FBE 적용 예외와 metadata encryption 차이가 있으므로 전체가 동일하게 보호된다고 단정하지 않습니다.
 3. CE 언랩은 온디바이스 KeyMint(봉인)와 Gatekeeper/Weaver(throttle)를 거칩니다. 매 추측이 기기에서 rate-limit돼 오프라인 병렬 대입이 불가능합니다.
 4. FBE는 파일 메타데이터(구조·크기·권한·타임스탬프)를 평문으로 남깁니다. 그걸 덮는 건 별도의 dm-default-key(Android 9 도입, 11 의무)로, 블록 전체를 한 키로 암호화합니다.
 5. 일반 단일 사용자 폰에서 화면 잠금은 CE 키를 제거하지 **않습니다**(재부팅해야 RAM이 지워짐). 잠금 시 키 제거는 work profile/멀티유저(Android 12+ 옵션)의 별개 기능입니다. 그리고 FBE는 7.0부터 있었고 10에서 의무가 됐습니다.
@@ -148,7 +174,7 @@ CE 마운트 → ACTION_BOOT_COMPLETED → 일반 앱 데이터 사용 가능
 2. CE가 "2요소(자격증명 + 온디바이스 하드웨어)"라는 것이 왜 **뽑아낸 플래시 이미지의 오프라인 브루트포스**를 막는지, C41의 Gatekeeper/Weaver throttle과 연결해 서술하세요.
 3. FBE/메타데이터 암호화가 "정지 상태 기밀성"일 뿐 **실행 중 기기**·**무결성(C28)**과 어떻게 다른지, 각각을 무엇이 담당하는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 `sec-api33` 에뮬(FBE를 소프트웨어로 지원)에서 다음을 수행하세요.
 
@@ -157,14 +183,14 @@ CE 마운트 → ACTION_BOOT_COMPLETED → 일반 앱 데이터 사용 가능
 - `createDeviceProtectedStorageContext()`로 DE에 쓴 값이 잠금해제 전 읽히고, 기본(CE) 컨텍스트에 쓴 값은 잠금해제 전 안 읽히는지 대조.
 - 왜 이 관측이 에뮬에서도 되는지(FBE 소프트웨어 지원), 그리고 **무엇이 안 되는지**(하드웨어 키 바인딩·throttle의 실측)를 적으세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
-이 모듈을 **실측 글**로 승격하세요. 환경: 에뮬로 FBE/Direct Boot의 **동작**은 관측 가능(DE/CE·브로드캐스트·컨텍스트), 하드웨어 키 바인딩·throttle의 **보증**은 실기기 필요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+이 모듈을 **가상 환경 실측 글**로 승격하세요. Emulator로 FBE/Direct Boot의 DE/CE 동작, broadcast와 context를 관측합니다. 하드웨어 키 바인딩과 throttle 보증은 공식 문서·공개 AOSP 소스까지만 분석하고 `가상 환경의 검증 한계`로 표시합니다.
 
 1. **FBE 상태**: `ro.crypto.type=file`·`/proc/mounts`를 실제 출력으로.
 2. **Direct Boot 실증**: directBootAware 리시버가 `LOCKED_BOOT_COMPLETED`에 뜨는 로그와, DE/CE 컨텍스트의 잠금 전 접근 차이를 캡처.
-3. **범위 서술**: DE에 비밀을 두면 안 되는 이유와, FBE가 실행 중 기기를 못 지키는 이유를 실물로.
-4. **하드웨어 대조**(가능하면): 실기기에서 CE 키가 KeyMint에 봉인됨을 (attestation/키 속성으로) 간접 확인.
+3. **범위 서술**: Emulator의 실제 DE/CE 접근 결과로 DE에 비밀을 두면 안 되는 이유와 FBE가 실행 중 게스트를 보호하는 범위를 설명.
+4. **하드웨어 경계**: CE key와 KeyMint 연결은 공개 AOSP 소스 경로로 추적하고, 로컬 Emulator에서 하드웨어 봉인을 검증했다고 주장하지 않기.
 
 각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
 
@@ -172,4 +198,4 @@ CE 마운트 → ACTION_BOOT_COMPLETED → 일반 앱 데이터 사용 가능
 
 C28이 "부팅된 게 진짜인가"였다면, C43은 "꺼지거나 잠긴 데이터가 안 읽히는가"입니다. FBE가 데이터를 DE(하드웨어 바인딩, 잠금 전 읽힘, 비밀 금지)와 CE(자격증명 + 온디바이스 하드웨어, 잠금 후, 앱 데이터 대부분)로 나눠서, 알람과 전화는 Direct Boot 구간에 뜨고 메시지 본문은 잠금해제까지 암호문으로 남습니다.
 
-그리고 CE의 힘은 **2요소**에 있습니다 — 자격증명이 SP를 열지만, 그 SP는 KeyMint에 봉인되고 브루트포스는 Gatekeeper/Weaver가 하드웨어에서 막습니다. 그래서 뽑아낸 플래시는 오프라인으로 못 뚫립니다. 다만 이 모든 것은 **정지 상태** 기밀성이지 실행 중 기기 방어도, 무결성(C28)도 아닙니다 — 각자 다른 층이 담당합니다. 다음은 앱이 이 저장소·키를 어떻게 쓰는지의 **C44(안전한 저장소·백업)**, 또는 런타임 무결성의 **C48(Play Integrity)**로 이어집니다.
+CE protection은 credential, synthetic password, rate limiting과 platform key hierarchy를 결합해 offline attack 비용을 높입니다. 구체적인 보장은 구현과 credential quality에 따라 달라지며, 실행 중 compromise나 boot integrity를 대신하지 않습니다. 다음은 **C44(안전한 저장소·백업)**와 **C48(Play Integrity)**로 이어집니다.

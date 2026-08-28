@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C21 - 4대 컴포넌트↔Binder 연결, exported가 만드는 공격면"
+title: "Android Security Concept Atlas C21 | 가상 실습 보고서 — 4대 컴포넌트↔Binder 연결, exported가 만드는 공격면"
 date: 2026-09-23 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Components, Intent, exported, PendingIntent, IntentRedirection, AMS, ConceptAtlas, 학습기록]
 excerpt: "앱 펜테스트에서 제일 먼저 세는 게 exported 컴포넌트입니다. 왜냐면 Activity·Service·BroadcastReceiver·ContentProvider를 시작/바인드/조회하는 건 전부 Binder 트랜잭션이고, 그 문을 여닫는 게 exported 플래그거든요. startActivity는 앱→system_server(A10+ ATMS) Binder 호출이고, AMS/ATMS가 exported와 android:permission을 호출자 UID로 검사하는 레퍼런스 모니터입니다. 핵심 함정: exported=false는 같은 UID만 - 권한을 아무리 가져도 타 앱은 못 갑니다. 반대로 exported면서 권한 가드가 없으면 그게 고전 공격면이죠. 그 위에 intent redirection(confused deputy)과 mutable PendingIntent 하이재크가 얹힙니다. 내 앱 펜테스트 작업의 뼈대인 Tier 3 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `ls -l /dev/{binder,hwbinder,vndbinder}`, `service list` |
+| 관측 결과 | binderfs의 세 Binder 노드와 255개 서비스 등록을 확인했다. |
+| 검증 한계 | 벤더 전용 HAL 트랜잭션이나 취약한 서비스 호출은 범용 AVD에 없으므로 공개 인터페이스·소스 분석으로 제한한다. |
+
+![C21 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-binder.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C21 — 4대 컴포넌트↔Binder 연결
 > **계층**: Tier 3 (IPC·프레임워크) · **난이도**: 중급 · **선수 개념**: C17(Binder), C19(AMS)
@@ -120,13 +146,13 @@ C17에서 Binder를, C19에서 AMS/system_server를 봤습니다. 앱의 4대 �
 2. `exported`와 `android:permission`의 관계(exported=필요조건, false=같은 UID만)를 정확히 서술하고, 왜 검사가 system_server에 있어야 하는지(호출자 UID 위조 불가, C22) 설명하세요.
 3. intent redirection과 PendingIntent 하이재크가 어떻게 피해자 앱의 정체성을 악용하는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 한 앱의 매니페스트에서 `exported`·`android:permission`을 컴포넌트별로 뽑아 외부 도달 가능 집합을 만드세요(소유/테스트 앱 대상).
 - `am start`/`content query`로 exported 컴포넌트 하나를 찔러 동작을 관찰하세요.
 - `pm get-app-links <pkg>`로 App Link 검증 상태를 확인하고, 그것이 exported와 별개 개념임을 서술하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

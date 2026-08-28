@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C20 - AIDL·HIDL·HAL, 프레임워크와 하드웨어의 계약"
+title: "Android Security Concept Atlas C20 | 가상 실습 보고서 — AIDL·HIDL·HAL, 프레임워크와 하드웨어의 계약"
 date: 2026-09-07 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, HAL, HIDL, AIDL, StableAIDL, VintfStability, hwbinder, vndbinder, Treble, ConceptAtlas, 학습기록]
 excerpt: "프레임워크가 카메라·NFC·지문 같은 기기별 하드웨어와 어떻게 대화하는가. HAL은 그 경계이고, HIDL과 AIDL은 그것을 표현하는 두 언어입니다. 예전에는 벤더 C 코드가 프레임워크 프로세스에 dlopen돼 같은 주소 공간·같은 권한으로 돌았지만, Treble이 그것을 별도 프로세스의 버전된 인터페이스로 빼내 격리했습니다. 그리고 'HAL은 hwbinder를 쓴다'는 HIDL에만 맞고, 요즘의 stable AIDL HAL은 앱과 같은 /dev/binder를 씁니다. 이 인터페이스는 빌드 경계가 아니라 신뢰·안정성 경계입니다. Concept Atlas의 스무 번째 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `ls -l /dev/{binder,hwbinder,vndbinder}`, `service list` |
+| 관측 결과 | binderfs의 세 Binder 노드와 255개 서비스 등록을 확인했다. |
+| 검증 한계 | 벤더 전용 HAL 트랜잭션이나 취약한 서비스 호출은 범용 AVD에 없으므로 공개 인터페이스·소스 분석으로 제한한다. |
+
+![C20 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-binder.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C20 — AIDL·HIDL·HAL
 > **계층**: Tier 3 (IPC·프레임워크) · **난이도**: 고급 · **선수 개념**: C17(Binder 드라이버), C31(Treble)
-> **성격**: 미학습 → 풀 작성.
+> **성격**: 공식 문서·공개 소스 기준 재검토.
 
 C17에서 Binder 드라이버를, C31에서 Treble이 HAL을 프로세스 밖으로 뺐다는 것을 봤습니다. 이 모듈은 그 **HAL 인터페이스** 자체 — HIDL과 AIDL입니다.
 
-한 문장으로: **HAL은 프레임워크와 기기별 하드웨어/벤더 코드 사이의 경계이고, HIDL·AIDL은 그것을 표현하는 두 언어이며, Treble이 그 경계를 별도 프로세스로 빼내 격리했다.** 🔴 미학습이라 처음부터 세웁니다.
+한 문장으로: **HAL은 프레임워크와 기기별 하드웨어/벤더 코드 사이의 경계이고, HIDL·AIDL은 그것을 표현하는 두 언어이며, Treble이 그 경계를 별도 프로세스로 빼내 격리했다.** 공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다.
 
 ## 배경 개념 - 경계와 두 언어
 
@@ -120,13 +146,13 @@ passthrough(HIDL 마이그레이션): 프레임워크 ─Bs*래퍼→ 레거시 
 2. "HAL은 hwbinder를 쓴다"가 왜 HIDL에만 맞고 stable AIDL엔 틀린지, 세 binder 도메인(binder/hwbinder/vndbinder)의 용도를 구분해 서술하세요.
 3. `@VintfStability` + frozen 스냅샷 + VINTF가 함께 어떻게 "업데이트된 프레임워크와 옛 벤더 HAL의 호환성"을 강제하는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기에서 `lshal`로 이 기기의 HAL 인스턴스와 각각의 transport(hwbinder=HIDL / binder=AIDL / passthrough)를 확인하고, HIDL과 AIDL HAL이 혼재하는지 관측하세요.
+- Cuttlefish에서 `lshal`과 `service list`를 사용해 제공되는 HAL/service instance를 확인하고, AOSP의 VINTF manifest와 `.hal`/`.aidl` 정의를 대조하세요. 특정 OEM HAL은 이 환경의 범위 밖입니다.
 - `service list`로 AIDL 서비스를, `hardware/interfaces`(AOSP)에서 특정 HAL의 `.hal`/`.aidl` 정의를 대조하세요.
 - 이 기기가 hwbinder를 여전히 쓰는 HIDL HAL을 가졌는지(레거시 잔존) 근거와 함께 판정하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

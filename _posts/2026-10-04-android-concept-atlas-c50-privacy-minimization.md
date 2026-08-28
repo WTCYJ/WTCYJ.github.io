@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C50 - 개인정보 최소화·권한 모델 변화, 권한은 침해의 폭발 반경이다"
+title: "Android Security Concept Atlas C50 | 가상 실습 보고서 — 개인정보 최소화·권한 모델 변화, 권한은 침해의 폭발 반경이다"
 date: 2026-10-04 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, DataMinimization, Permissions, PrivacyDashboard, PhotoPicker, ScopedStorage, PrivateSpace, ConceptAtlas, 학습기록]
 excerpt: "보안 블로그가 왜 '개인정보 최소화'를 다루냐면 - 앱이 쥔 권한 하나하나가 침해 시 공격자(그리고 그 앱의 모든 SDK)가 상속하는 능력, 즉 폭발 반경이기 때문입니다. 권한은 고전적 의미의 공격 진입점이 아니라 뚫린 뒤의 반경이고, 최소화는 그 반경과 새어나갈 데이터를 동시에 줄이죠. Android 권한 모델은 A6 런타임 권한부터 A15 Private Space까지 꾸준히 그쪽으로 진화해 왔습니다 - 넓고 영구적인 사전 허가에서 좁고 취소 가능하고 시간 제한적이고 투명한 접근으로. 다만 '최소화 = 최소권한'은 사촌 관계지 등호가 아니고(하나는 능력, 하나는 데이터), 이 기본 축소도 targetSdk 게이트라 옛 타깃 앱은 비켜갑니다. Tier 8을 닫는 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | Android 개인정보·보안·네트워크 설정 캡처, `curl --tlsv1.3`, 패키지·AppOps 조회 |
+| 관측 결과 | 권한·개인정보 통제 화면과 TLS 1.3 HTTP 200 응답을 확인했다. 앱·호스트 네트워크 관측을 분리해 기록했다. |
+| 검증 한계 | Play Integrity의 프로덕션 verdict, 실제 OAuth 공급자, 제3자 SDK 백엔드는 범용 AVD 단독 검증 범위 밖이다. |
+
+![C50 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/privacy.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C50 — 개인정보 최소화·권한 모델 변화
 > **계층**: Tier 8 (앱 보안 통제) · **난이도**: 기초 · **선수 개념**: C10(권한), C02(최소권한)
@@ -123,13 +149,13 @@ C10에서 권한을, C49에서 SDK가 앱 권한을 상속함을 봤습니다. �
 2. 데이터 최소화와 최소권한이 왜 "등호가 아니라 사촌"인지(능력 vs 데이터, S&S vs GDPR) 설명하세요.
 3. Photo Picker/부분 미디어 같은 "능력 제거형" 통제가 왜 "요청 후 신뢰"보다 보안적으로 나은지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 앱의 요청 권한을 `dumpsys package`로 떠서 "실제로 필요한 것"과 대조해 과권한을 식별하세요(소유/허가 대상).
 - 사진을 다루는 앱이 Photo Picker(무권한)인지 `READ_MEDIA_*` 요청인지 확인하세요.
 - 프라이버시 대시보드/`cmd appops`로 한 앱의 위치·마이크·카메라 접근 이력을 보세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 화면·출력만** 붙입니다.
 

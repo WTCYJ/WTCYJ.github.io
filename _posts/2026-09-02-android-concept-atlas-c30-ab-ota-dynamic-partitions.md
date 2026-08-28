@@ -1,20 +1,46 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C30 - A/B 무중단 업데이트·dynamic partitions·Virtual A/B"
+title: "Android Security Concept Atlas C30 | 가상 실습 보고서 — A/B 무중단 업데이트·dynamic partitions·Virtual A/B"
 date: 2026-09-02 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ABUpdate, SeamlessUpdate, DynamicPartitions, superimg, VirtualAB, VABC, updateengine, bootcontrol, OTA, ConceptAtlas, 학습기록]
 excerpt: "OTA 하나가 어떻게 실행 중인 폰을 건드리지 않고 배경에서 설치되고, 새 빌드가 부팅에 실패하면 어떻게 저절로 예전으로 돌아가는가. A/B는 부팅 핵심 파티션을 두 슬롯으로 두고 비활성 슬롯에 업데이트를 쓴 뒤 재부팅으로 전환하며, 실패하면 부트로더가 롤백합니다. dynamic partitions는 고정 GPT를 super 하나 속 논리 파티션으로 바꿔 OTA가 재분할하게 하고, Virtual A/B는 두 벌 저장 비용을 스냅샷으로 없앱니다. 그리고 이 '슬롯 롤백'은 C28의 AVB 롤백 인덱스와 완전히 다른 층입니다 - 자주 헷갈리는 지점이죠. Concept Atlas의 열다섯 번째 모듈입니다."
 ---
 
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.treble.enabled`, `getprop ro.apex.updatable`, `mount`, FBE 속성 |
+| 관측 결과 | Treble/APEX 활성화와 `/data`의 file-based encryption(`file`, `encrypted`)을 확인했다. |
+| 검증 한계 | 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 실제 하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다. |
+
+![C30 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-boot.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
+
 > **Concept Atlas 모듈**: C30 — A/B OTA·dynamic partitions·super.img
 > **계층**: Tier 5 (부팅·업데이트 체인) · **난이도**: 중급 · **선수 개념**: C27(부트로더), C28(Verified Boot·롤백 인덱스)
-> **성격**: 미학습 → 풀 작성. Domain 2(부팅·업데이트 체인)를 채웁니다.
+> **성격**: 공식 문서·공개 소스 기준 재검토. Domain 2(부팅·업데이트 체인)를 채웁니다.
 
 OTA 하나가 어떻게 실행 중인 폰을 건드리지 않고 배경에서 설치되고, 새 빌드가 부팅에 실패하면 어떻게 저절로 예전으로 돌아가는가 — 이게 이 모듈입니다. C28이 "부팅된 게 진짜인가"였다면, C30은 그 이미지가 **어떻게 갱신되고, 실패해도 어떻게 살아 돌아오는가**입니다.
 
-한 문장으로: **부팅 핵심 파티션을 두 슬롯으로 두고 비활성 슬롯에 업데이트를 쓴 뒤 재부팅으로 전환하며, 새 슬롯이 스스로를 검증하지 못하면 부트로더가 예전 슬롯으로 롤백한다.** 🔴 미학습이라 처음부터 세웁니다.
+한 문장으로: **부팅 핵심 파티션을 두 슬롯으로 두고 비활성 슬롯에 업데이트를 쓴 뒤 재부팅으로 전환하며, 새 슬롯이 스스로를 검증하지 못하면 부트로더가 예전 슬롯으로 롤백한다.** 공식 문서와 공개 소스를 기준으로 핵심 경계를 정리합니다.
 
 ## 배경 개념 - 두 슬롯과 하나의 super
 
@@ -134,13 +160,13 @@ Virtual A/B: super 안에 한 벌 + COW 스냅샷(/data)
 2. Virtual A/B가 진짜 A/B의 무엇(저장 비용)을 어떻게(COW 스냅샷) 줄이는지, 그리고 그 대가(병합 전에만 롤백)를 서술하세요.
 3. `update_verifier`가 첫 부팅에 하는 일과, 그것이 `markBootSuccessful` 및 C28의 dm-verity와 어떻게 연결되는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
-- 실기기에서 `fastboot getvar current-slot`·`getvar slot-count`, `getprop ro.boot.slot_suffix`로 슬롯 구성을, `lpdump`와 `ls /dev/block/mapper`로 super의 논리 파티션(dynamic partitions)을 확인하세요.
-- 이 기기가 진짜 A/B인지 Virtual A/B인지(super 안에 슬롯 두 벌인지 한 벌+스냅샷인지)를 근거와 함께 판정하세요.
+- Cuttlefish/가상 A/B 테스트 이미지에서 `getprop ro.boot.slot_suffix`, `lpdump`와 `/dev/block/mapper`를 수집해 slot과 dynamic partition 구성을 확인하세요.
+- 사용한 가상 이미지가 A/B인지 Virtual A/B인지 `lpdump`, snapshot metadata와 AOSP build configuration을 근거로 판정하세요. 실제 단말의 fastboot 상태는 조회하거나 변경하지 않습니다.
 - 에뮬/일부 기기는 A/B·dynamic partitions가 없을 수 있으니, 없으면 "없음"을 근거와 함께 기록하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

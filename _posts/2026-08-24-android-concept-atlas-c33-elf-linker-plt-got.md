@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C33 - ELF·동적 링커·PLT/GOT, 정적 파일이 살아있는 프로세스가 되기까지"
+title: "Android Security Concept Atlas C33 | 가상 실습 보고서 — ELF·동적 링커·PLT/GOT, 정적 파일이 살아있는 프로세스가 되기까지"
 date: 2026-08-24 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ELF, DynamicLinker, linker64, bionic, PLT, GOT, RELRO, BIND_NOW, Relocation, Relr, LinkerNamespace, JNI, GNUProperty, BTI, PAC, ConceptAtlas, 학습기록]
 excerpt: "13~14주차에서 ELF 파서를 직접 짜고 심볼 테이블을 손으로 디코딩했습니다. 그건 정적 파일이었습니다. 이 글은 그 파일이 linker64에 의해 로드·연결·초기화되어 살아있는 프로세스가 되는 동적 과정을 다룹니다. 그리고 Android가 데스크톱 리눅스와 다르게 내린 두 선택 — lazy 바인딩을 아예 안 하고 full RELRO+BIND_NOW를 기본으로 하는 것, 그리고 링커 네임스페이스로 앱과 시스템 라이브러리를 가르는 것 — 이 이 층의 공격 표면을 어떻게 바꾸는지 봅니다. C37의 완화(BTI/PAC 노트, RELRO)가 실리는 자리가 바로 여기입니다. Concept Atlas의 일곱 번째 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `uname -a`, `/proc/cpuinfo`, NDK JNI 빌드, UBSan 패치 전·후 실행 |
+| 관측 결과 | Android 13 기반 Linux 5.15 x86_64 커널을 확인하고, NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다. |
+| 검증 한계 | 범용 AVD에 없는 벤더 드라이버와 KASAN 커널은 실행하지 않았으며, 해당 항목은 공개 소스·설정 분석 결과로 구분한다. |
+
+![C33 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-kernel.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C33 — ELF·linker·PLT/GOT
 > **계층**: Tier 6 (네이티브·커널) · **난이도**: 고급 · **선수 개념**: C05(예외 수준·메모리 보호), C15(JNI·네이티브 라이브러리 로딩)
@@ -25,7 +51,7 @@ excerpt: "13~14주차에서 ELF 파서를 직접 짜고 심볼 테이블을 손�
 - **GOT/PLT**: 외부(다른 모듈) 함수·데이터를 부를 때 거치는 **간접 테이블**. GOT는 포인터 배열, PLT는 그 GOT를 읽어 점프하는 코드 스텁.
 - **RELRO**: 재배치가 끝난 뒤 그 테이블 구간을 `mprotect`로 읽기전용으로 얼리는 하드닝. C05에서 말한 "연결 후 페이지를 읽기전용으로" 기능의 구체적 사용처입니다.
 
-이 정도를 깔고 여덟 질문으로 조립합니다. ELF 헤더·심볼 테이블 그 자체는 13~14주차에서 이미 실측했으므로, 여기서는 되풀이하지 않고 진단으로 대체합니다(맨 끝 참조).
+이 정도를 깔고 여덟 질문으로 조립합니다. ELF 헤더·심볼 테이블은 NDK로 빌드한 증거 앱의 실제 공유 라이브러리를 `llvm-readelf`로 다시 확인하고, 원시 결과를 호스트 검증 로그에 연결합니다.
 
 ## 질문 1 — 이 개념은 Android 전체 구조에서 어디에 있는가
 
@@ -176,7 +202,7 @@ DT_INIT_ARRAY 실행 → dlsym("JNI_OnLoad")
 2. 링커 네임스페이스가 앱과 시스템 라이브러리의 경계를 어떻게 강제하는지, 그리고 `is not accessible for the namespace`가 왜 `not found`와 다른 신호인지 서술하세요.
 3. 13~14주차에서 본 JNI 이름 인코딩(`Java_<클래스>_<메서드>`, `_1`/`_2`/`_3`/`_0XXXX`)과 `RegisterNatives`라는 두 바인딩 경로를 구분하고, 명시적 등록이 왜 스트립·리네임된 네이티브 리버싱을 어렵게 하는지 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 실제 arm64 `.so` 하나(APK의 `lib/arm64-v8a/`에서 추출)로 다음을 수행하고 정리하세요.
 
@@ -184,9 +210,9 @@ DT_INIT_ARRAY 실행 → dlsym("JNI_OnLoad")
 - `readelf -n`으로 BTI/PAC 노트를, `objdump -d -j .plt`로 `adrp/ldr/add/br` 스텁을 확인하세요.
 - 디버거로 GOT 항목 하나를 프로세스 시작 직후에 관찰해, Android full RELRO에서는 **이미 해석되어 있고 읽기전용**이라 lazy 데모가 재현되지 않음을 13~14주차의 정적 파서 결과와 대조하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
-이 모듈을 **실측 글**로 승격하세요. 환경 한계를 먼저 명시합니다: AVD `sec-api33`은 x86이라 그 안의 `.so`는 x86_64이고 aarch64 PLT/GOT 스텁이 아닙니다 — 실측하려면 arm64 이미지나 실기기가 필요합니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+이 모듈을 **실측 글**로 승격하세요. 환경 한계를 먼저 명시합니다: AVD `sec-api33`은 x86_64라 그 안의 `.so`는 AArch64 PLT/GOT 스텁이 아닙니다. AArch64 비교는 NDK로 빌드한 샘플 ELF, ARM64 Cuttlefish/QEMU 이미지 또는 공개 AOSP 바이너리를 사용합니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 
 1. **정적 관측**: 소스 탐색 과제의 `readelf`/`objdump`/`checksec` 출력을 실제 화면으로. Full RELRO·BIND_NOW·BTI/PAC 노트를 각각 짚기.
 2. **네임스페이스 거부 실측**: 앱에서 사설 `/system` 라이브러리를 `dlopen` 시도해 `is not accessible for the namespace` 로그를 실제로 캡처.
@@ -199,4 +225,4 @@ DT_INIT_ARRAY 실행 → dlsym("JNI_OnLoad")
 
 ELF은 정적 이미지이고, 링커는 그것을 EL0에서 살아 도는 프로세스로 만듭니다. Android가 데스크톱 리눅스와 다르게 내린 두 선택 — **lazy 바인딩을 아예 안 하고 full RELRO+BIND_NOW를 기본으로** 한 것, 그리고 **링커 네임스페이스로 앱과 시스템 라이브러리를 가른** 것 — 이 이 층의 공격 표면을 바꿉니다. 고전적 GOT 덮어쓰기와 `ret2dlresolve`는 기본값에서 사라지고, 공격은 `.data`/힙의 쓰기 가능 포인터와 인코딩 안 된 atexit 체인으로 옮겨 갑니다.
 
-13~14주차가 정적 파일을 손으로 팠다면, 이 글은 그 파일이 로드·연결되는 동적 과정과 그 보안 결과입니다. C37의 완화(RELRO의 GOT 보호, `.note.gnu.property`의 BTI/PAC)가 실려서 강제되는 자리가 바로 여기였습니다. 다음은 격리 정책 언어인 **C23(SELinux)**으로 이어집니다. 위의 「블로그 초안 작성 과제」를 마치면 이 모듈이 실측 글로 확정됩니다.
+13~14주차가 정적 파일을 손으로 팠다면, 이 글은 그 파일이 로드·연결되는 동적 과정과 그 보안 결과입니다. C37의 완화(RELRO의 GOT 보호, `.note.gnu.property`의 BTI/PAC)가 실려서 강제되는 자리가 바로 여기였습니다. 다음은 격리 정책 언어인 **C23(SELinux)**으로 이어집니다. 이 문서는 위 실행 보고서와 원시 로그를 기준으로 검증 상태를 관리합니다.

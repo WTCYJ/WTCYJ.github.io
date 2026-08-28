@@ -1,12 +1,38 @@
 ---
 layout: post
-title: "Android Security Concept Atlas C13 - ART: DEX→OAT→VDEX, 리버서가 무엇을 분석해야 하나"
+title: "Android Security Concept Atlas C13 | 가상 실습 보고서 — ART: DEX→OAT→VDEX, 리버서가 무엇을 분석해야 하나"
 date: 2026-09-18 21:00:00 +0900
 category: 블로그/기술문서
 author: WTCY
+series: Android Security Concept Atlas
+document_type: virtual-lab-report
+verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ART, dex2oat, OAT, VDEX, ARTImage, AOT, JIT, ConceptAtlas, 학습기록]
 excerpt: "앱을 리버싱할 때 무엇을 분석해야 하느냐 - OAT의 네이티브 코드? 아닙니다, DEX입니다. ART는 DEX 바이트코드를 실행하고, dex2oat가 그 DEX를 OAT(ELF에 싸인 네이티브 코드)와 VDEX(DEX + 검증 메타데이터, 재검증 생략용)로 컴파일하죠. 핵심은 DEX가 진실의 원천이라 VDEX 안에 그대로 보존되고, OAT는 그것의 파생 캐시일 뿐 새 로직이 없으며, ISA·부트이미지·DEX 체크섬에 묶여 기기 간 이식이 안 된다는 것. 그리고 Android 7부터는 설치 시 완전 AOT가 아니라 인터프리트+JIT로 프로필을 모으다 백그라운드에서 핫 메서드만 speed-profile로 컴파일하는 하이브리드입니다. 내 DEX 리버싱 작업의 배경을 이루는 Tier 2 런타임 모듈입니다."
 ---
+
+> **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
+
+<!-- atlas-verification:start -->
+## 가상 실습 실행 보고서
+
+| 구분 | 기록 |
+|---|---|
+| 실행일 | 2026-08-29 (Asia/Seoul) |
+| 대상 | 전용 `codex-atlas-api33` AVD · Android 13/API 33 · Google APIs x86_64 |
+| 실행 명령·코드 | `getprop ro.zygote`, `getprop dalvik.vm.usejit`, `ps` |
+| 관측 결과 | `zygote64`와 JIT 활성 상태를 확인했다. 비특권 앱의 전체 프로세스 열람 제한도 함께 관측했다. |
+| 검증 한계 | OAT/VDEX 생성 정책은 빌드와 프로파일 상태에 따라 달라지므로 이 한 번의 캡처를 모든 Android 버전에 일반화하지 않는다. |
+
+![C13 가상 실습 검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-runtime.png)
+
+화면의 값은 저장소의 읽기 전용 [Atlas Evidence 앱](/labs/android-concept-atlas-evidence-app/README.md)이 실행 중인 앱 프로세스에서 수집했으며, 호스트 `adb shell` 결과와 교차 확인했다. 전체 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md), 빌드·서명·TLS 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다. `[exit=0]`은 실행 성공, 접근 거부는 Android 격리의 예상 결과, 빈 속성은 이 AVD가 값을 제공하지 않았다는 뜻이다.
+<!-- atlas-verification:end -->
+
+
+
+
+
 
 > **Concept Atlas 모듈**: C13 — ART: DEX→OAT→VDEX
 > **계층**: Tier 2 (Android Runtime) · **난이도**: 중급 · **선수 개념**: C07(DEX), C06(APK)
@@ -69,7 +95,7 @@ DEX(C07)를 실행하는 **런타임**입니다. C06의 APK 안 DEX가 여기서
 - `ls /data/app/<pkg>/oat/<isa>/`, `dumpsys package <pkg>`(현재 컴파일 필터/상태), `cmd package compile -m speed -f <pkg>`(강제 컴파일), `cmd package dump-profiles`, 부트 이미지 `/apex/com.android.art`.
 - **소스**: AOSP `art/dex2oat`·`oatdump`·`compiler_filter.h`, source.android.com "Configure ART"·"ART optimizing profiles".
 
-**주의**: 아키텍처 무관 개념이지만, `.odex`는 대상 ISA 네이티브라 **에뮬레이터(x86) OAT와 실기기(arm64) OAT는 다름** — DEX 복원·분석은 어디서든 가능.
+**주의**: `.odex`의 native code는 target ISA에 종속됩니다. x86_64 AVD와 ARM64 Cuttlefish/QEMU의 OAT를 구분하고, DEX 수준 결과와 ISA별 결과를 섞지 않습니다.
 
 ## 질문 8 — 이전에 학습한 개념과 어떻게 연결되는가
 
@@ -121,13 +147,13 @@ DEX(C07)를 실행하는 **런타임**입니다. C06의 APK 안 DEX가 여기서
 2. A7.0 하이브리드(인터프리트+JIT+프로필→백그라운드 speed-profile)가 "설치 시 완전 AOT" 모델을 어떻게 바꿨는지 서술하세요.
 3. OAT/VDEX가 왜 ISA·부트이미지·DEX 체크섬에 묶여 비이식인지, 그것이 포렌식/분석에 주는 함의와 함께 서술하세요.
 
-## 소스 탐색 과제
+## 소스·정적 검증 경로
 
 - 임의 앱의 `/data/app/<pkg>/oat/<isa>/`에서 `base.odex`·`base.vdex`를 찾고, `dumpsys package <pkg>`로 현재 컴파일 필터를 확인하세요.
 - `oatdump` 또는 `vdexExtractor`로 vdex에서 DEX를 복원해, 원본 `classes.dex`와 동등한지 대조하세요.
 - `cmd package compile -m speed -f <pkg>` 전후로 OAT 크기·필터가 어떻게 바뀌는지 관찰하세요.
 
-## 블로그 초안 작성 과제
+## 추가 심화 재현 절차
 
 이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
 

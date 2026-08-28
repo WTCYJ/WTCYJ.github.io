@@ -30,7 +30,15 @@ defaults:
 
 # 카테고리 정의는 _data/categories.yml 로 이동했습니다.
 
-exclude: ["sitemap.xml", "feed.xml", "LICENSE", "README.md", "Gemfile", "Gemfile.lock"]
+exclude:
+  - sitemap.xml
+  - feed.xml
+  - LICENSE
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - labs/android-concept-atlas-evidence-app/build
+  - labs/android-concept-atlas-research-method/build
 
 kramdown:
   math_engine: null
