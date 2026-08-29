@@ -440,7 +440,7 @@ img { display: block; }
   max-width: 700px;
   margin: 13px 0 22px;
   font-family: var(--hand);
-  font-size: clamp(2.1rem, 3.6vw, 2.85rem);
+  font-size: clamp(1.75rem, 3.1vw, 2.45rem);
   font-weight: 700;
   line-height: 1.08;
   letter-spacing: -.025em;
@@ -449,6 +449,7 @@ img { display: block; }
   text-decoration: underline wavy var(--banana) 5px;
   text-underline-offset: 10px;
 }
+.hero-title-line { display: block; white-space: nowrap; }
 
 .hero-desc { max-width: 650px; color: var(--ink-soft); font-size: 15px; }
 .hero-stats { margin-top: 25px; display: flex; flex-wrap: wrap; gap: 9px; }
@@ -867,7 +868,6 @@ html[data-theme="dark"] .category-hero figure img {
   .sidebar { grid-template-columns: 1fr; }
   .profile-card { grid-row: auto; }
   .panel--archive { display: none; }
-  .hero h1 { font-size: 2.5rem; }
   .post-item { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
   .post-date { grid-column: 1 / -1; }
   .post-body { font-size: 15px; }
