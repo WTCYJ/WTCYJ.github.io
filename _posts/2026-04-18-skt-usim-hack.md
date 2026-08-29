@@ -2,7 +2,7 @@
 layout: post
 title: "[보안 사고 분석 #2] SKT 유심 해킹 사건 — BPFDoor와 2,300만 가입자 정보 유출 (2025)"
 date: 2026-04-18
-category: 블로그/기술문서
+category: 블로그/기술
 author: yejunkim2000
 tags: [보안사고, 유심해킹, BPFDoor, APT, SKT, 통신보안]
 ---

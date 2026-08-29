@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C55 | 가상 실습 보고서 — 위협 모델·실제 영향 산정, 기술적 결함을 위험도로 번역하기"
 date: 2026-10-27 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

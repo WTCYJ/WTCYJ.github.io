@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C18 | 가상 실습 보고서 — Parcel 직렬화 계약, write/read 순서가 어긋날 때 생기는 일"
 date: 2026-10-19 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

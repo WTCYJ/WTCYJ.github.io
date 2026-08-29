@@ -2,7 +2,7 @@
 layout: post
 title: "Android 앱 보안 분석 22주차 - 쿼터의 키를 누가 정하는가"
 date: 2026-08-09 20:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, CVE-2022-20425, 근본원인분석, 신뢰경계, Binder, ZenModeHelper, CWE-400, 자원소모, 시큐어코딩, 학습기록]
 excerpt: "재현도 했고 코드도 확인했으니 남은 것은 왜 이런 일이 생겼는지 설명하는 일입니다. 한도 검사 코드를 신뢰 경계 위에 올려놓고 보니 결함이 한 줄로 정리됐습니다. 개수를 세는 키를 호출자가 정하고 있었습니다. 그리고 제대로 셀 수 있는 값은 이미 같은 레코드에 저장돼 있었습니다."

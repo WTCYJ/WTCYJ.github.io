@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C56 | 가상 실습 보고서 — 책임 있는 공개(CVD), 발견을 세상에 안전하게 돌려주기"
 date: 2026-10-05 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

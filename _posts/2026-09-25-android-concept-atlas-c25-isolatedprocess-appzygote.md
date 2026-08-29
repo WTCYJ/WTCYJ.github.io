@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C25 | 가상 실습 보고서 — isolatedProcess·app zygote, 최강 인앱 샌드박스"
 date: 2026-09-25 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

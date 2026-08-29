@@ -2,7 +2,7 @@
 layout: post
 title: "논문 읽기를 시작하며 - 영어도 어렵고 내용도 어렵다"
 date: 2026-04-08
-category: 논문/컨퍼런스
+category: 논문
 author: yejunkim2000
 ---
 

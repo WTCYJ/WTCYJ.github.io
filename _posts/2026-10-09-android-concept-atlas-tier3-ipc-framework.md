@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas Tier 3 | 학습 로드맵 — IPC·프레임워크"
 date: 2026-10-09 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: learning-roadmap

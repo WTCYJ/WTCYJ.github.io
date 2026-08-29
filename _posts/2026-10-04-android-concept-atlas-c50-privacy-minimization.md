@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C50 | 가상 실습 보고서 — 개인정보 최소화·권한 모델 변화, 권한은 침해의 폭발 반경이다"
 date: 2026-10-04 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

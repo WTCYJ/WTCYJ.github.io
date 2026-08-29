@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas Tier 2 | 학습 로드맵 — Android Runtime"
 date: 2026-10-08 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: learning-roadmap

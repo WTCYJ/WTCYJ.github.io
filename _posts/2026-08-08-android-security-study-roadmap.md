@@ -2,7 +2,7 @@
 layout: post
 title: "Android 보안 분석 24주 로드맵 - 환경 분리 설계와 CVE 재현 프로토콜"
 date: 2026-08-08 09:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 학습로드맵, AOSP, Cuttlefish, OWASP, MASTG, MASVS, CVE, SecurityBulletin, Frida, jadx, apktool, MobSF, adb, 에뮬레이터, SELinux, VerifiedBoot, Binder, 취약점분석, 정적분석, 동적분석]
 excerpt: "Android 앱 보안 분석부터 공개 CVE의 패치 전·후 비교까지 24주로 끊어 설계한 학습 계획입니다. 앱 실습용 Windows 에뮬레이터 환경과 시스템 연구용 Linux/KVM Cuttlefish 환경을 분리한 이유, 공격 성공이 아니라 안전한 관찰 지표로 취약성을 입증하는 CVE 재현 프로토콜, 그리고 매 실험을 재현 가능하게 남기는 노트 템플릿을 정리했습니다."

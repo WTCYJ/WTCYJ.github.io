@@ -2,7 +2,7 @@
 layout: post
 title: "블로그 개설 및 Jekyll 환경 구축 기록"
 date: 2026-04-06
-category: 블로그/기술문서
+category: 블로그/기술
 author: yejunkim2000
 excerpt: "GitHub Pages와 Jekyll을 이용해 개발 블로그를 구축한 과정을 정리합니다."
 ---

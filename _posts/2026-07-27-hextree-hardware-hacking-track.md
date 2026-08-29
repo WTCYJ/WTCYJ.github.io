@@ -2,7 +2,7 @@
 layout: post
 title: "전압 폴트 인젝션 입문 — HexTree Hardware Hacking 트랙 정리"
 date: 2026-07-27
-category: 블로그/기술문서
+category: 시스템
 author: yejunkim2000
 tags: [HexTree, 하드웨어해킹, FaultInjection, VoltageGlitching, 전압글리칭, CrowbarGlitch, nRF52, APPROTECT, STM32, ReadoutProtection, walletfail, AirTag, Faultier, 임베디드보안, 펌웨어보안]
 excerpt: "코드에 결함이 없어도 칩의 전원을 수십 나노초 흔들면 명령 하나가 건너뛰어집니다. HexTree Hardware Hacking 트랙의 세 코스를 따라 전압 폴트 인젝션의 원리와 파라미터 구조, nRF52 APPROTECT·STM32 읽기보호가 무력화된 사례, 그리고 방어 설계를 정리했습니다."

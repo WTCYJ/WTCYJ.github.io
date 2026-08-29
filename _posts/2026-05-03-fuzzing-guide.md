@@ -2,7 +2,7 @@
 layout: post
 title: "퍼징(Fuzzing) 완전 정복 — AFL++, Jackalope, libFuzzer 비교 분석"
 date: 2026-05-03
-category: BugBounty
+category: 블로그/기술
 author: yejunkim2000
 tags: [퍼징, Fuzzing, AFL++, Jackalope, libFuzzer, 버그바운티, 취약점분석]
 ---

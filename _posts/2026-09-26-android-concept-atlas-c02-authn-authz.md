@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C02 | 가상 실습 보고서 — 인증 vs 인가, 혼동이 곧 접근 통제 버그"
 date: 2026-09-26 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

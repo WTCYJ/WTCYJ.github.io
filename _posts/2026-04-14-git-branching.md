@@ -2,7 +2,7 @@
 layout: post
 title: "Learn Git Branching 완전 정복 — 명령어 총정리"
 date: 2026-04-14
-category: 블로그/기술문서
+category: 개발
 author: yejunkim2000
 tags: [git, branch, rebase, cherry-pick, remote]
 ---
@@ -225,4 +225,3 @@ git stash list     # 저장 목록 확인
 
 <img width="1581" height="1253" alt="image" src="https://github.com/user-attachments/assets/6ae39df0-6d90-49fb-9804-d1d1f495e564" />
 <img width="1448" height="760" alt="스크린샷 2026-04-14 224814" src="https://github.com/user-attachments/assets/daf34eac-f591-4311-b807-f600b1bfe9cc" />
-

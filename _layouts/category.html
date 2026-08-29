@@ -6,20 +6,24 @@ layout: default
 {% assign atlas_filtered = filtered | where: "series", "Android Security Concept Atlas" | sort_natural: "title" %}
 {% assign regular_filtered = filtered | where_exp: "post", "post.series != 'Android Security Concept Atlas'" %}
 {% assign ordered_filtered = atlas_filtered | concat: regular_filtered %}
+{% assign category_data = site.data.categories | where: "key", page.cat_key | first %}
 
-<section class="section">
-  <div class="section-header">
-    <span class="section-label">{{ page.cat_icon }} {{ page.cat_name }}</span>
-    <div class="section-line"></div>
-    <span class="post-tag tag-{{ page.cat_color }}">{{ filtered | size }} posts</span>
+<section class="category-hero">
+  <div>
+    <span class="section-label">CATEGORY · {{ filtered | size }} POSTS</span>
+    <h1>{{ page.cat_icon }} {{ page.cat_name }}</h1>
+    <p>{{ category_data.description }}</p>
   </div>
+  <figure><img src="{{ '/assets/img/monkey-patch/rhesus-closeup.jpg' | relative_url }}" alt="정면을 바라보는 어린 마카크 원숭이"><figcaption>고르는 중...</figcaption></figure>
+</section>
 
+<section class="section category-posts">
   <div class="posts-list">
     {% if filtered.size == 0 %}
-      <div class="empty-note">// 아직 작성된 글이 없습니다. 첫 글을 작성해보세요!</div>
+      <div class="empty-note">아직 작성된 글이 없습니다. 첫 기록을 준비 중입니다.</div>
     {% else %}
       {% for post in ordered_filtered %}
-        <a href="{{ post.url }}" class="post-item">
+        <a href="{{ post.url | relative_url }}" class="post-item">
           <span class="post-date">{{ post.date | date: "%y.%m.%d" }}</span>
           <span class="post-title">{{ post.title }}</span>
           <span class="post-tag tag-{{ page.cat_color }}">{{ post.date | date: "%Y" }}</span>

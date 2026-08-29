@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C10 | 가상 실습 보고서 — permission·signature 권한·AppOps, UID에 무엇을 허가할까"
 date: 2026-09-15 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

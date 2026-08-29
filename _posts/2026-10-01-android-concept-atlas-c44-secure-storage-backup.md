@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C44 | 가상 실습 보고서 — 안전한 저장소·백업·키 관리, 하드코딩 키와 allowBackup이 새는 곳"
 date: 2026-10-01 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

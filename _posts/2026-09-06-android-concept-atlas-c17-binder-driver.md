@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C17 | 가상 실습 보고서 — Binder 드라이버, node와 handle과 하나의 ioctl"
 date: 2026-09-06 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

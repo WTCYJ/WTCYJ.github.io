@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C38 | 가상 실습 보고서 — ASan·HWASan·KASAN·UBSan, 버그를 프로덕션 전에 잡는 탐지기들"
 date: 2026-09-11 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

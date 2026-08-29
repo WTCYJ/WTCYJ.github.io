@@ -2,7 +2,7 @@
 layout: post
 title: "[Wargame] OverTheWire Bandit LV0 → LV25 상세 풀이"
 date: 2026-04-27
-category: CTF/Wargame
+category: 시스템
 author: yejunkim2000
 tags: [OverTheWire, Bandit, Wargame, Linux, SSH]
 ---

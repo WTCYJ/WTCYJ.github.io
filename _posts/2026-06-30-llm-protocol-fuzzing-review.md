@@ -2,7 +2,7 @@
 layout: post
 title: "대규모 언어 모델 기반 프로토콜 퍼징의 연구 동향 — ChatAFL을 분기점으로 한 계보적 검토"
 date: 2026-06-30
-category: 논문/컨퍼런스
+category: 논문
 author: yejunkim2000
 tags: [논문리뷰, 프로토콜퍼징, LLM, ChatAFL, AFLNet, TitanFuzz, MultiFuzz, ChatFuMe, NDSS, 소프트웨어보안, 퍼징]
 excerpt: "상태 기반 퍼징(AFLNet)과 LLM 기반 생성(TitanFuzz)이 ChatAFL에서 수렴한 뒤 근거성(MultiFuzz)·비용(ChatFuMe)으로 분화하는 흐름을, '지식 출처의 이행'이라는 축으로 도표 10개와 함께 분석한 문헌 검토."

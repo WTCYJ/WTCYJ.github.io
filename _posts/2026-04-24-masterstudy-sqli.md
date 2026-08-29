@@ -2,7 +2,7 @@
 layout: post
 title: "[BugBounty] MasterStudy LMS SQL Injection 취약점 발견 — CVE 제출 과정"
 date: 2026-04-24
-category: BugBounty
+category: 웹
 author: yejunkim2000
 tags: [BugBounty, SQLi, WordPress, Patchstack, CVE, LMS]
 ---

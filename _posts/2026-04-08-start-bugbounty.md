@@ -2,7 +2,7 @@
 layout: post
 title: "Bug Bounty를 시작하며 - 아직 아무것도 모르는 상태에서"
 date: 2026-04-08
-category: BugBounty
+category: 웹
 author: yejunkim2000
 ---
 

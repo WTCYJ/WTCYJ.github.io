@@ -2,7 +2,7 @@
 layout: post
 title: "Android 앱 보안 분석 5~6주차 - apktool·jadx 정적 분석과 자작 리포트 도구"
 date: 2026-08-09 09:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 정적분석, jadx, apktool, aapt2, APK, DEX, AndroidManifest, WebView, addJavascriptInterface, 딥링크, exported, 데이터흐름, taint, Kotlin, Metadata, 취약점분석, 학습기록]
 excerpt: "직접 만든 앱을 APK에서부터 다시 분석했습니다. 심어둔 약점 10개 중 자동 리포트가 잡은 것은 7개였고, 놓친 셋은 전부 데이터 흐름 문제였습니다. 첫 리포트의 하드코딩 문자열 표가 126행 노이즈였던 원인과, WebView 브릿지 노출을 정적 분석에서 동적 확인까지 이어붙인 과정을 정리했습니다."

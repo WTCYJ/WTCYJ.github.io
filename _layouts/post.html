@@ -5,27 +5,27 @@ layout: default
 {% assign c = site.data.categories | where: "key", page.category | first %}
 
 <article class="post-layout">
-
   <header class="post-header">
-    <a href="/category/{{ c.slug }}/" class="post-tag tag-{{ c.color | default: 'teal' }}" style="text-decoration:none;">
-      {{ page.category }}
-    </a>
-    <h1 class="post-title">{{ page.title }}</h1>
-    <div class="post-meta">
-      <span>{{ page.date | date: "%Y.%m.%d" }}</span>
-      {% if page.author %}<span>{{ page.author }}</span>{% endif %}
-      {% if page.tags.size > 0 %}<span>{{ page.tags | join: " / " }}</span>{% endif %}
+    <div class="post-heading-copy">
+      <a href="{{ '/category/' | append: c.slug | append: '/' | relative_url }}" class="post-tag tag-{{ c.color | default: 'cocoa' }}">{{ page.category }}</a>
+      <h1 class="post-title">{{ page.title }}</h1>
+      <div class="post-meta">
+        <span>{{ page.date | date: "%Y.%m.%d" }}</span>
+        {% if page.author %}<span>{{ page.author }}</span>{% endif %}
+        {% if page.tags.size > 0 %}<span>{{ page.tags | join: " / " }}</span>{% endif %}
+      </div>
     </div>
+    <figure class="post-mood">
+      <img src="{{ '/assets/img/monkey-patch/pout-monkey.png' | relative_url }}" alt="입을 내민 원숭이">
+      <figcaption>오늘도 하나 뜯어봄.</figcaption>
+    </figure>
   </header>
 
-  <div class="post-body">
-    {{ content }}
-  </div>
+  <div class="post-body">{{ content }}</div>
 
   <footer class="post-footer">
     <a href="javascript:history.back()" class="back-btn">← 뒤로</a>
-    <a href="/posts/" class="back-btn">/posts</a>
+    <a href="{{ '/posts/' | relative_url }}" class="back-btn">전체 글</a>
     <a href="#" class="back-btn">↑ top</a>
   </footer>
-
 </article>

@@ -9,7 +9,7 @@ permalink: /about/
 <div class="about-layout">
 
   <div class="about-head">
-    <div class="about-avatar">{{ p.initials | default: "YJ" }}</div>
+    <img class="about-avatar" src="{{ '/assets/img/monkey-patch/pout-monkey.png' | relative_url }}" alt="입을 내민 원숭이">
     <div>
       <h1 class="about-name">{{ p.name }}{% if p.real_name %} <span class="about-realname">{{ p.real_name }}</span>{% endif %}</h1>
       <div class="about-role">{{ p.role }}</div>

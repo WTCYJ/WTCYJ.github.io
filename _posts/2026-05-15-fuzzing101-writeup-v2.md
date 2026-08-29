@@ -2,7 +2,7 @@
 layout: post
 title: "[Fuzzing-101] AFL++ 실습 상세 Write-up — Xpdf, libexif, tcpdump CVE 분석"
 date: 2026-05-15
-category: CTF/Wargame
+category: 블로그/기술
 author: yejunkim2000
 tags: [Fuzzing, AFL++, ASAN, CVE, Xpdf, libexif, tcpdump, 취약점분석]
 ---

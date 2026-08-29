@@ -2,7 +2,7 @@
 layout: post
 title: "[보안기초] 침입 탐지 및 방지 시스템(IDS/IPS) 완전 정복"
 date: 2026-05-12 09:00:00 +0900
-category: 블로그/기술문서
+category: 시스템
 author: yejunkim2000
 tags: [IDS, IPS, Firewall, Snort, Suricata, Zeek, Wazuh, NIDS, HIDS, NIPS, HIPS]
 

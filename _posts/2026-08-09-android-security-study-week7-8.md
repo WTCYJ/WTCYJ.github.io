@@ -2,7 +2,7 @@
 layout: post
 title: "Android 앱 보안 분석 7~8주차 - 동적 분석으로 검증한 컴포넌트 노출과 평문 통신"
 date: 2026-08-09 10:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 동적분석, adb, logcat, 프록시, MITM, 평문통신, cleartext, exported, IntentExtra, 인가우회, ScopedStorage, 경로이탈, PathTraversal, WebView, 회귀테스트, 학습기록]
 excerpt: "정적 분석으로 만든 표의 각 행을 기기에서 직접 밟아보았습니다. 앱이 평문 HTTP를 쓰는 탓에 인증서 설치도 없이 프록시 하나로 비밀번호와 토큰이 보였고, exported 액티비티에 인텐트 extra를 붙이는 것만으로 남의 메모와 앱 내부 파일이 나갔습니다. 제 검증 스크립트가 위양성을 만든 일과, 경로 이탈의 실제 경계를 두 번 시도해서 찾은 과정도 함께 적었습니다."

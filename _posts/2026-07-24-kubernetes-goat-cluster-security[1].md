@@ -2,7 +2,7 @@
 layout: post
 title: "Kubernetes Goat로 배우는 쿠버네티스 클러스터 보안"
 date: 2026-07-24
-category: CTF/Wargame
+category: 시스템
 author: yejunkim2000
 tags: [KubernetesGoat, Kubernetes, Docker, 컨테이너보안, 클라우드보안, ContainerEscape, RBAC, SSRF, CommandInjection, PrivilegeEscalation, kind, 모의침투]
 excerpt: "의도적 취약 클러스터 Kubernetes Goat를 kind로 직접 구축해 컨테이너 이스케이프·RBAC 오구성·시크릿 노출·SSRF·NodePort 노출 등 10개 시나리오를 실제 익스플로잇하고, 각 취약점의 근본 원인과 수정 매니페스트·탐지까지 분석한 실습 기록."

@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C36 | 가상 실습 보고서 — 벤더 드라이버·HAL 공격 표면, EL0에서 EL1로 가는 다리"
 date: 2026-09-09 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

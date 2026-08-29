@@ -2,7 +2,7 @@
 layout: post
 title: "공모전과 자격증 - 결과보다 과정을 남긴다"
 date: 2026-04-08
-category: 공모전/자격증
+category: 블로그/기술
 author: yejunkim2000
 ---
 

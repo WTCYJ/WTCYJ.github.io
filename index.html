@@ -4,76 +4,78 @@ title: Home
 ---
 
 <section class="hero">
-  <p class="hero-label">// security · development · research</p>
-  <h1>Hello, I'm<br><span class="highlight glitch" data-text="{{ site.data.profile.name }}">{{ site.data.profile.name }}</span>.</h1>
-  <p class="hero-sub">{{ site.data.profile.real_name }} · {{ site.data.profile.affiliations | join: " · " }}</p>
-  <p class="hero-desc">{{ site.data.profile.bio | default: "보안과 개발을 탐구하는 공간입니다." }}</p>
-  <div class="hero-stats">
-    <div class="stat-item">posts <span>{{ site.posts | size }}</span></div>
-    <div class="stat-item">categories <span>{{ site.data.categories | size }}</span></div>
-    <div class="stat-item">github <span><a href="https://github.com/yejunkim2000" target="_blank" rel="noopener">@yejunkim2000</a></span></div>
+  <div class="hero-copy">
+    <p class="hero-label">SECURITY · BUILD · FIELD NOTES</p>
+    <h1>만들고, 분석하고,<br>배운 것을 기록합니다.</h1>
+    <p class="hero-desc">개발과 보안 연구에서 직접 실험한 과정과 결과를 기록합니다.</p>
+    <div class="hero-stats">
+      <span>POSTS <strong>{{ site.posts | size }}</strong></span>
+      <span>CATEGORIES <strong>{{ site.data.categories | size }}</strong></span>
+      <a href="https://github.com/yejunkim2000" target="_blank" rel="noopener">@yejunkim2000 ↗</a>
+    </div>
   </div>
+  <figure class="hero-photo">
+    <img src="{{ '/assets/img/monkey-patch/orangutan-face.jpg' | relative_url }}" alt="손가락을 얼굴에 대고 생각하는 오랑우탄">
+    <figcaption class="monkey-sticker"><img src="{{ '/assets/img/monkey-patch/pout-monkey.png' | relative_url }}" alt=""><span>이거 왜 안 됨?</span></figcaption>
+  </figure>
 </section>
 
 <section class="section">
   <div class="section-header">
-    <span class="section-label">categories</span>
+    <div><span class="section-label">8 CATEGORIES</span><h2>어디부터 뜯어볼까?</h2></div>
     <div class="section-line"></div>
   </div>
 
   <div class="categories-grid">
     {% for c in site.data.categories %}
-      <a href="/category/{{ c.slug }}/" class="cat-card" data-color="{{ c.color }}">
+      <a href="{{ '/category/' | append: c.slug | append: '/' | relative_url }}" class="cat-card" data-color="{{ c.color }}">
+        <span class="cat-index">0{{ forloop.index }}</span>
         <span class="cat-icon">{{ c.icon }}</span>
         <div class="cat-name">{{ c.name }}</div>
-        <div class="cat-count">{{ site.posts | where: "category", c.key | size }} posts</div>
+        <p class="cat-desc">{{ c.description }}</p>
+        <div class="cat-count">{{ site.posts | where: 'category', c.key | size }} posts →</div>
       </a>
     {% endfor %}
   </div>
 
   <div class="section-header">
-    <span class="section-label">Android Security Concept Atlas · C01 → C56</span>
-    <div class="section-line"></div>
-  </div>
-
-  {% assign atlas_reports = site.posts | where: "series", "Android Security Concept Atlas" | where: "document_type", "virtual-lab-report" | sort_natural: "title" %}
-  <div class="posts-list">
-    {% for post in atlas_reports limit: 10 %}
-      {% assign c = site.data.categories | where: "key", post.category | first %}
-      <a href="{{ post.url }}" class="post-item">
-        <span class="post-date">C{{ forloop.index | prepend: '0' | slice: -2, 2 }}</span>
-        <span class="post-title">{{ post.title }}</span>
-        <span class="post-tag tag-{{ c.color | default: 'teal' }}">학습 순서</span>
-      </a>
-    {% endfor %}
-  </div>
-
-  <div style="margin-top:1.5rem; margin-bottom:2.5rem;">
-    <a href="/posts/android-concept-atlas-index/" class="btn-neon">C01~C56 전체 학습 지도 →</a>
-  </div>
-
-  <div class="section-header">
-    <span class="section-label">recent posts</span>
+    <div><span class="section-label">LATEST RESEARCH</span><h2>최근 연구 기록</h2></div>
     <div class="section-line"></div>
   </div>
 
   <div class="posts-list">
     {% for post in site.posts limit: 10 %}
       {% assign c = site.data.categories | where: "key", post.category | first %}
-      <a href="{{ post.url }}" class="post-item">
+      <a href="{{ post.url | relative_url }}" class="post-item">
         <span class="post-date">{{ post.date | date: "%y.%m.%d" }}</span>
         <span class="post-title">{{ post.title }}</span>
-        <span class="post-tag tag-{{ c.color | default: 'teal' }}">{{ post.category }}</span>
+        <span class="post-tag tag-{{ c.color | default: 'cocoa' }}">{{ post.category }}</span>
       </a>
     {% endfor %}
-    {% if site.posts.size == 0 %}
-      <div class="empty-note">// 아직 작성된 글이 없습니다.</div>
-    {% endif %}
   </div>
-
-  {% if site.posts.size > 10 %}
-    <div style="margin-top:1.5rem;">
-      <a href="/posts/" class="btn-neon">전체 글 보기 →</a>
-    </div>
-  {% endif %}
+  {% if site.posts.size > 10 %}<div class="section-action"><a href="{{ '/posts/' | relative_url }}" class="text-link">전체 글 보기 →</a></div>{% endif %}
 </section>
+
+<section class="banana-vault" aria-labelledby="banana-vault-title">
+  <p class="section-label">ONE LAST THING</p>
+  <h2 id="banana-vault-title">맨 아래까지 내려온 사람에게</h2>
+  <button class="banana-trigger" id="banana-trigger" type="button" aria-describedby="banana-hint">
+    <img src="{{ '/assets/img/monkey-patch/banana.svg' | relative_url }}" alt="바나나">
+  </button>
+  <p class="banana-hint" id="banana-hint">누르면… 별일 없을걸?</p>
+  <output class="sr-only" id="banana-progress" aria-live="polite"></output>
+
+  <dialog class="banana-reward" id="banana-reward" aria-labelledby="banana-reward-title">
+    <div class="banana-reward-card">
+      <button class="banana-close" id="banana-close" type="button" aria-label="닫기">×</button>
+      <img class="banana-keeper" src="{{ '/assets/img/monkey-patch/pout-monkey.png' | relative_url }}" alt="바나나를 지키던 원숭이">
+      <p class="section-label">EASTER EGG · 1013 / 1013</p>
+      <h2 id="banana-reward-title">이걸 정말 1013번 눌렀네.</h2>
+      <p>인정. 이 바나나는 이제 네 거야.</p>
+      <a class="banana-take" id="banana-take" href="{{ '/assets/img/monkey-patch/banana.svg' | relative_url }}" download="monkey-patch-banana.svg">바나나 가져가기 ↓</a>
+      <p class="banana-taken" id="banana-taken" aria-live="polite"></p>
+    </div>
+  </dialog>
+</section>
+
+<script src="{{ '/assets/js/banana-easter-egg.js' | relative_url }}" defer></script>

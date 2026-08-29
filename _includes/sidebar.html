@@ -1,65 +1,48 @@
 {% assign p = site.data.profile %}
 <aside class="sidebar">
-
-  <div class="panel profile-card">
-    <div class="panel-title">profile.sys</div>
-    <div class="about-avatar profile-avatar">{{ p.initials | default: "WT" }}</div>
-    <div class="profile-name">
-      {{ p.name }}{% if p.real_name %} <span class="profile-realname">{{ p.real_name }}</span>{% endif %}
-    </div>
+  <section class="paper-panel profile-card">
+    <span class="tape" aria-hidden="true"></span>
+    <div class="panel-kicker">LAB NOTE 01</div>
+    <img src="{{ '/assets/img/monkey-patch/pout-monkey.png' | relative_url }}" alt="입을 내민 원숭이" class="profile-avatar">
+    <div class="profile-name">{{ p.name }}{% if p.real_name %} <span>{{ p.real_name }}</span>{% endif %}</div>
     <div class="profile-role">{{ p.role }}</div>
-    {% if p.affiliations.size > 0 %}
-      <div class="profile-affil">
-        {% for a in p.affiliations %}<span>{{ a }}</span>{% endfor %}
-      </div>
-    {% endif %}
-    {% if p.tags.size > 0 %}
-      <div class="hash-list">
-        {% for t in p.tags %}<span class="hash-tag">#{{ t }}</span>{% endfor %}
-      </div>
-    {% endif %}
+    <p class="profile-tagline">오늘도 하나 뜯어봄.</p>
+    {% if p.affiliations.size > 0 %}<div class="profile-affil">{% for a in p.affiliations %}<span>{{ a }}</span>{% endfor %}</div>{% endif %}
     <div class="profile-links">
-      <a href="/about/" class="btn-neon">about →</a>
-      {% for l in p.links %}
-        <a href="{{ l.url }}" class="btn-neon"{% if l.url contains '://' %} target="_blank" rel="noopener"{% endif %}>{{ l.name }}</a>
-      {% endfor %}
+      <a href="{{ '/about/' | relative_url }}" class="text-link">about →</a>
+      {% for l in p.links %}<a href="{{ l.url }}" class="text-link"{% if l.url contains '://' %} target="_blank" rel="noopener"{% endif %}>{{ l.name }}</a>{% endfor %}
     </div>
-  </div>
+  </section>
 
-  <div class="panel">
-    <div class="panel-title">search.exe</div>
-    <form class="search-box" action="/posts/" method="get" role="search">
-      <span class="search-prompt">/</span>
+  <section class="paper-panel">
+    <div class="panel-kicker">SEARCH</div>
+    <form class="search-box" action="{{ '/posts/' | relative_url }}" method="get" role="search">
       <input type="search" name="q" class="search-input" placeholder="글 검색..." aria-label="글 검색">
-      <button type="submit" class="search-go" aria-label="검색">↵</button>
+      <button type="submit" class="search-go" aria-label="검색">검색</button>
     </form>
-  </div>
+  </section>
 
-  <div class="panel">
-    <div class="panel-title">category.dat</div>
+  <section class="paper-panel">
+    <div class="panel-kicker">8 CATEGORIES</div>
     <div class="side-list">
       {% for c in site.data.categories %}
-        <a href="/category/{{ c.slug }}/" class="side-item" data-color="{{ c.color }}">
-          <span class="si-icon">{{ c.icon }}</span>
-          <span class="si-name">{{ c.name }}</span>
-          <span class="si-count">{{ site.posts | where: "category", c.key | size }}</span>
+        <a href="{{ '/category/' | append: c.slug | append: '/' | relative_url }}" class="side-item" data-color="{{ c.color }}">
+          <span class="si-icon">{{ c.icon }}</span><span class="si-name">{{ c.name }}</span><span class="si-count">{{ site.posts | where: 'category', c.key | size }}</span>
         </a>
       {% endfor %}
     </div>
-  </div>
+  </section>
 
-  <div class="panel panel--tags">
-    <div class="panel-title">archive.log</div>
+  <figure class="mood-card">
+    <img src="{{ '/assets/img/monkey-patch/found-it-monkey.png' | relative_url }}" alt="원인을 알아낸 듯 위를 바라보는 원숭이 짤">
+    <figcaption>원인을 찾았을 때의 표정</figcaption>
+  </figure>
+
+  <section class="paper-panel panel--archive">
+    <div class="panel-kicker">ARCHIVE</div>
     <div class="side-list">
-      {% assign years = site.posts | group_by_exp: "post", "post.date | date: '%Y'" %}
-      {% for y in years %}
-        <a href="/posts/" class="side-item" data-color="teal">
-          <span class="si-icon">▸</span>
-          <span class="si-name">{{ y.name }}</span>
-          <span class="si-count">{{ y.items | size }}</span>
-        </a>
-      {% endfor %}
+      {% assign years = site.posts | group_by_exp: 'post', "post.date | date: '%Y'" %}
+      {% for y in years %}<a href="{{ '/posts/' | relative_url }}" class="side-item"><span class="si-icon">↳</span><span class="si-name">{{ y.name }}</span><span class="si-count">{{ y.items | size }}</span></a>{% endfor %}
     </div>
-  </div>
-
+  </section>
 </aside>

@@ -2,7 +2,7 @@
 layout: post
 title: "진로 시장 분석 - 침투테스터를 목표로"
 date: 2026-04-10
-category: 공모전/자격증
+category: 블로그/기술
 author: yejunkim2000
 ---
 

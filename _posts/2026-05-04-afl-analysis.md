@@ -2,7 +2,7 @@
 layout: post
 title: "AFL 핵심 메커니즘 — afl-gcc.c, afl-as.c/h, afl-fuzz.c, technical_details.txt"
 date: 2026-05-05
-category: BugBounty
+category: 블로그/기술
 author: yejunkim2000
 tags: [AFL, Fuzzing, 퍼징, 취약점분석, BugBounty, 보안연구, 소스코드분석]
 ---

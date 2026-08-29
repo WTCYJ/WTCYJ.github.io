@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C05 | 가상 실습 보고서 — ARM64 예외 수준과 메모리 보호, 격리는 어느 층에서 강제되는가"
 date: 2026-08-22 21:00:00 +0900
-category: Android
+category: 안드로이드
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
