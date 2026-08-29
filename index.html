@@ -32,6 +32,27 @@ title: Home
   </div>
 
   <div class="section-header">
+    <span class="section-label">Android Security Concept Atlas · C01 → C56</span>
+    <div class="section-line"></div>
+  </div>
+
+  {% assign atlas_reports = site.posts | where: "series", "Android Security Concept Atlas" | where: "document_type", "virtual-lab-report" | sort_natural: "title" %}
+  <div class="posts-list">
+    {% for post in atlas_reports limit: 10 %}
+      {% assign c = site.data.categories | where: "key", post.category | first %}
+      <a href="{{ post.url }}" class="post-item">
+        <span class="post-date">C{{ forloop.index | prepend: '0' | slice: -2, 2 }}</span>
+        <span class="post-title">{{ post.title }}</span>
+        <span class="post-tag tag-{{ c.color | default: 'teal' }}">학습 순서</span>
+      </a>
+    {% endfor %}
+  </div>
+
+  <div style="margin-top:1.5rem; margin-bottom:2.5rem;">
+    <a href="/posts/android-concept-atlas-index/" class="btn-neon">C01~C56 전체 학습 지도 →</a>
+  </div>
+
+  <div class="section-header">
     <span class="section-label">recent posts</span>
     <div class="section-line"></div>
   </div>

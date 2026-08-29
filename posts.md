@@ -25,8 +25,12 @@ permalink: /posts/
     {% endfor %}
   </div>
 
+  {% assign atlas_posts = site.posts | where: "series", "Android Security Concept Atlas" | sort_natural: "title" %}
+  {% assign regular_posts = site.posts | where_exp: "post", "post.series != 'Android Security Concept Atlas'" %}
+  {% assign ordered_posts = atlas_posts | concat: regular_posts %}
+
   <div class="posts-list" id="posts-container">
-    {% for post in site.posts %}
+    {% for post in ordered_posts %}
       {% assign c = site.data.categories | where: "key", post.category | first %}
       {% capture haystack %}{{ post.title }} {{ post.category }} {{ post.tags | join: ' ' }} {{ post.excerpt | strip_html }}{% endcapture %}
       <a href="{{ post.url | relative_url }}" class="post-item"

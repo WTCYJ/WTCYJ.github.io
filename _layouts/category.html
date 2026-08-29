@@ -3,6 +3,9 @@ layout: default
 ---
 
 {% assign filtered = site.posts | where: "category", page.cat_key %}
+{% assign atlas_filtered = filtered | where: "series", "Android Security Concept Atlas" | sort_natural: "title" %}
+{% assign regular_filtered = filtered | where_exp: "post", "post.series != 'Android Security Concept Atlas'" %}
+{% assign ordered_filtered = atlas_filtered | concat: regular_filtered %}
 
 <section class="section">
   <div class="section-header">
@@ -15,7 +18,7 @@ layout: default
     {% if filtered.size == 0 %}
       <div class="empty-note">// 아직 작성된 글이 없습니다. 첫 글을 작성해보세요!</div>
     {% else %}
-      {% for post in filtered %}
+      {% for post in ordered_filtered %}
         <a href="{{ post.url }}" class="post-item">
           <span class="post-date">{{ post.date | date: "%y.%m.%d" }}</span>
           <span class="post-title">{{ post.title }}</span>
