@@ -406,7 +406,7 @@ img { display: block; }
   border-radius: 6px;
   box-shadow: var(--shadow);
 }
-.mood-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: 50% 30%; filter: saturate(.72) contrast(1.04); }
+.mood-card img { width: 100%; aspect-ratio: 1 / 1; object-fit: contain; object-position: center; background: var(--surface-soft); filter: saturate(.72) contrast(1.04); }
 .mood-card figcaption { padding: 10px 12px; color: var(--cocoa); font-family: var(--hand); font-size: 1.08rem; text-align: center; }
 
 /* Home hero */
@@ -440,10 +440,12 @@ img { display: block; }
   max-width: 700px;
   margin: 13px 0 22px;
   font-family: var(--hand);
-  font-size: clamp(2.25rem, 5.7vw, 4rem);
+  font-size: clamp(2.1rem, 3.6vw, 2.85rem);
   font-weight: 700;
-  line-height: 1.04;
-  letter-spacing: -.035em;
+  line-height: 1.08;
+  letter-spacing: -.025em;
+  word-break: keep-all;
+  overflow-wrap: normal;
   text-decoration: underline wavy var(--banana) 5px;
   text-underline-offset: 10px;
 }
@@ -454,8 +456,8 @@ img { display: block; }
 .hero-stats a { padding: 7px 10px; color: var(--ink-soft); background: var(--surface-soft); border: 1px solid var(--rule); border-radius: 4px; font-family: var(--mono); font-size: 10px; text-decoration: none; }
 .hero-stats strong { color: var(--forest); }
 
-.hero-photo { position: relative; min-height: 390px; overflow: hidden; border-left: 1px solid var(--rule); }
-.hero-photo > img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; filter: saturate(.7) sepia(.06) contrast(1.05); }
+.hero-photo { position: relative; min-height: 390px; overflow: hidden; display: flex; align-items: center; background: var(--surface-soft); border-left: 1px solid var(--rule); }
+.hero-photo > img { width: 100%; height: 100%; object-fit: contain; object-position: center; filter: saturate(.7) sepia(.06) contrast(1.05); }
 .monkey-sticker {
   position: absolute;
   left: 16px;
@@ -603,7 +605,8 @@ img { display: block; }
   aspect-ratio: 1 / 1;
   margin: 0 auto 20px;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--surface-soft);
   image-rendering: auto;
   border: 9px solid var(--photo-frame);
   border-radius: 16px;
@@ -693,8 +696,8 @@ img { display: block; }
 .category-hero > div { padding: clamp(30px, 5vw, 55px); display: flex; flex-direction: column; justify-content: center; }
 .category-hero h1 { margin: 8px 0 12px; font-family: var(--hand); font-size: clamp(2.2rem, 5vw, 3.5rem); line-height: 1; }
 .category-hero p { max-width: 570px; color: var(--ink-soft); font-size: 14px; }
-.category-hero figure { position: relative; overflow: hidden; border-left: 1px solid var(--rule); }
-.category-hero figure img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%; filter: saturate(.72) contrast(1.04); }
+.category-hero figure { position: relative; overflow: hidden; display: flex; align-items: center; background: var(--surface-soft); border-left: 1px solid var(--rule); }
+.category-hero figure img { width: 100%; height: 100%; object-fit: contain; object-position: center; filter: saturate(.72) contrast(1.04); }
 .category-hero figcaption { position: absolute; right: 12px; bottom: 12px; padding: 6px 10px; background: var(--banana-soft); border: 1px solid var(--banana); border-radius: 5px; font-family: var(--hand); transform: rotate(-2deg); }
 
 html[data-theme="dark"] .mood-card img,
@@ -734,7 +737,7 @@ html[data-theme="dark"] .category-hero figure img {
 .post-header h1 { color: var(--ink); font-size: clamp(1.75rem, 4vw, 2.55rem); line-height: 1.35; letter-spacing: -.025em; overflow-wrap: anywhere; }
 .post-meta { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px 17px; color: var(--ink-faint); font-family: var(--mono); font-size: 10px; overflow-wrap: anywhere; }
 .post-mood { transform: rotate(2deg); }
-.post-mood img { width: 104px; height: 104px; margin-left: auto; object-fit: cover; border: 7px solid var(--surface); box-shadow: 4px 5px 0 var(--card-shadow-hover); }
+.post-mood img { width: 104px; height: 104px; margin-left: auto; object-fit: contain; background: var(--surface-soft); border: 7px solid var(--surface); box-shadow: 4px 5px 0 var(--card-shadow-hover); }
 .post-mood figcaption { margin-top: 7px; color: var(--cocoa); font-family: var(--hand); text-align: right; }
 
 .post-body { color: var(--body-copy); font-size: 16px; line-height: 1.9; overflow-wrap: break-word; }
