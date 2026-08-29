@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C33 | 가상 실습 보고서 — ELF·동적 링커·PLT/GOT, 정적 파일이 살아있는 프로세스가 되기까지"
 date: 2026-08-24 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

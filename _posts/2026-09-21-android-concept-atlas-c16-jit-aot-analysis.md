@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C16 | 가상 실습 보고서 — JIT/AOT와 분석 결과 차이, 정적으로 보이는 것 ≠ 실제 실행"
 date: 2026-09-21 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

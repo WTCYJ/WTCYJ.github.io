@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C20 | 가상 실습 보고서 — AIDL·HIDL·HAL, 프레임워크와 하드웨어의 계약"
 date: 2026-09-07 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

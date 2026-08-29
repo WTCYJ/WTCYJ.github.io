@@ -2,7 +2,7 @@
 layout: post
 title: "Android 앱 공격 표면 분석 — HexTree Android Track 정리"
 date: 2026-07-26
-category: CTF/Wargame
+category: Android
 author: yejunkim2000
 tags: [HexTree, Android, 모바일보안, AndroidSecurity, Intent, IntentRedirect, PendingIntent, BroadcastReceiver, AIDL, Binder, ContentProvider, FileProvider, PathTraversal, WebView, CustomTabs, Frida, jadx, apktool, 리버싱, MITM, 버그바운티]
 excerpt: "Activity·Service·BroadcastReceiver·ContentProvider·WebView가 각각 어떤 조건에서 외부 앱에 노출되고, 그 노출이 어떻게 권한 상승과 데이터 유출로 이어지는지 직접 작성한 공격 앱으로 재현했습니다. HexTree Android Track의 코스 순서에 따라 Intent Redirect, PendingIntent 위임, provider 주입, WebView·CustomTabs 문제를 정리한 분석 기록입니다."

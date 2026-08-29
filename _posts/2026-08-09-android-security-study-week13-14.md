@@ -2,7 +2,7 @@
 layout: post
 title: "Android 앱 보안 분석 13~14주차 - JNI·ELF 심볼과 난독화의 실제 효과"
 date: 2026-08-09 13:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 네이티브, JNI, ELF, 심볼테이블, dynsym, NDK, 난독화, R8, ProGuard, jadx, 리버싱, 정적분석, 학습기록]
 excerpt: "readelf도 NDK도 없는 환경에서 파이썬으로 ELF 파서를 만들어 .so의 동적 심볼을 읽었습니다. stripped인데도 JNI 심볼이 남는 이유, 그리고 같은 소스를 R8로 빌드해 리포트를 비교한 결과를 정리했습니다. 대조군이 오염된 비교를 할 뻔한 일과, 제 분석 도구가 난독화된 앱에서 눈이 멀었던 일도 함께 적었습니다."

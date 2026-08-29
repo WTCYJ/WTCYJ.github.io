@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C21 | 가상 실습 보고서 — 4대 컴포넌트↔Binder 연결, exported가 만드는 공격면"
 date: 2026-09-23 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

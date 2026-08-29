@@ -2,7 +2,7 @@
 layout: post
 title: "Android 앱 보안 분석 9~10주차 - 취약점 10건 수정과 회귀 검증"
 date: 2026-08-09 11:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 취약점수정, 회귀테스트, AndroidKeystore, TLS, NetworkSecurityConfig, exported, ScopedStorage, allowBackup, WebView, 서버측인가, 경로이탈, adb, 학습기록]
 excerpt: "앞선 구간에서 재현해둔 약점 10건을 실제로 고치고, 7~8주차에 만든 검증 스크립트를 그대로 다시 돌려 전부 재현 불가가 되는지 확인했습니다. 수정이 시험 도구를 망가뜨린 사례, `am start`의 출력을 잘라 보고 오판한 사례, 그리고 판정 기준을 서술에서 판정으로 바꾼 과정을 정리했습니다."

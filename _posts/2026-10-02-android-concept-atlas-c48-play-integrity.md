@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C48 | 가상 실습 보고서 — Play Integrity·앱 무결성, 클라이언트 판정은 왜 무의미한가"
 date: 2026-10-02 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

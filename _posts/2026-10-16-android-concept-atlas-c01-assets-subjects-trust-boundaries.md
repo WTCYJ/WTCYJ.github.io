@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C01 | 가상 실습 보고서 — 자산·주체·신뢰 경계·공격 표면, 보안 분석의 좌표계"
 date: 2026-10-16 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

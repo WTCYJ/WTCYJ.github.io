@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas Tier 7 | 학습 로드맵 — 하드웨어 기반 보안"
 date: 2026-10-13 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: learning-roadmap

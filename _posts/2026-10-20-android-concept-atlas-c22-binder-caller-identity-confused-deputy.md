@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C22 | 가상 실습 보고서 — Binder 호출자 UID·identity clearing·confused deputy"
 date: 2026-10-20 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

@@ -191,7 +191,7 @@ foreach ($m in $modules) {
 layout: post
 title: "Android Security Concept Atlas $($m.id) | 가상 실습 보고서 — $($m.title)"
 date: $($m.date) 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

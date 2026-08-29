@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas Tier 0 | 학습 로드맵 — 보안·시스템 기초"
 date: 2026-10-06 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: learning-roadmap

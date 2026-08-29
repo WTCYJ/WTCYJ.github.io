@@ -2,7 +2,7 @@
 layout: post
 title: "Android 앱 보안 분석 20주차 - CVE-2022-20425 재현, 한도가 아니라 세는 단위였습니다"
 date: 2026-08-09 18:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, CVE, CVE-2022-20425, ZenModeHelper, DoS, 취약점재현, 프로브, AOSP, 에뮬레이터, 대조군, 학습기록]
 excerpt: "패치 전과 후 이미지에 같은 프로브를 돌렸더니 결과가 똑같았습니다. 둘 다 101번째에서 막혔습니다. 실패처럼 보였지만 18주차에 이 경우를 대비해 판별용 측정을 하나 설계해 뒀고, 그걸 돌리자 갈렸습니다. 패치가 바꾼 것은 한도의 유무가 아니라 개수를 세는 단위였습니다."

@@ -7,6 +7,12 @@
   icon: "⌨"
   color: "blue"
 
+- name: "Android"
+  key: "Android"
+  slug: "android"
+  icon: "◉"
+  color: "green"
+
 - name: "CTF / Wargame"
   key: "CTF/Wargame"
   slug: "ctf"

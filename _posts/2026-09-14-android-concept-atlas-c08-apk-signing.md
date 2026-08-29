@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C08 | 가상 실습 보고서 — APK 서명 v1~v4·키 순환, 앱 정체성의 신뢰 뿌리"
 date: 2026-09-14 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

@@ -2,7 +2,7 @@
 layout: post
 title: "Android Security Concept Atlas C14 | 가상 실습 보고서 — ClassLoader·리플렉션·동적 코드 로딩, 정적 분석이 무너지는 곳"
 date: 2026-09-20 21:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 series: Android Security Concept Atlas
 document_type: virtual-lab-report

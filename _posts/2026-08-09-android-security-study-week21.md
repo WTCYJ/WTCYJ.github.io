@@ -2,7 +2,7 @@
 layout: post
 title: "Android 앱 보안 분석 21주차 - 관측을 코드로 확정하기, 1541행 중 17줄"
 date: 2026-08-09 19:00:00 +0900
-category: 블로그/기술문서
+category: Android
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, CVE-2022-20425, ZenModeHelper, 디컴파일, jadx, services.jar, 패치분석, 재현성, 대조군, 학습기록]
 excerpt: "20주차에 두 이미지의 동작 차이를 봤습니다. 그런데 두 이미지는 파일 7개가 다릅니다. 그 차이가 정말 이 CVE 패치 때문인지 확정하려면 동작이 아니라 코드를 봐야 했습니다. 두 이미지에서 services.jar를 뽑아 디컴파일했더니, 문제의 클래스 1541행 중 다른 줄이 17줄이었고 전부 이 패치였습니다."
