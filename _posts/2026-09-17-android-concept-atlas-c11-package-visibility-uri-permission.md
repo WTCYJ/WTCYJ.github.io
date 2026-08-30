@@ -137,27 +137,28 @@ C10에서 권한은 UID에 부여된다 했습니다. 그런데 앱이 서로를
 5. 표준 FileProvider는 `getCanonicalPath()` 정규화로 막습니다. 위험은 **과도한 `<paths>`·커스텀 `openFile()`**.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 패키지 가시성이 왜 "예외가 아니라 조용한 필터링"인지, targetSdk 게이트와 함께 서술하고, 감사자가 `<queries>`를 왜 공격면 지도로 읽는지 설명하세요.
-2. URI 권한이 "전체 프로바이더 권한"이 아니라 "한 URI 임시 위임"임을, 프로바이더 opt-in·임시/영속 수명과 함께 서술하세요.
-3. confused-deputy(자기 파일 대리 읽기) 패턴이 어떻게 성립하는지, C47(WebView/딥링크)·C09(UID)와 엮어 서술하세요.
+이 모듈의 두 통로(가시성·URI 권한)는 모두 **UID 경계를 건너는 통제**(질문 1·8)이고, 그 경계 자체가 이 세션의 AVD에서 실제로 만들어지는지를 먼저 확인했다. `codex-atlas-api33`(Android 13/API 33, x86_64)에서 증거 앱을 직접 빌드·서명·설치했고, 그 결과 Package Manager가 앱을 **별도 UID로 등록**했다.
 
-## 소스·정적 검증 경로
+```console
+$ apksigner verify --print-certs app.apk
+$ adb install -r app.apk
+```
 
-- 임의 앱의 매니페스트에서 `<queries>`와 `<provider android:exported/grantUriPermissions>`를 확인하고, `dumpsys package <pkg>`의 `queries`와 대조하세요.
-- 파일 공유 앱 하나가 `file://` 대신 `content://`(FileProvider)를 쓰는지, `<paths>` 설정이 지나치게 넓지 않은지 점검하세요.
+**1) URI 권한·가시성이 겨누는 "UID 경계"가 실재한다.** 검증 블록의 관측 결과대로 Package Manager가 이 앱을 자신의 UID로 등록했다 — 질문 2에서 "그랜트/시행은 Binder에서 UID별"이라 한 그 UID가 프로세스 등록 수준에서 확인된 것이다. URI 권한이 "전체 권한 없이 한 URI만 임시로" 넘긴다는 주장(질문 3)도, 그 넘김이 바로 이 UID 경계를 넘기 때문에 의미가 있다.
 
-## 추가 심화 재현 절차
+**2) 필터링·그랜트의 대상은 "설치된 서명 패키지"다.** 검증 블록의 명령대로 `apksigner verify`로 v2/v3 서명을 검증한 뒤 `adb install -r`로 설치했다 — 가시성 필터링은 설치된 패키지 목록에 작동하고(질문 2), URI 그랜트는 대상 패키지에 발급된다(질문 3). 즉 이 build→sign→install 파이프라인이 두 통로가 다루는 "패키지"라는 단위를 이 AVD에서 실제로 성립시켰다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+## 가상환경 검증 한계
 
-1. **가시성 실측**: targetSdk 다른 두 앱에서 `getInstalledPackages()` 결과 차이(또는 `dumpsys`)를.
-2. **URI 권한 실측**: 공유 흐름의 `content://` URI와 그랜트를 `dumpsys package`로.
-3. **취약 서술**: exported 프로바이더/confused-deputy를 개념으로(악성 페이로드 없이 원리만).
-4. **연결**: 내 WebView/딥링크 작업(C47)에서 URI 취급 버그를 이 틀로 재서술.
+정직하게, 이 세션의 실측 캡처는 위 UID 등록·서명·설치까지다. 나머지는 근거(개발자 문서·질문 7의 관측 경로)는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+- **`dumpsys package <pkg>`의 `queries`/`uri-grants`와 `adb shell content query` 출력은 이 세션에서 새로 캡처하지 않았다.** targetSdk 30+와 ≤29 앱의 가시성 목록 차이, URI 그랜트의 임시→회수 생애주기는 문서화된 동작으로 서술했을 뿐 이 문서에 원시 출력으로 남기지는 않았다.
+- **confused-deputy·exported 프로바이더 유출은 개념으로만 다뤘다.** 악성 페이로드 없이 원리만 서술했고(질문 5), 피해자 프로바이더를 실제로 대리 호출하는 재현은 하지 않았다.
+- **QUERY_ALL_PACKAGES의 Play 정책 리젝과 AAB의 Play App Signing 변환은 로컬 AVD로 재현하지 않았다.** 검증 블록의 한계 그대로, 서버·정책 측 동작이라 Google APIs 에뮬레이터만으로는 관측되지 않는다.
+
+관련 근거: [Package visibility filtering](https://developer.android.com/training/package-visibility) · [Sharing files (FileProvider)](https://developer.android.com/training/secure-file-sharing) · [androidx FileProvider](https://developer.android.com/reference/androidx/core/content/FileProvider) · [Storage Access Framework](https://developer.android.com/guide/topics/providers/document-provider)
 
 ## 마치며
 

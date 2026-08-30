@@ -144,28 +144,37 @@ C09의 UID에 **권능**을 붙이는 층입니다. C08(signature 권한은 같�
 5. **A11/R**입니다. Q는 지속형 "사용 중일 때만"을 추가했습니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 네 보호수준(normal/dangerous/signature/internal)이 각각 어떻게 부여되는지 서술하고, signature가 왜 C08 서명과 직결되는지 설명하세요.
-2. AppOps의 네(다섯) 모드를 설명하고, 특히 `MODE_IGNORED`(조용한 빈 데이터)와 `MODE_ERRORED`(예외)의 차이가 리버싱에서 왜 중요한지 서술하세요.
-3. `checkPermission`(명시 uid) vs `checkCallingPermission`(Binder 호출자)의 차이가 어떻게 권한 우회 취약점이 되는지, C09·C17과 엮어 서술하세요.
+전용 `codex-atlas-api33` AVD(Android 13/API 33, x86_64)에서 증거 앱을 직접 빌드·서명·설치하며, permission 층 전체가 앉는 두 토대를 실제 명령으로 확인했다.
 
-## 소스·정적 검증 경로
+**1) 권한이 부여되는 "UID/appId"의 실체를 설치 시점에 확인했다.** `javac`→`d8`→`aapt`→`zipalign`으로 증거 앱 APK를 빌드해 설치하자, Package Manager가 이 앱을 **별도 UID로 등록**했다.
 
-- 임의 앱에 대해 `dumpsys package <pkg>`로 요청/부여 권한과 install/runtime 구분을 확인하세요.
-- `cmd appops get <pkg>`로 op 모드를 보고, `pm revoke`로 하나 취소한 뒤 대응 op가 어떻게 바뀌는지 관찰하세요.
-- `pm list permissions -g -d`로 dangerous 그룹을 나열하고, SYSTEM_ALERT_WINDOW가 그 목록에 없음(special access)을 확인하세요.
+```console
+$ adb install -r <evidence-app>.apk
+```
 
-## 추가 심화 재현 절차
+이 UID가 곧 질문 1·4의 "누구", 즉 `PermissionManagerService`가 grant 상태를 매다는 키다 — 권한을 부여할 대상 자체를 설치 파이프라인이 먼저 만들어낸다. 화면의 설치된 앱 목록(위 검증 스크린샷)과 호스트 `adb shell` 결과가 이 등록을 교차 확인했고, 원시 출력은 호스트 검증 로그·API 33 기준 로그에 보존돼 있다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) signature 보호수준의 판정 근거인 암호적 서명 동일성을 직접 검증했다.** signature 권한은 "선언 앱과 같은 서명 인증서"일 때만 부여된다(질문 2·3, C08). 그 부여 판정이 기대는 것과 동일한 서명 검증을 `apksigner verify`로 돌려 v2/v3 서명 스킴 통과를 확증한 뒤 설치했다.
 
-1. **권한 실측**: `dumpsys package`로 한 앱의 protectionLevel별 권한을.
-2. **AppOps 실측**: `cmd appops get`으로 모드를, `pm revoke` 전후 대조를.
-3. **시행 서술**: `*Calling*` vs 명시-uid 차이를, 권한 우회 패턴으로 서술(C17).
-4. **연결**: signature 권한을 공유하는 두 앱의 서명자 해시(C08)를 대조.
+```console
+$ apksigner verify <evidence-app>.apk
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+서명이 확인되어야 "같은 키" 판정이 성립하므로, 이 검증 통과는 signature 권한 모델의 암호적 전제(C08)가 이 AVD의 실제 APK 위에서 성립함을 뜻한다.
+
+**3) 나머지 시행 규칙은 질문 7이 가리키는 AOSP 소스에서 확정했다.** 보호수준 네 가지의 부여 방식, AppOps 다섯 모드 상수(`MODE_ALLOWED`~`MODE_FOREGROUND`), `checkPermission`(명시 uid) vs `checkCallingPermission`(Binder 호출자)의 분기는 `PermissionManagerService`·`AppOpsService`·`AppOpsManager.java`(모드 상수 정의)가 규정한다. 권한/AppOps는 아키텍처 무관 로직이라 이 x86_64 AVD와 실기의 동작이 같다(질문 7).
+
+## 가상환경 검증 한계
+
+이 세션이 새 출력으로 캡처한 증적은 위 빌드·서명·설치 파이프라인과 UID 등록까지다. 아래는 근거는 확정했으나 이 AVD 세션에서 실행 출력으로 남기지는 않았다.
+
+- **per-op AppOps 모드와 `pm revoke` 전후 대조는 이번 검증 로그에 기록되지 않았다.** `cmd appops get`·`dumpsys package`로 실측 가능한 아키텍처 무관 항목이지만, 이 세션의 증적에는 빌드·설치 파이프라인만 담겼다.
+- **`checkPermission` vs `*Calling*` 권한 우회는 소스 수준 사실이며, 살아있는 Binder 호출 스택 트레이스나 실제 우회 익스플로잇으로 재현하지 않았다.** 시행 분기의 근거는 AOSP 소스로만 확정했다.
+- **Play App Signing과 AAB의 Play 서버측 서명 키 변환은 로컬 Google APIs AVD만으로 재현되지 않는다.** 이 글이 검증한 서명은 로컬 v2/v3 스킴까지다(검증 블록의 검증 한계와 동일).
+
+관련 근거: [Android 권한 개요](https://developer.android.com/guide/topics/permissions/overview) · [<permission> protectionLevel](https://developer.android.com/guide/topics/manifest/permission-element) · [AppOpsManager](https://developer.android.com/reference/android/app/AppOpsManager) · [AOSP AppOpsManager.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/app/AppOpsManager.java)
 
 ## 마치며
 

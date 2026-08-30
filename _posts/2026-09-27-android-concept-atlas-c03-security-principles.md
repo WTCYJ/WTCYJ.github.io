@@ -141,28 +141,37 @@ excerpt: "이 Atlas의 거의 모든 모듈은 사실 몇 개의 오래된 설�
 5. Binder는 **주** 채널이지 유일한 문이 아닙니다(소켓·공유메모리·파일·직접 시스템콜, 각각 DAC/SELinux/seccomp가 매개).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 최소권한과 fail-safe defaults가 왜 다른 축인지 정의로 구분하고, 각각을 Android 메커니즘으로 예시하세요.
-2. reference monitor의 세 속성을 서술하고, 왜 "완전중재+economy 두 원칙의 합성"이라 하면 부정확한지(변조 불가) 설명하세요.
-3. 완전중재가 막는 것(stale 인가)과 막지 못하는 것(고전 TOCTOU 레이스)을 구분해, 후자에 왜 원자성이 필요한지 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈의 원칙 주장을 앱 프로세스 자기 관측으로 확인했다. 검증 블록에 기록한 명령이 그 근거다.
 
-## 소스·정적 검증 경로
+```console
+$ id
+uid=10174 ...                    # 앱마다 다른 격리 UID
+$ cat /proc/self/attr/current
+untrusted_app ...                # SELinux 도메인
+$ cat /proc/self/status          # 발췌
+CapEff=0                         # 상속 capability 전부 비움
+Seccomp=2                        # seccomp-bpf 필터 강제(SECCOMP_MODE_FILTER)
+$ uname -a
+Linux ... 5.15 ...
+```
 
-- 이 Atlas의 다섯 모듈을 골라, 각각이 어느 원칙(최소권한/완전중재/fail-safe/심층방어/…)의 사례인지 매핑하세요.
-- Android에서 fail-safe defaults의 증거 셋(SELinux deny-by-default, non-exported 기본, 미요청 권한)을 각각 실측 명령으로 확인하세요.
-- 과거 원칙 위반(예: shared-UID, 모놀리식 벤더 특권)과 그 개선(C09/C25/C31)을 대응시키세요.
+**1) 최소권한이 프로세스 수준에서 실재한다.** 앱 UID는 `10174`, `CapEff=0`이다. 이 프로세스는 자기 앱 전용 UID 하나만 갖고 상속 capability는 전부 비어 있다 — 질문 4의 "앱마다 UID(C09) + capability 0(C24)"가 권한의 **크기** 축에서 그대로 관측된다. 권한이 0에서 시작한다는 이 값이, 최소권한과 fail-safe defaults가 다른 축이라는 질문 3의 구분(크기 vs 기본/오류 시 방향)을 뒷받침한다.
 
-## 추가 심화 재현 절차
+**2) 심층방어의 독립 층들이 한 프로세스에 동시에 얹혀 있다.** 같은 프로세스에서 DAC(UID `10174`) · MAC(`untrusted_app` SELinux 도메인) · seccomp(`Seccomp=2`) · capability 비움(`CapEff=0`)이 함께 관측된다 — 질문 4의 "앱 샌드박스 = DAC+MAC+seccomp+caps 비움"이 네 값으로 동시에 확인된다. 한 층이 뚫려도 나머지 세 층이 남는다는 것이 심층방어의 요점이고, 이는 질문 5의 "단일 층 실패가 전면 장악"의 정반대 상태다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**3) SELinux가 이 프로세스를 정책 대상으로 잡고 있다.** `/proc/self/attr/current`가 빈 값이 아니라 `untrusted_app` 도메인을 돌려준다는 것은, 이 앱 프로세스가 커널 LSM의 매개 대상으로 등록돼 있다는 뜻이다 — reference monitor "항상 호출됨(=완전중재)" 속성의 전제(질문 2)가 도메인 배정 수준에서 확인된다. 다만 "매 접근을 정책과 대조"하는 런타임 매개 자체와 "변조 불가" 속성은 아래 한계로 넘긴다.
 
-1. **원칙 지도**: 이 Atlas 모듈들을 원칙별로 분류한 표(글로).
-2. **fail-safe 실측**: SELinux deny-by-default·non-exported·미요청 권한을 명령으로.
-3. **위반→개선 서술**: shared-UID 폐기·isolatedProcess를 원칙으로 재서술.
-4. **연결**: reference monitor를 SELinux+system_server로 어떻게 근사하는지.
+## 가상환경 검증 한계
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 이 문서가 새로 캡처한 실측은 위 (1)~(3)까지다. 나머지는 근거를 소스·문서로 확정했을 뿐 이 AVD 세션에서 새로 관측하지는 않았다.
+
+- **완전중재의 런타임 매개와 reference monitor "변조 불가"는 값으로 관측하지 않았다.** 도메인 배정까지는 확인했으나, SELinux가 매 접근을 실제로 정책과 대조하는 경로와 정책·TCB의 변조 불가 속성(질문 2·3)은 AOSP sepolicy와 커널 LSM 소스로만 판정한다.
+- **ARM64 하드웨어 격리 계층은 x86_64 AVD라 미측정이다.** 검증 블록에 적었듯 ARM64 EL·PAC·BTI·MTE는 이 아키텍처에서 런타임 관측 대상이 아니며, 하드웨어 TEE/StrongBox도 에뮬레이터에서는 소프트웨어 폴백이라 실제 격리 경계를 재현하지 않는다.
+- **원칙 위반의 라이브 재현은 하지 않았다.** shared-UID 악용이나 과특권 데몬 같은 위반 사례(질문 5)는 개념·역사(질문 6)로만 서술했고, 이 세션에서 실제로 익스플로잇하거나 커널 완화를 우회한 관측은 없다.
+
+관련 근거: [Android 앱 샌드박스](https://source.android.com/docs/security/app-sandbox) · [Android SELinux](https://source.android.com/docs/security/features/selinux) · [capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html)
 
 ## 마치며
 

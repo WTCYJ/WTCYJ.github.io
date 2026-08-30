@@ -136,27 +136,34 @@ C05에서 EL0/EL1을 다뤘고, C09에서 UID 샌드박스를, C34에서 ioctl(=
 5. **하드웨어 MMU**가 프로세스별 페이지 테이블을 걸어 격리합니다. UID DAC(C09)는 그 위의 파일 접근 정책이지 매 메모리 접근 검사가 아닙니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. `fork()`(COW)·`execve()`(교체)·`clone()`(스레드=mm 공유)의 차이를, zygote가 왜 fork를 exec 없이 쓰는지와 함께 서술하세요.
-2. arm64에서 시스템 콜이 EL0→EL1을 넘는 경로(x8/x0-x5, SVC, sys_call_table, x0/-errno)를 서술하고, seccomp와 vDSO가 그 경로를 각각 어떻게 바꾸는지 설명하세요.
-3. 앱 간 격리가 "소프트웨어 검사"가 아니라 "프로세스별 페이지 테이블 + MMU"라는 하드웨어임을 서술하고, 이것이 C05·C09와 어떻게 이어지는지 쓰세요.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈의 밑변 주장들을 실행 중인 앱 프로세스의 명령으로 확인했다. 검증 블록에 기록한 명령은 아래 넷이다.
 
-## 소스·정적 검증 경로
+```console
+$ id
+$ cat /proc/self/attr/current
+$ cat /proc/self/status
+$ uname -a
+```
 
-- 임의 앱의 `/proc/<pid>/maps`를 떠서 text/lib/heap/stack/anon 영역과 권한(r-x/rw-)을 분류하고, `smaps`로 zygote와 COW-공유된 클린 페이지를 식별하세요.
-- `strace`로 앱이 아닌 셸 바이너리 하나의 시스템 콜을 떠서 `SVC` 번호(x8)와 인자를 관찰하고, seccomp에 막히는 호출이 있는지 확인하세요.
+**1) 앱은 UID로 식별되는 평범한 Linux 프로세스다.** `id`와 `/proc/self/status`가 앱 UID **10174**를 냈다. 커널이 앱을 특별한 객체로 두는 게 아니라 일반 프로세스에 UID를 붙일 뿐이라는 질문 1·질문 8의 밑변 주장이 그대로 확인된다 — 이 UID 위에 다음 편 C09의 샌드박스 정책이 얹힌다.
 
-## 추가 심화 재현 절차
+**2) seccomp-bpf가 앱 코드가 돌기 전에 이미 걸려 있다.** `/proc/self/status`의 `Seccomp=2`(= `SECCOMP_MODE_FILTER`)가 관측됐다. 질문 4의 "seccomp-bpf가 진짜 시스템 콜 진입 경로에서 필터한다", 질문 6의 "zygote 특화(SpecializeCommon→SetUpSeccompFilter) 시 자식에 설치 — 앱 코드 실행 전"이 실행 시점의 프로세스 상태로 확증된다. 필터는 앱 코드가 첫 줄을 돌기 전에 이미 상속돼 있었다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**3) EL0 유저 프로세스는 특권이 없다.** `CapEff=0`(유효 capability 없음)과 `/proc/self/attr/current`의 `untrusted_app` SELinux 도메인이 함께 관측됐다. 질문 2의 "전부 EL0(유저스페이스)", 질문 1의 "그 위에 UID·SELinux가 정책으로 얹힌다"와 일치한다 — 프로세스 모델이 밑변이고 capability·SELinux는 그 위의 정책 계층이다.
 
-1. **주소공간 실측**: `/proc/<pid>/maps`·`smaps`로 VA 영역과 COW 공유를 캡처.
-2. **시스템 콜 실측**: `strace`/`simpleperf`로 SVC 경로를.
-3. **격리 서술**: 두 앱의 서로 다른 UID·서로 다른 주소공간을 근거로, MMU 격리와 UID DAC(C09)를 구분해 서술.
-4. **연결**: SIGSEGV 하나를 유발해(예: 잘못된 포인터) 매핑 안 된 VA 접근이 신호로 이어지는 걸 확인.
+**4) 커널은 평범한 Linux(5.15)다.** `uname -a`가 Linux 5.15를 냈다. 프로세스·주소공간·시스템 콜이 아키텍처 무관한 Linux 개념이라는 질문 7의 관찰 근거이며, `/proc`·`status` 같은 실측 창구가 에뮬레이터에서도 그대로 열린다는 것을 보여준다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 위 실측은 프로세스 정체성·seccomp·capability·커널 판까지다. 이 x86_64 AVD 세션에서 새로 캡처하지 못한 것은 다음이다.
+
+- **SVC 시스템 콜 경로는 이 AVD에서 관측할 수 없었다.** x86_64 AVD는 `SVC #0`이 아니라 x86 `syscall` 명령을 쓰므로, `x8`=번호·`x0-x5`=인자·`el0_svc`→`sys_call_table[x8]`→`x0`/-errno의 arm64 경로는 런타임이 아니라 커널 소스(`arch/arm64/kernel/{entry.S,syscall.c}`)로만 판정했다.
+- **TTBR0/TTBR1 페이지 테이블 전환과 MMU의 VA→PA 격리, ARM64 EL·PAC·BTI·MTE는 하드웨어 동작이라 이 x86_64에서 런타임으로 캡처하지 못했다.** 검증 블록의 한계 기록대로 공개 소스·문서 경로로만 판정했다.
+- **`/proc/<pid>/maps`·`smaps`의 VMA·COW 귀속 분류, `strace`의 SVC 트레이스, 의도적 SIGSEGV 유발은 이 문서에서 새로 캡처하지 않았다.** 개념과 관측 창구는 질문 7에서 확정했으나, 이 세션의 실측은 위 네 명령까지다.
+
+관련 근거: [fork(2)](https://man7.org/linux/man-pages/man2/fork.2.html) · [execve(2)](https://man7.org/linux/man-pages/man2/execve.2.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html) · [Android Application Sandbox](https://source.android.com/docs/security/app-sandbox)
 
 ## 마치며
 

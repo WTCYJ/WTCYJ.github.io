@@ -140,28 +140,37 @@ excerpt: "15~16주차에서 저는 'Binder 경계는 두 겹'이라고 관측했
 5. **같은 드라이버 코드(binder.c)**의 별도 장치 인스턴스입니다. Treble이 컨텍스트를 셋으로 나눠 각자 컨텍스트 매니저·SELinux 도메인을 갖게 한 것입니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. `binder_node`(서버 소유)와 `handle`(클라이언트 측 프로세스별 정수)의 차이를, 드라이버가 어떻게 handle을 node로(그리고 다른 프로세스의 다른 handle로) 번역하는지로 설명하세요.
-2. 커널이 발신자 euid/pid를 도장 찍는 것이 왜 권한 검사(C22)의 위조 불가 근거인지, 그리고 그것이 왜 유저스페이스에서 스푸핑되지 않는지 서술하세요.
-3. Bad Binder(CVE-2019-2215)가 왜 EL0→EL1 커널 LPE인지(C05)와, binder 드라이버가 왜 큰 커널 공격 표면인지 서술하세요.
+가상 실습 환경(codex-atlas-api33, x86_64, Android 13/API 33)에서 이 모듈의 핵심 주장을 실제 명령으로 확인했다. 상단 검증 화면(`evidence-binder.png`)과 호스트 `adb shell` 교차 확인이 근거다.
 
-## 소스·정적 검증 경로
+**1) Binder는 하나의 통로가 아니라 세 도메인으로 갈라져 있다(질문 6).** `ls`가 세 개의 별도 문자 장치를 그대로 보여준다.
 
-- Android Emulator/Cuttlefish에서 `ls -l /dev/binder*`로 제공되는 binder device를 확인하고, 접근 권한이 허용되는 범위에서 `/proc/<pid>/fd` 또는 `dumpsys`로 프로세스별 binder 참여를 관찰하세요.
-- 가능하면 `/sys/kernel/debug/binder/transactions`나 `dumpsys` 일부로 활성 트랜잭션/노드를 관측하세요.
-- 커널 소스 `binder_transaction()`에서 `sender_euid`가 어디서 오는지 한 곳 인용하세요(위조 불가의 근거).
+```console
+$ ls -l /dev/{binder,hwbinder,vndbinder}
+```
 
-## 추가 심화 재현 절차
+세 노드가 모두 존재한다는 관측(검증 블록의 "binderfs의 세 Binder 노드")이 질문 6의 세 도메인 주장을 파일시스템 수준에서 확증한다. 같은 `binder.c` 코드의 별도 장치 인스턴스이고, binderfs가 정적 노드 대신 이 노드들을 프로비저닝하며, Treble의 system↔vendor 분리(C31)가 여기서 장치 단위로 강제된다 — 오개념 판별 5번("서로 다른 드라이버다")이 반증되는 지점이다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) handle 0의 컨텍스트 매니저가 서비스를 이름으로 중개한다(질문 3).** `service list`가 등록된 서비스 목록을 돌려준다.
 
-1. **도메인 실측**: `ls -l /dev/binder*`와 대표 프로세스의 fd로 세 도메인 참여를 캡처.
-2. **node/handle 서술**: 소스(`binder.c`)에서 node/ref 번역과 `sender_euid` 도장을 인용해 서술.
-3. **공격면 서술**: Bad Binder를 EL0→EL1(C05)로 귀속하고, refcount/death가 왜 반복 CVE인지.
-4. **경계 재해석**: 15~16주차의 "경계 두 겹" 관측을 세 binder 도메인으로 재서술.
+```console
+$ service list
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+255개 서비스 등록(검증 블록의 관측 결과)은, 나머지 프로세스가 handle 0(servicemanager, C19)에 트랜잭션해 이름으로 node를 얻는 구조의 실물이다. 서비스 하나하나가 서버 소유 node이고 클라이언트는 이름으로 그 참조를 요청한다는, node와 handle을 가르는 질문 3·질문 4의 골격이 서비스 디렉터리 수준에서 드러난다.
+
+**3) sender_euid 도장과 node↔ref 번역은 드라이버 소스에서 근거를 확정했다.** 위조 불가 신원(`sender_euid = task_euid`)과 node↔handle 재작성은 유저스페이스에서 관측되는 값이 아니라 커널 `drivers/android/binder.c`의 `binder_transaction()` 안에서 드라이버가 수행하는 동작이다. 발신자 euid가 유저스페이스 입력이 아니라 드라이버가 발신자 task에서 직접 읽어 트랜잭션에 박는 값이라는 점이 질문 3의 "커널이 도장 찍는다(위조 불가)"와 C22 권한 검사의 근거를 이룬다 — 오개념 판별 3번("악성 앱이 UID를 위조")은 이 소스 사실 앞에서 성립하지 않는다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 새 실측 캡처는 (1)·(2)까지다 — 세 도메인 장치의 존재와 서비스 등록. 나머지는 근거는 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지 않았다.
+
+- **드라이버 내부의 라이브 트랜잭션(sender_euid 도장, node↔ref 번역, 단일 복사)은 이 세션에서 실행 중 상태로 관측하지 않았다.** `/sys/kernel/debug/binder`의 트랜잭션 통계는 범용 AVD에서 접근이 제한되어, 그 동작은 커널 소스로만 근거화했다.
+- **벤더 전용 HAL(hwbinder/vndbinder) 트랜잭션과 취약한 서비스 호출은 범용 AVD에 존재하지 않는다(검증 블록의 검증 한계).** 세 장치의 노드는 보이지만, vndbinder를 실제로 오가는 벤더↔벤더 AIDL 트래픽은 이 이미지에 담겨 있지 않다.
+- **Bad Binder(CVE-2019-2215) 같은 커널 UAF 익스플로잇은 재현하지 않았다.** EL0→EL1 LPE 귀속(C05)은 공개 분석과 드라이버 구조에 근거한 서술이며, 이 AVD에서 커널 익스플로잇을 실행한 결과가 아니다. 이 x86_64 에뮬레이터에는 ARM64 EL/PAC/BTI/MTE 같은 하드웨어 완화 계층이 없어 그 부분은 애초에 미측정이다.
+
+관련 근거: [frameworks/native/libs/binder (AOSP)](https://cs.android.com/android/platform/superproject/+/master:frameworks/native/libs/binder/) · [Android AIDL 가이드](https://developer.android.com/guide/components/aidl) · [HIDL·벤더 인터페이스(Treble)](https://source.android.com/docs/core/architecture/hidl) · [CVE-2019-2215 (NVD)](https://nvd.nist.gov/vuln/detail/CVE-2019-2215)
 
 ## 마치며
 

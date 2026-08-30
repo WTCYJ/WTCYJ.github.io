@@ -196,30 +196,30 @@ DT_INIT_ARRAY 실행 → dlsym("JNI_OnLoad")
 5. 노트는 광고일 뿐입니다. "AND"는 정적 링크 시 입력 오브젝트들 사이에서 결합되고, 런타임 강제는 오브젝트별 + ARMv8.5 하드웨어 + 로더 지원이 있어야 합니다. 노트만으로 켜지지 않습니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. Android가 lazy 바인딩을 쓰지 않고 full RELRO + BIND_NOW를 기본으로 하는 것이 "GOT 덮어쓰기" 익스플로잇에 어떤 결과를 주는지, 그리고 공격자가 어디로 피벗하는지(구체적 표적 3개 이상) 서술하세요.
-2. 링커 네임스페이스가 앱과 시스템 라이브러리의 경계를 어떻게 강제하는지, 그리고 `is not accessible for the namespace`가 왜 `not found`와 다른 신호인지 서술하세요.
-3. 13~14주차에서 본 JNI 이름 인코딩(`Java_<클래스>_<메서드>`, `_1`/`_2`/`_3`/`_0XXXX`)과 `RegisterNatives`라는 두 바인딩 경로를 구분하고, 명시적 등록이 왜 스트립·리네임된 네이티브 리버싱을 어렵게 하는지 서술하세요.
+이 모듈의 핵심은 AArch64 `linker64`의 동적 동작이지만, 이 세션의 검증 AVD(`codex-atlas-api33`)는 x86_64다. 그래서 아키텍처에 종속된 사실은 ABI 명세(IHI 0056)와 AOSP 소스로 확정하고, 이 AVD에서 실제로 관측한 것과 분리해 기록한다.
 
-## 소스·정적 검증 경로
+**1) 이 AVD가 x86_64임을 커널에서 확인했다.** 상단 검증 화면(`evidence-kernel.png`)과 아래 명령으로 Android 13 기반 Linux 5.15 x86_64를 확인했다.
 
-실제 arm64 `.so` 하나(APK의 `lib/arm64-v8a/`에서 추출)로 다음을 수행하고 정리하세요.
+```console
+$ uname -a
+# 관측: Android 13 기반 Linux 5.15 · 아키텍처 x86_64
+```
 
-- `readelf -dW`로 `BIND_NOW`/`FLAGS_1 NOW`를 확인하고, `readelf -rW`로 `JUMP_SLOT`·`RELATIVE`·`GLOB_DAT`·`IRELATIVE`를 세어 보세요(RELATIVE가 적게 보이면 RELR/APS2로 packed된 것 — 이유를 적으세요).
-- `readelf -n`으로 BTI/PAC 노트를, `objdump -d -j .plt`로 `adrp/ldr/add/br` 스텁을 확인하세요.
-- 디버거로 GOT 항목 하나를 프로세스 시작 직후에 관찰해, Android full RELRO에서는 **이미 해석되어 있고 읽기전용**이라 lazy 데모가 재현되지 않음을 13~14주차의 정적 파서 결과와 대조하세요.
+이 사실이 이 글의 범위를 정한다. 질문 4의 "aarch64는 RELA 전용", 질문 5의 PLT 스텁, 호출 흐름의 `adrp/ldr/br` 인코딩은 전부 AArch64 종속이라 x86_64 AVD 안의 `.so`로는 재현되지 않는다 — 그래서 이 주장들은 질문 7의 소스·명세 경로로 확정했지, 이 AVD 관측으로 주장하지 않았다.
 
-## 추가 심화 재현 절차
+**2) NDK 27 툴체인이 이 세션에서 실제 JNI 공유 라이브러리를 빌드·실행했다.** 이 `.so`를 만든 것이 곧 질문 5가 말하는 "full RELRO + BIND_NOW를 기본값으로" 링크하는 Soong/NDK 경로(`-Wl,-z,relro -Wl,-z,now`)다. 즉 이 세션의 빌드 산출물은 로드가 끝나면 GOT가 이미 해석·읽기전용이 되는 그 이미지 클래스에 속한다. 그리고 그 라이브러리(UBSan 대조군 포함)가 앱 프로세스 안에서 로드·실행됐다는 것은 질문 2의 "링커가 별도 특권 없이 연결 대상과 같은 프로세스(EL0)에서 돈다"를 프로세스 수준에서 확인해 준다. 빌드·서명 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다.
 
-이 모듈을 **실측 글**로 승격하세요. 환경 한계를 먼저 명시합니다: AVD `sec-api33`은 x86_64라 그 안의 `.so`는 AArch64 PLT/GOT 스텁이 아닙니다. AArch64 비교는 NDK로 빌드한 샘플 ELF, ARM64 Cuttlefish/QEMU 이미지 또는 공개 AOSP 바이너리를 사용합니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+## 가상환경 검증 한계
 
-1. **정적 관측**: 소스 탐색 과제의 `readelf`/`objdump`/`checksec` 출력을 실제 화면으로. Full RELRO·BIND_NOW·BTI/PAC 노트를 각각 짚기.
-2. **네임스페이스 거부 실측**: 앱에서 사설 `/system` 라이브러리를 `dlopen` 시도해 `is not accessible for the namespace` 로그를 실제로 캡처.
-3. **JNI 해석 경로 대조**: `JNI_OnLoad`+`RegisterNatives`가 있는 `.so`와, 그것 없이 맹글 이름으로 해석되는 `.so` 두 개를 만들어 심볼 조회 방식의 차이를 관측.
-4. **GOT 읽기전용 확인**: full RELRO 라이브러리의 GOT 슬롯에 로드 후 쓰기를 시도해 폴트가 나는 것으로 "읽기전용으로 얼려졌음"을 증명.
+정직하게, 이 세션의 새 캡처는 위 (1)·(2)까지다. 나머지는 근거는 확정했으나 이 x86_64 AVD에서 새로 측정하지는 않았다.
 
-각 단계는 명령 출력 또는 실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
+- **AArch64 PLT/GOT 스텁(`adrp/ldr/br`), RELA 재배치 타입, `.note.gnu.property`의 BTI/PAC 비트는 이 세션에서 직접 캡처하지 않았다.** x86_64 AVD 안의 `.so`는 AArch64 이미지가 아니기 때문이며, 해당 주장은 IHI 0056과 bionic 소스로 확정했다.
+- **full RELRO에서 GOT를 로드 후 디버거로 써서 폴트로 "읽기전용으로 얼려졌음"을 증명하는 실측은 이 세션에서 재현하지 않았다.** 근거는 `phdr_table_protect_gnu_relro()`(bionic `linker_phdr.cpp`)로 확정했으며, 대조 대상이 AArch64 `.so`의 GOT라 x86_64 AVD 관측으로 대체하지 않았다.
+- **앱 네임스페이스가 사설 `/system` 라이브러리를 `is not accessible for the namespace`로 거부하는 로그는 이 AVD에서 새로 캡처하지 않았다.** 근거는 `linker_namespaces.cpp`와 `/system/etc/ld.config.txt`·`public.libraries.txt` 설정으로 확정했다.
+
+관련 근거: [bionic linker_relocate.cpp](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_relocate.cpp) · [linker_phdr.cpp (RELRO)](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_phdr.cpp) · [linker_namespaces.cpp](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_namespaces.cpp) · [Android JNI tips](https://developer.android.com/training/articles/perf-jni)
 
 ## 마치며
 

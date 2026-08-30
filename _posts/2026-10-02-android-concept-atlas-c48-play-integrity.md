@@ -140,28 +140,32 @@ C42에서 하드웨어 키 증명을 봤습니다. 이 편은 그 위에 선 앱
 5. SafetyNet Attestation은 **2025 초 완전 종료**. Play Integrity로 이전해야.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. Play Integrity가 왜 "하드 게이트가 아니라 서버에서 검증할 위험 신호"인지, 클라이언트 전용 검사가 왜 무의미한지 서술하세요.
-2. 판정 3축(app 인식·device SET·라이선스)의 의미를 각각 서술하고, PLAY_RECOGNIZED가 C08 서명과 어떻게 이어지는지 설명하세요.
-3. BASIC/DEVICE(소프트웨어)와 STRONG(하드웨어 C42)의 우회 난이도 차이를 서술하고, 무결성을 유일 통제로 쓰면 안 되는 이유를 쓰세요.
+이 모듈은 Google Play 백엔드와 기기 무결성 판정에 의존한다. 범용 `codex-atlas-api33` AVD(x86_64, Android 13)로는 프로덕션 verdict 자체를 만들 수 없으므로, **측정 가능한 것은 실측하고 규격에 속하는 것은 문서로 확정**하는 방식으로 핵심 주장을 확인했다.
 
-## 소스·정적 검증 경로
+**1) 서명+암호화 토큰은 앱이 아니라 서버에서만 복호된다 — 규격으로 확정.** Play Integrity가 돌려주는 판정 토큰은 JWS-in-JWE(서명 후 암호화)이고, 복호·검증은 개발자 서버(또는 Google 복호 엔드포인트)에서 이뤄진다. 앱은 토큰을 만들지도, 열지도 못하고 **그대로 전달**만 한다. 이것이 질문 3·4의 핵심 불변식 — 클라이언트 전용 검사가 무의미한 이유 — 을 측정이 아니라 API 설계 수준에서 확정한다. 앱 안에 판정 분기가 있으면 그 분기는 토큰 내용이 아니라 앱이 스스로 만든 값을 보는 것이므로 RE로 패치할 수 있다.
 
-- Play Integrity를 쓰는 앱을 디컴파일해 판정 처리 분기가 **클라이언트에서만** 이뤄지는지(패치 가능) 확인하세요(소유/허가 앱).
-- 서버 검증이 있는 흐름과 없는 흐름의 우회 가능성 차이를 서술하세요.
-- 기기별 판정(정품/루팅/가상)이 어떻게 나오는지 개념적으로 정리하세요.
+**2) 판정 토큰 전달 구간의 안전 채널은 이 환경에서 실측했다.** 판정 흐름의 마지막 구간(앱 → 그대로 전달 → 내 서버 → 복호/검증)은 반드시 안전한 전송 채널을 타야 한다. 호스트 검증에서 그 전송 계층이 이 AVD 환경에서 성립함을 실제로 확인했다.
 
-## 추가 심화 재현 절차
+```console
+$ curl -I --tlsv1.3 https://developer.android.com
+# 관측: TLS 1.3 핸드셰이크 성공, HTTP 응답 헤더 수신(200)
+```
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 응답·화면만** 붙입니다.
+검증 블록의 `관측 결과`(TLS 1.3 왕복 성립)와 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 남긴 실제 명령(`curl -I --tlsv1.3 https://developer.android.com`)이다. verdict 자체는 아니지만, "앱→서버" 릴레이가 기대는 전송 계층이 현대 규격으로 동작함을 확인한 것이다.
 
-1. **판정 실측**: 소유 앱에서 Play Integrity 판정 3축을(민감값 마스킹).
-2. **우회 서술**: 클라 전용 검사의 패치 우회를 개념으로(악용 없이 원리만).
-3. **층 서술**: BASIC vs STRONG의 하드웨어 차이(C42).
-4. **연결**: 서버 검증·nonce가 왜 필수인지.
+**3) deviceRecognitionVerdict는 단일 값이 아니라 SET, STRONG만 하드웨어 뿌리 — 규격으로 확정.** deviceRecognitionVerdict는 라벨 집합이고 **빈 SET = 전면 실패**다(질문 2·3의 SET 불변식). 그중 MEETS_STRONG_INTEGRITY만 하드웨어 키 증명(C42)에 뿌리를 둬 BASIC/DEVICE(소프트웨어 판정)와 우회 난이도가 근본적으로 다르다. 이 계층 구조는 규격 문서로 확인된다(질문 6에서 정리한 STRONG=하드웨어 키 증명·최신 보안패치 기반).
 
-각 단계는 응답·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서가 새로 캡처한 실측은 (2)의 전송 계층까지다. 나머지 핵심 주장은 규격·문서로 확정했으나 이 AVD 세션에서 프로덕션 값을 직접 만들지는 않았다.
+
+- **프로덕션 Play Integrity verdict(3축 실제 값)는 이 세션에서 생성·캡처하지 않았다.** 판정은 Google Play 백엔드와 기기 무결성 상태에 의존하고, 범용 AVD 단독으로는 실제 verdict를 재현할 수 없다(검증 블록의 검증 한계와 동일).
+- **MEETS_STRONG_INTEGRITY의 하드웨어 뿌리는 실측하지 못했다.** x86_64 에뮬레이터에는 실제 TEE/StrongBox가 없어 키 증명(C42)이 소프트웨어 폴백으로 처리되므로, 하드웨어 백드 서명 체인은 이 환경에서 확인 대상이 아니다.
+- **Magisk/Zygisk/PIF 류 실제 우회와 클라이언트 판정 분기의 라이브 패치·후킹은 재현하지 않았다.** 이 세션은 개념·규격 수준까지만 다뤘고, 실제 루팅 은닉이나 바이너리 패치는 수행하지 않았다.
+
+관련 근거: [Play Integrity API 개요](https://developer.android.com/google/play/integrity/overview) · [판정(verdict) 해석](https://developer.android.com/google/play/integrity/verdicts) · [AOSP 키 증명(STRONG의 하드웨어 뿌리, C42)](https://source.android.com/docs/security/features/keystore/attestation)
 
 ## 마치며
 

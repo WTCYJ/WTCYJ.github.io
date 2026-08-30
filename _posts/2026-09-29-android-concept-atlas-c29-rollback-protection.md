@@ -142,28 +142,33 @@ C28에서 AVB가 이미지의 진위를 증명한다 했습니다. 그런데 **�
 5. 재플래시로 되돌릴 수 있으면 무력. **RPMB/TEE**(replay-protected)라야.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 서명 검증(C28)과 롤백 방지가 왜 별개 층이며 둘 다 필요한지, "서명됐지만 낡은 이미지" 위협으로 서술하세요.
-2. 이미지의 롤백 인덱스(빌드 고정값)와 저장된 최소값(단조 비감소)의 차이, 그리고 forward-only 래칫이 A/B(C30)와 어떻게 조율되는지 서술하세요.
-3. AVB 롤백 인덱스(드물게)와 KeyMint `os_patchlevel` 바인딩(월단위)이 어떻게 역할을 나누는지, C42 원격 탐지와 함께 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 이 모듈이 검증할 수 있는 지점과 없는 지점을 실제로 갈라 확인했다. 롤백 방지의 저장·비교는 RPMB/TEE·부트로더에 있어 에뮬레이터가 직접 만질 수 없으므로, 측정으로 확정한 것과 소스·문서로 확정한 것을 나눠 적는다.
 
-## 소스·정적 검증 경로
+**1) 이 AVD는 업데이트 인프라(Treble/APEX)는 노출하되 롤백 방지의 실측 지점은 노출하지 않는다 — 질문 7의 주의가 실측으로 확인된다.** 검증 블록의 명령으로 Treble/APEX 활성화와 `/data`의 file-based encryption(`file`, `encrypted`)까지는 확인했으나, 같은 AVD가 AVB 상태·A/B 슬롯 속성은 내주지 않았다.
 
-- `avbtool info_image --image vbmeta.img`로 `Rollback Index`/`Rollback Index Location`을 확인하세요.
-- `getprop`으로 `ro.boot.vbmeta.*`·`verifiedbootstate`를 떠서 검증부팅 상태를 보세요.
-- 공개 key attestation test vector의 `osPatchLevel`/`bootPatchLevel`을 파싱해 downgrade 탐지에 쓰이는 방식을 서술하고, 로컬 환경의 보증과 혼동하지 마세요.
+```console
+$ getprop ro.treble.enabled
+$ getprop ro.apex.updatable
+$ mount
+```
 
-## 추가 심화 재현 절차
+관측 결과는 검증 블록 표(| 관측 결과 |)와 상단 [부팅 증거 화면](/assets/img/android-concept-atlas/verified-api33/evidence-boot.png)에 보존했다. 즉 "일반 x86_64 AVD에서는 hardware-backed rollback index storage를 검증할 수 없다"(질문 7 주의)가 추측이 아니라 이 세션의 실제 관측이다 — AVB의 `rollback_index`와 저장된 최소값을 읽을 인터페이스 자체가 이 이미지에 없다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 저장이 replay-protected여야 한다는 불변식은 소스로 확정된다(질문 3·5).** 저장소가 RPMB(Replay Protected Memory Block — 256비트 키·HMAC-SHA256·단조 쓰기 카운터, 키가 REE에 노출되지 않음) 또는 TEE 보안 저장소여야, 재플래시로 최소값을 되돌려 무력화하는 공격이 막힌다. 이 구조는 AOSP `external/avb`와 eMMC/UFS 규격에 명시돼 있고, 에뮬레이터가 그 저장소를 갖지 않는다는 점이 (1)의 관측과 정확히 맞물린다.
 
-1. **인덱스 실측**: `avbtool info_image`의 롤백 인덱스 필드를.
-2. **상태 실측**: `getprop`의 vbmeta/verifiedbootstate를.
-3. **층 서술**: 서명(진위) vs 롤백(최신성)을 구분해.
-4. **연결**: 월단위 방지가 왜 KeyMint patchlevel인지(C40), 원격 탐지가 왜 attestation인지(C42).
+**3) 월단위 다운그레이드 방지는 AVB 롤백 인덱스가 아니라 KeyMint `os_patchlevel` 바인딩이 담당한다(질문 3·6·8).** AVB `rollback_index`는 반드시 롤백 불가여야 할 수정에서만 드물게 오르고, 매달의 패치레벨 다운그레이드 차단은 KeyMint의 `os_patchlevel`/`boot_patchlevel` 바인딩이, 원격 노출은 key attestation의 patchlevel/부팅상태 보고(C42)가 나눠 맡는다. 이 역할 분담은 KeyMint HAL Tag 정의와 attestation 확장 필드 문서로 확인된다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서에서 새로 캡처한 실측은 (1)의 속성 관측까지다. (2)·(3)은 근거를 소스·문서로 확정했으나 이 AVD 세션에서 하드웨어 동작으로 재현하지는 않았다.
+
+- **AVB `rollback_index`와 저장된 최소값을 이 세션에서 읽지 못했다.** 이 Google APIs x86_64 AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않아, `avbtool info_image`가 대상으로 삼을 실기 vbmeta도, 부트로더의 비교·전진(forward-only 래칫)도 관측 범위 밖이었다.
+- **RPMB/TEE 롤백 저장의 replay-protection은 소프트웨어 폴백으로만 존재한다.** 에뮬레이터에는 실제 RPMB 파티션과 하드웨어 보안 저장소가 없어, 단조 쓰기 카운터의 물리적 보증은 측정하지 못했다. 하드웨어 롤백 퓨즈와 부트 ROM도 검증 범위 밖이다.
+- **다운그레이드 부팅 거부를 라이브로 재현하지 않았다.** 오래된 서명 이미지로 실제 플래시·다운그레이드해 부팅 거부를 유발하는 절차는 실물 기기·언락이 필요해 이 가상 실습에서 다루지 않았다.
+
+관련 근거: [AVB 2.0 README (AOSP external/avb)](https://cs.android.com/android/platform/superproject/+/master:external/avb/README.md) · [Verified Boot](https://source.android.com/docs/security/features/verifiedboot) · [Android Keystore/KeyMint](https://source.android.com/docs/security/features/keystore) · [Key Attestation](https://developer.android.com/privacy-and-security/security-key-attestation)
 
 ## 마치며
 

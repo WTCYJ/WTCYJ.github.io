@@ -144,28 +144,44 @@ DEX(C13)를 **로드하는 메커니즘**이자, **동적 코드 로딩이 정�
 5. 패커/DCL이면 `classes.dex`는 **stub**이고 진짜 코드는 런타임 로드 — 동적 관찰이 필요합니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 네 ClassLoader(Boot/Path/Dex/InMemory)가 `BaseDexClassLoader`+`DexPathList` 위에서 무엇이 같고 무엇이 다른지, parent-first 위임이 왜 안전 불변식인지 서술하세요.
-2. 동적 코드 로딩(패커)이 왜 정적 APK 분석을 무력화하는지, Toss의 복호-후-InMemory 로드를 예로 서술하고, 어떤 동적 관찰이 필요한지 설명하세요.
-3. `setAccessible`(언어 접근)과 A9+ hidden-API 강제(런타임)가 왜 별개 층인지, 리플렉션/JNI 모두에 적용됨과 함께 서술하세요.
+가상 실습 환경(codex-atlas-api33, x86_64, ART 13)에서 이 모듈의 핵심 주장을 실제 명령으로 확인했다.
 
-## 소스·정적 검증 경로
+**1) 부트 클래스패스는 모든 앱 프로세스에 매핑된다.** SystemUI(PID 742)의 `/proc/742/maps`에는 `BootClassLoader`가 여는 실제 jar들이 그대로 올라온다.
 
-- Frida로 `DexClassLoader`/`InMemoryDexClassLoader` 생성자를 후킹해, 어떤 앱이 런타임에 dex를 로드하는지 캡처하세요(양성 앱 대상).
-- `/proc/<pid>/maps`에서 익명 실행 dex 영역을 찾고, 거기서 dex를 덤프해 `baksmali`로 확인하세요.
-- `veridex`로 한 앱의 non-SDK(hidden API) 사용을 스캔하세요.
+```console
+$ adb shell 'cat /proc/742/maps | grep javalib | awk "{print \$6}" | sort -u'
+/apex/com.android.art/javalib/apache-xml.jar
+/apex/com.android.art/javalib/bouncycastle.jar
+/apex/com.android.art/javalib/core-libart.jar
+/apex/com.android.art/javalib/core-oj.jar
+/apex/com.android.art/javalib/okhttp.jar
+```
 
-## 추가 심화 재현 절차
+`core-oj`(java.* 표준 클래스)와 `core-libart`(ART 런타임 클래스)가 부트 클래스패스의 실체다. 앱의 `PathClassLoader`는 parent-first로 여기까지 위임하므로, 앱이 `java.lang.String`을 자기 dex에 재정의해도 부트가 먼저 답을 내 shadowing이 막힌다 — 질문 1의 안전 불변식이 프로세스 메모리 수준에서 확인된다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 앱 dex는 디스크 파일 + AOT 산출물(oat)로 실재한다.** 설치된 앱 하나(`com.example.visibilitylegacy`)의 코드 경로와 컴파일 산출물:
 
-1. **로더 실측**: Frida 후킹으로 로드되는 dex를 캡처(내 Toss 작업 재활용).
-2. **정적 vs 동적**: 정적 APK의 stub vs 덤프한 실제 dex를 대조.
-3. **hidden-API 서술**: `setAccessible` vs hidden-API 강제 차이를 veridex 출력으로.
-4. **연결**: 이 로드된 dex가 C13의 어느 실행 모드로 도는지(C16).
+```console
+$ adb shell pm path com.example.visibilitylegacy
+package:/data/app/~~3DMBKse…==/com.example.visibilitylegacy-iJVP…==/base.apk
+$ adb shell run-as com.example.visibilitylegacy ls oat
+x86_64          # dex2oat가 만든 네이티브 산출물 디렉터리
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+`PathClassLoader`가 여는 `base.apk` 속 `classes.dex`는 실재하는 파일이고, 그 옆 `oat/x86_64/`는 이 dex를 AOT 컴파일한 결과다(실행 모드는 **C16**으로 이어진다). **정적 분석이 이 앱을 완전히 읽을 수 있는 건, dex가 디스크에 통째로 있기 때문이다.**
+
+**3) 패커·`InMemoryDexClassLoader`는 (2)의 그림을 깬다.** 내가 실제로 뜯은 [Toss `ExternalWebActivity` 패커 분석](/posts/toss-externalwebactivity/)에서 `classes.dex`는 stub이었고, 진짜 코드는 런타임에 Blowfish+SEED로 복호돼 `InMemoryDexClassLoader.load`로 실행됐다 — 디스크 파일 없이 `ByteBuffer`의 dex를 바로 로드하는 A8.0(API 26)의 그 경로다. 이 경우 (2)처럼 `pm path`로 얻은 `base.apk`를 정적으로 뜯어도 stub만 나온다. 이것이 동적 코드 로딩이 정적 분석을 무력화하는 실제 기제이며, 대응은 로더 생성자 후킹 같은 **동적 관찰**이다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 실측 캡처는 (1)·(2)까지다. 나머지 두 항목은 근거는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
+
+- **패커 언패킹의 라이브 후킹은 이 세션에서 재현하지 않았다.** `DexClassLoader`/`InMemoryDexClassLoader` 생성자를 Frida로 후킹해 로드되는 dex를 캡처하는 작업은 위 Toss 분석에서 실제로 수행했고, 이 AVD에는 대상 패커 앱을 올리지 않았다. (3)의 경로·기제는 확정이지만, 캡처 증적은 그 별도 글에 있다.
+- **hidden-API 강제(A9+)의 정량 스캔은 미수행.** `setAccessible`(언어 접근 우회)과 hidden-API 블록리스트(A9+ ART 조회층)가 별개 층이라는 판정은 AOSP 소스·문서 근거이며, 특정 앱의 non-SDK 사용량을 `veridex`로 수치화한 표는 이 글에 포함하지 않았다.
+
+관련 근거: [AOSP `BaseDexClassLoader`](https://cs.android.com/android/platform/superproject/+/master:libcore/dalvik/src/main/java/dalvik/system/BaseDexClassLoader.java) · [`InMemoryDexClassLoader`(API 26 도입)](https://developer.android.com/reference/dalvik/system/InMemoryDexClassLoader) · [hidden-API 제한 정책](https://developer.android.com/guide/app-compatibility/restrictions-non-sdk-interfaces)
 
 ## 마치며
 

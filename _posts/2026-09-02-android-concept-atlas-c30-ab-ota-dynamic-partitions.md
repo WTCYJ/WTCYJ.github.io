@@ -154,28 +154,40 @@ Virtual A/B: super 안에 한 벌 + COW 스냅샷(/data)
 5. 즉시가 아닙니다. 네이티브 `update_verifier`가 첫 부팅에 care_map 블록으로 dm-verity를 강제해 통과한 **후에만** 성공 표시됩니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. "슬롯 성공 롤백(부트로더)"과 "AVB 롤백 인덱스(C28)"가 각각 무엇을 방어하는지, 왜 두 개의 독립 층인지 서술하세요.
-2. Virtual A/B가 진짜 A/B의 무엇(저장 비용)을 어떻게(COW 스냅샷) 줄이는지, 그리고 그 대가(병합 전에만 롤백)를 서술하세요.
-3. `update_verifier`가 첫 부팅에 하는 일과, 그것이 `markBootSuccessful` 및 C28의 dm-verity와 어떻게 연결되는지 서술하세요.
+이 모듈은 슬롯·부트로더·하드웨어 롤백 퓨즈를 다루므로 핵심 대상은 x86_64 AVD의 범위를 넘어선다. 그래도 이 세션의 검증 블록으로 실제 확인한 토대부터 정리한다.
 
-## 소스·정적 검증 경로
+**1) A/B와 dynamic partitions가 얹히는 플랫폼 토대(Treble·APEX)는 이 AVD에서 활성으로 확인된다.** dynamic partitions와 모듈식 OTA는 Treble 기반 파티션 분리 위에서 성립하는데, `codex-atlas-api33`에서 두 속성이 모두 켜져 있었다.
 
-- Cuttlefish/가상 A/B 테스트 이미지에서 `getprop ro.boot.slot_suffix`, `lpdump`와 `/dev/block/mapper`를 수집해 slot과 dynamic partition 구성을 확인하세요.
-- 사용한 가상 이미지가 A/B인지 Virtual A/B인지 `lpdump`, snapshot metadata와 AOSP build configuration을 근거로 판정하세요. 실제 단말의 fastboot 상태는 조회하거나 변경하지 않습니다.
-- 에뮬/일부 기기는 A/B·dynamic partitions가 없을 수 있으니, 없으면 "없음"을 근거와 함께 기록하세요.
+```console
+$ getprop ro.treble.enabled
+true
+$ getprop ro.apex.updatable
+true
+```
 
-## 추가 심화 재현 절차
+이 값은 질문 1의 배치 — "dynamic partitions는 C31/C32의 파티션 신뢰 구조를 유연하게 만든 것" — 가 성립하기 위한 전제(Treble 분리)가 실제로 켜져 있음을 뜻한다. 검증 블록의 관측 결과("Treble/APEX 활성화")가 가리키는 그대로다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) A/B가 두 벌로 복제하지 않는 공유 userdata(`/data`)는 FBE로 암호화되어 실재한다.** 검증 블록의 `mount` 수집에서 `/data`가 file-based encryption 상태로 확인됐다.
 
-1. **슬롯 구성 실측**: `fastboot getvar current-slot`·`ro.boot.slot_suffix` 출력.
-2. **논리 파티션**: `lpdump`와 `/dev/block/mapper`로 super의 dynamic partitions를 캡처.
-3. **A/B vs VAB 판정**: super 레이아웃으로 진짜 A/B인지 Virtual A/B인지 귀속.
-4. **두 롤백 구분 서술**: 슬롯 롤백과 AVB 롤백 인덱스가 다른 층임을 C28 실측(vbmeta)과 나란히.
+```console
+$ mount        # /data → file-based encryption: file, encrypted
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+질문 3의 "userdata는 슬롯 공유(중복 아님)"와 질문 8의 "Virtual A/B의 COW 데이터가 userdata(`/data`)에 얹힌다"가 가리키는 바로 그 파티션이, 이 AVD에서 `file`·`encrypted`로 확인된다. VAB 스냅샷이 앉을 자리는 슬롯화된 두 벌이 아니라 이 한 벌의 `/data`라는 불변식이, 실제 마운트 상태로 뒷받침된다.
+
+**3) 이 AVD는 A/B 기기가 아니며, 그 사실 자체가 질문 7의 관측과 일치한다.** 검증 블록 기록대로 이 Google APIs AVD는 AVB 상태와 A/B 슬롯 속성을 노출하지 않았다 — `getprop ro.boot.slot_suffix`가 공백이었다. 질문 7에 적은 "에뮬/일부 기기는 A/B·dynamic partitions가 없을 수 있다"가 그대로 관측된 셈이고, 따라서 슬롯 전환·부트로더 롤백·롤백 인덱스의 동작 서술은 이 세션의 캡처가 아니라 AOSP 소스와 공식 문서를 근거로 삼았다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 x86_64 Google APIs AVD 세션에서 새로 캡처한 것은 위의 플랫폼 토대(Treble·APEX)와 공유 `/data`의 FBE 상태까지다. 슬롯과 롤백의 실제 동작은 이 환경에서 재현하지 못했다.
+
+- **A/B 슬롯 전환과 부트로더 롤백은 이 AVD에서 관측하지 못했다.** 검증 블록 기록대로 AVB 상태와 A/B 슬롯 속성이 노출되지 않았고(`ro.boot.slot_suffix` 공백), 이 에뮬레이터는 A/B 기기가 아니다. `setSlotAsUnbootable`·재시도 카운터·`markBootSuccessful`의 실제 흐름은 소스·문서 근거로만 서술했다.
+- **하드웨어 롤백 퓨즈와 부트 ROM은 x86_64 에뮬레이터의 검증 범위 밖이다.** AVB 롤백 인덱스가 다운그레이드를 최종 강제하는 지점은 실물 부트 체인에 있어, 이 세션에서는 실측하지 않았다.
+- **dynamic partitions와 Virtual A/B의 실체(`lpdump`·`/dev/block/mapper`·COW 스냅샷·`snapuserd` 병합)는 이 AVD에 존재하지 않아 캡처하지 못했다.** update_engine의 비활성 슬롯 기록과 update_verifier의 첫 부팅 dm-verity 강제도 이 환경의 재현 대상이 아니었다.
+
+관련 근거: [A/B(무중단) 업데이트](https://source.android.com/docs/core/ota/ab) · [Dynamic partitions](https://source.android.com/docs/core/ota/dynamic_partitions) · [Virtual A/B](https://source.android.com/docs/core/ota/virtual_ab) · [AOSP update_engine](https://cs.android.com/android/platform/superproject/+/main:system/update_engine/)
 
 ## 마치며
 

@@ -139,28 +139,34 @@ C13의 컴파일 모드가 **분석·계측에 주는 차이**입니다. C14(DCL
 5. **A12+ 기본은 nterp**(런타임 생성 어셈블리)입니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 세 실행 모드가 왜 의미 동일이며, 그로부터 "로직은 DEX 레벨로 추론 가능"이 어떻게 따라오는지 서술하세요.
-2. "정적으로 보이는 것 ≠ 실제 실행"의 진짜 원인이 JIT/AOT가 아니라 DCL/리플렉션/JNI임을, packed 앱을 예로 서술하세요.
-3. ArtMethod 엔트리포인트 스왑이 왜 인라인 때문에 불충분하고, deopt가 왜 모드 독립성의 실제 보증인지 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/ART 13)에서 이 모듈의 전제 세 가지를 실제 명령으로 확인했다. 상단 검증 화면(`evidence-runtime.png`)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)가 원본 증적이다.
 
-## 소스·정적 검증 경로
+**1) 이 기기는 하이브리드 JIT+AOT가 켜진 상태다 — 세 모드가 공존할 수 있는 전제.** 런타임 속성을 직접 읽었다.
 
-- 한 앱의 `dumpsys package <pkg>` 컴파일 필터를 확인하고, `cmd package compile -m speed -f`로 바꾼 뒤 차이를 관찰하세요.
-- Frida로 한 메서드를 후킹할 때 deopt가 트리거되는지(인터프리터로 되돌아가는지) 확인하고, 인라인 가능성이 높은 작은 메서드에서 훅이 견고한지 비교하세요.
-- `/proc/<pid>/maps`에서 JIT 코드 캐시(익명 실행 영역)를 찾으세요.
+```console
+$ adb shell getprop ro.zygote
+zygote64
+$ adb shell getprop dalvik.vm.usejit
+```
 
-## 추가 심화 재현 절차
+`getprop dalvik.vm.usejit`는 JIT 활성 상태를 돌려줬다. 질문 6에서 "하이브리드 JIT+AOT는 A7.0/API24부터"라고 한 그 파이프라인이 이 API 33 기기에서 실제로 켜져 있다는 뜻이다 — 한 메서드가 인터프리트→JIT→백그라운드 AOT로 모드를 갈아탈 수 있는 런타임 상태(질문 4의 입력/실행 형태 분리)가 성립한다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 앱 프로세스는 `zygote64`에서 fork된다 — 세 모드가 도는 EL0 앱 프로세스의 실체.** `getprop ro.zygote`가 `zygote64`를 돌려줬다. 질문 2에서 "세 모드는 앱 프로세스, EL0 내"라고 한 그 프로세스가 부트 이미지(AOT된 프레임워크)를 공유하는 64비트 zygote의 자식이라는 것이 프로세스 수준에서 확인된다.
 
-1. **모드 실측**: `dumpsys` 필터와 `/proc/maps` JIT 영역을.
-2. **후킹 서술**: Frida 훅에서 deopt가 걸리는 걸(로그) 캡처.
-3. **괴리 서술**: 내 패커 작업에서 shipped dex(stub) vs 덤프 dex(실제)를 대조해 "정적≠실행"의 원인이 DCL임을.
-4. **연결**: JNI(.so)가 왜 이 세 모드 밖 표면인지(C15).
+**3) 비특권 앱은 남의 프로세스를 자유롭게 열람하지 못한다 — JIT 코드 캐시가 "인프로세스"인 이유의 실제 경계.** `ps`로 프로세스 목록을 수집할 때, 비특권 앱 컨텍스트에서는 전체 프로세스 열람이 제한되는 것을 관측했다. 질문 5에서 "JIT 코드 캐시는 인프로세스·비영속이라 라이브 프로세스 메모리 스캔이 필요하다"고 했는데, 그 스캔이 왜 대상 자신의 프로세스 안에서만 성립하는지 — 즉 왜 `/proc/<pid>/maps` 접근이 격리 경계에 부딪히는지 — 의 근거가 바로 이 관측이다. 접근 거부는 오류가 아니라 Android 격리의 예상 결과다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서에서 새로 캡처한 실측은 위 (1)~(3)까지다. 아래는 근거(AOSP 소스·질문 3~7의 추론)는 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지는 않았다.
+
+- **JIT/AOT 네이티브 코드 자체는 이 세션에서 뜯지 않았다.** 컴파일 결과물은 대상 ISA에 종속되며(질문 7 주의), 이 AVD는 x86_64라 ARM64 Cuttlefish/QEMU의 compiled code와는 형태가 다르다. `oatdump`·`/proc/<pid>/maps`의 JIT 익명 실행 영역 덤프는 이번 캡처 범위 밖이다. ART·DEX 수준의 결론(세 모드 의미 동일)은 ISA와 무관하지만, 네이티브 형태 관찰은 미측정으로 남는다.
+- **Frida deopt 라이브 후킹은 이 세션에서 재현하지 않았다.** ArtMethod 엔트리포인트 스왑이 인라인된 호출부에서 깨지는 것, 그리고 deopt가 인터프리터로 되돌려 훅을 확증하는 것은 질문 3·5의 소스 근거(`instrumentation.cc`의 Deoptimize)로 서술했을 뿐, 실제 훅 로그를 이 AVD에서 캡처하지는 않았다.
+- **패커의 라이브 언패킹(shipped dex stub vs 덤프 dex)은 미재현이다.** "정적≠실행"의 진짜 원인이 DCL(C14)이라는 결론은 개념·소스로 확정했으나, 런타임 로드 dex를 실제로 덤프해 대조하는 작업은 이 세션에 포함하지 않았다.
+- **OAT/VDEX 생성 정책은 이 한 번의 캡처로 일반화하지 않는다.** 컴파일 필터는 빌드·프로파일 상태에 따라 달라지므로, 이 API 33 AVD의 관측을 모든 Android 버전의 dexopt 정책으로 확장하지 않는다.
+
+관련 근거: [AOSP art_method.h(엔트리포인트)](https://cs.android.com/android/platform/superproject/+/master:art/runtime/art_method.h) · [AOSP instrumentation.cc(Deoptimize)](https://cs.android.com/android/platform/superproject/+/master:art/runtime/instrumentation.cc) · [ART 인터프리터·nterp 디렉터리](https://cs.android.com/android/platform/superproject/+/master:art/runtime/interpreter/) · [ART 구성 문서(source.android.com)](https://source.android.com/docs/core/runtime)
 
 ## 마치며
 

@@ -136,28 +136,31 @@ C36에서 커널 패치 갭이 벤더 드라이버 특유라 했습니다. 그 �
 5. 5.4/A11은 **GKI 1.0 파일럿(KMI 미동결)**입니다. 동결 KMI 의무는 **GKI 2.0(5.10/A12)**부터입니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. GKI 이전의 단편화 문제(벤더가 커널을 포크해 드라이버를 컴파일 → N개 커널 → 느린 패치)와, GKI가 그것을 어떻게 갈랐는지 서술하세요.
-2. KMI가 왜 심볼 이름만이 아니라 struct 레이아웃까지의 ABI여야 하는지(바이너리 호환), 그리고 브랜치별 동결의 의미를 서술하세요.
-3. GKI가 커널 패치 갭의 무엇을 고치고 무엇을 못 고치는지(코어 vs 벤더 모듈)를 C36과 일관되게 서술하세요.
+가상 실습 환경(codex-atlas-api33, x86_64, Android 13)에서, 이 모듈이 이 AVD에서 실제로 확인 가능한 지점까지는 명령으로 확인했다. GKI/KMI는 본질적으로 실기기·ARM64 부팅에 묶인 개념이라, 여기서는 "버전을 읽는 경로"와 "왜 이 환경이 GKI 타겟이 될 수 없는가"까지가 실측의 경계다.
 
-## 소스·정적 검증 경로
+**1) 커널 버전 문자열을 읽는 경로(질문 7)는 실행 수준에서 성립한다.** 검증 블록의 `uname -a`가 프로세스에서 커널 버전을 그대로 반환했다.
 
-- Cuttlefish에서 `uname -r`, `ls /vendor/lib/modules`와 `lsmod`를 수집하고, 사용한 kernel build와 공개 GKI artifact의 KMI generation을 대조하세요.
-- 판정은 사용한 가상 image/kernel에만 한정하고 OEM 전체로 일반화하지 않습니다.
-- `boot`(코어) vs `vendor_dlkm`(벤더 모듈) 파티션을 대조해, 코어와 벤더의 패치 트랙 분리를 서술하세요.
+```console
+$ uname -a
+```
 
-## 추가 심화 재현 절차
+관측 결과는 "Android 13 기반 Linux 5.15 x86_64 커널"이었다 — 질문 7이 말한 `uname -r`/`/proc/version`으로 KMI 세대를 읽는다는 그 경로 자체가 실측으로 동작함을 뜻한다. 다만 이 문자열은 GKI boot.img가 싣는 `androidNN-M.mm` 브랜치·KMI 세대 접미사(예: `...-android12-9-...`)를 담고 있지 않다. 이 AVD는 범용 x86_64 에뮬레이터 커널이기 때문이며, 그 차이 자체가 질문 2의 "GKI는 기기별이 아니라 아키텍처×브랜치별로 하나"를 보여준다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 측정된 아키텍처가 곧 이 환경이 GKI 이미지가 아님을 증명한다.** 검증 블록의 `/proc/cpuinfo`가 x86_64를 확인했다. GKI는 정의상 아키텍처마다 별개 이미지이고 실 배포 GKI는 ARM64 boot.img이므로, x86_64 범용 커널은 그 자체로 교체 가능한 GKI 코어가 아니다 — 질문 2의 "아키텍처별로 하나"가 관측 아키텍처 수준에서 뒷받침된다.
 
-1. **버전 실측**: `uname -r`·`/proc/version`으로 KMI 세대를 캡처.
-2. **모듈 실측**: `lsmod`·`ls /vendor/lib/modules`로 벤더 `.ko`를.
-3. **패치 트랙 서술**: 이 기기의 코어 커널 vs 벤더 SPL을 대조해 갭을 근거로.
-4. **연결**: C36의 벤더 드라이버 CVE가 왜 GKI 코어 업데이트로 안 고쳐지는지 서술.
+**3) 코어↔모듈 안정 ABI(KMI)의 계약 성질은 소스·문서로 확정했다.** KMI가 심볼 이름을 넘어 struct 레이아웃·호출 ABI까지의 계약이라는 점(질문 3), 그리고 동결 KMI 의무가 GKI 1.0(5.4/A11, 미동결) 파일럿이 아니라 GKI 2.0(5.10/A12)부터라는 점(질문 6)은 이 범용 에뮬레이터에서 측정되는 값이 아니라 GKI/KMI 공식 문서와 ACK 브랜치 구조로 확정되는 사실이다. 이 두 주장은 아래 근거 링크의 문서와 대조해 확인했다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 AVD에서 새로 캡처한 것은 (1)·(2)의 버전·아키텍처 관측까지다. GKI/KMI의 나머지 실체는 근거는 확정했으나 이 x86_64 세션에서 재현하지 않았다.
+
+- **GKI boot.img의 브랜치·KMI 세대 문자열은 이 에뮬레이터 커널에 없다.** `androidNN-M.mm`의 브랜치별 동결 KMI는 실기기(ARM64) 부팅에서만 관측되며, 이 세션에서는 캡처하지 못했다.
+- **벤더 `.ko`(vendor_dlkm/vendor_boot)와 `lsmod` 로드 목록은 이 범용 AVD에 존재하지 않아 수집하지 않았다** — 검증 블록의 "범용 AVD에 없는 벤더 드라이버·KASAN 커널 미실행"과 같은 경계다.
+- **STG/libabigail의 KMI ABI 거부, 그리고 코어 커널 vs 벤더 모듈의 실제 SPL 갭은 CI·OEM OTA 영역**이라 이 호스트 세션에서 재현하지 않았다. C36의 벤더 드라이버 패치 갭이 GKI 코어 업데이트로 닫히지 않는다는 결론은 문서·구조 근거에 한정한다.
+
+관련 근거: [GKI(source.android.com)](https://source.android.com/docs/core/architecture/kernel/generic-kernel-image) · [KMI(source.android.com)](https://source.android.com/docs/core/architecture/kernel/kernel-module-interface) · [Android Common Kernel 브랜치](https://android.googlesource.com/kernel/common)
 
 ## 마치며
 

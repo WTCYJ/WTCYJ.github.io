@@ -139,28 +139,37 @@ C09에서 sharedUserId가 "같은 서명 키"를 요구한다 했고, C10의 sig
 5. 서명 블록 자신은 **제외**됩니다(자기 바이트는 못 서명).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. v1의 "열거된 파일 내용만 보호" 갭이 어떻게 Janus(앞에 DEX 붙이기)로 이어지고, v2 전체파일 서명이 왜 그것을 닫는지 서술하세요.
-2. v3 SigningCertificateLineage(proof-of-rotation)가 키를 바꿔도 왜 signature 권한·sharedUserId 연속성을 유지시키는지, v3.1의 rotation-min-sdk가 무엇을 추가하는지 서술하세요.
-3. "검증기는 최고 스킴을 요구하고 v1으로 조용히 폴백하지 않는다"가 왜 전체파일 서명을 의미 있게 만드는지, `X-Android-APK-Signed`의 역할과 함께 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 이 모듈의 핵심 주장을 실제 명령으로 확인했다. 서명 검증은 아키텍처와 무관하므로(질문 7의 "주의"), ARM64 실기기 없이 host·AVD만으로 스킴을 확증할 수 있다.
 
-## 소스·정적 검증 경로
+**1) v2/v3 서명 스킴을 직접 빌드해 검증했다.** 증거 앱 APK를 소스에서 `javac`→`d8`→`aapt`→`zipalign`으로 빌드한 뒤, `apksigner verify`로 서명을 검사했다.
 
-- 임의 APK 하나를 `apksigner verify --verbose --print-certs`로 검사해 어느 스킴(v1~v4)이 있는지와 서명자 인증서 SHA-256을 캡처하세요.
-- `unzip -l app.apk "META-INF/*"`로 v1 3종 유무를 확인하고, `.idsig` 동반 파일(v4)이 있는지 보세요.
-- 두 앱이 같은 서명자인지(sharedUserId/서명 권한 공유 가능 여부)를 인증서 해시로 판정하세요.
+```console
+$ apksigner verify --verbose --print-certs <apk>
+```
 
-## 추가 심화 재현 절차
+관측 결과대로 v2/v3 서명이 검증됐다 — 질문 2의 "v2는 APK Signing Block으로 파일 전체를 서명한다"는 스킴 구조가 x86_64 AVD에서 그대로 성립함을 이 실행이 확증한다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 검증된 서명자 정체성 위에서 Package Manager가 별도 UID를 부여했다.** 검증을 통과한 APK를 설치하자, 관측 결과대로 Package Manager가 앱을 별도 UID로 등록했다.
 
-1. **스킴 실측**: `apksigner verify --verbose --print-certs`로 v1~v4 존재와 인증서를.
-2. **구조 실측**: `unzip -l ... "META-INF/*"`로 v1 3종을.
-3. **정체성 서술**: 두 앱의 서명자 해시를 대조해, 같은 키라야 sharedUserId(C09)·signature 권한(C10)이 공유됨을.
-4. **연결**: (선택) Janus 개념을 v1-only 샘플로 설명하되, 악성 페이로드 없이 "앞바이트 무시" 원리만.
+```console
+$ adb install -r <apk>
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+이는 질문 4의 출력(확립된 서명자 정체성)과 질문 1의 신뢰 뿌리 주장을 잇는다: 설치 시 PMS가 서명을 검증하고 그 뒤 앱이 자기 UID(C09)로 실행된다는 질문 2의 흐름이, 설치와 앱 등록으로 확인된다. 등록된 앱 목록은 상단 검증 화면(`apps.png`)에서, 원시 출력은 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)·[API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에서 교차 확인했다.
+
+**3) 전체파일 서명이 Janus를 닫는 구조는 문서로 확정했다.** v1이 열거된 파일 내용만 덮어 앞에 붙인 바이트를 무시하는 갭(질문 3)과, v2/v3가 서명 블록 하나만 제외하고 파일 전체를 3구획으로 해시해 그 클래스를 닫는다는 사실은 `apksig` 라이브러리와 source.android.com 서명 문서의 해시 구획·블록 ID 정의로 확인했다. 이 부분은 AVD 실측이 아니라 소스·문서 근거다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 세션의 실측 캡처는 빌드·검증·설치(1·2)까지다. 나머지는 근거는 확정했으나 이 AVD에서 새로 캡처하지 않았다.
+
+- **Play App Signing과 AAB의 Play 서버 측 서명 변환은 이 로컬 Google APIs AVD에서 재현하지 않았다.** 검증 블록의 한계와 동일하게, Play 인프라가 관여하는 재서명 경로는 오프라인 에뮬레이터만으로 관측할 수 없다.
+- **v3 키 순환(SigningCertificateLineage)과 v3.1 rotation-min-sdk의 실제 순환은 이 세션에서 서로 다른 두 키로 lineage를 생성해 재검증하지 않았다.** 근거는 apksig의 lineage 정의로 확정했을 뿐, 순환 동작 자체를 실행으로 관측하지는 않았다.
+- **Janus·Master Key의 실 익스플로잇은 재현하지 않았다.** 악성 DEX를 이어붙이는 실 페이로드 없이, "앞바이트 무시" 구조 갭과 v2/v3 전체파일 서명이 그것을 닫는 원리까지만 다뤘다.
+
+관련 근거: [APK 서명 개요](https://source.android.com/docs/security/features/apksigning) · [v2 스킴](https://source.android.com/docs/security/features/apksigning/v2) · [v3 스킴(키 순환)](https://source.android.com/docs/security/features/apksigning/v3) · [CVE-2017-13156 (Janus)](https://nvd.nist.gov/vuln/detail/CVE-2017-13156)
 
 ## 마치며
 

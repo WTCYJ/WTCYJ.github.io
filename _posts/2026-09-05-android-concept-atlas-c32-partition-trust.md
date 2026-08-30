@@ -133,28 +133,32 @@ C31이 프레임워크와 벤더를 **갈랐다**면, C32는 그 갈라진 조�
 5. chained vbmeta로 **파티션별 별도 키·별도 롤백 슬롯**(C28)입니다 — vbmeta_system과 vbmeta_vendor는 서로 다른 서명자.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 파티션마다 다른 서명자·SELinux 도메인·vbmeta 키를 가진다는 것이 "신뢰 방향의 비대칭"으로 어떻게 이어지는지 서술하세요.
-2. `coredomain`과 벤더 도메인 사이의 직접 IPC를 막는 neverallow(C23)와 링커 네임스페이스(C33)가 함께 어떻게 벤더 인터페이스를 **유일한 통로**로 만드는지 서술하세요.
-3. 봉쇄된 벤더 HAL이 그럼에도 왜 위험한 공격 표면인지(커널 도달)를 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈이 전제하는 **파티션 분리**가 이 기기에서 실제로 켜져 있음을 확인했고, 그 분리를 신뢰 경계로 강제하는 세 층의 근거는 AOSP 소스로 확정했다.
 
-## 소스·정적 검증 경로
+**1) Treble이 활성 → system/vendor 파티션 분리가 이 기기의 실제 상태다.** 검증 블록에 기록한 대로, 아래 속성 조회가 Treble/APEX 활성을 반환했다.
 
-- Cuttlefish에서 `ls -Z`로 `/system`·`/vendor`·`/product`·`/odm`의 SELinux type을 비교하고, host-side `sepolicy-analyze`로 `coredomain`과 vendor domain의 경계 및 neverallow를 확인하세요.
-- `avbtool info_image`로 vbmeta_system과 vbmeta_vendor가 **서로 다른 키**로 체인됨을 확인하세요(C28 절차).
-- 이 세 층(SELinux·링커·AVB)이 같은 프레임워크/벤더 선을 어떻게 강제하는지 근거와 함께 정리하세요.
+```console
+$ adb shell getprop ro.treble.enabled
+$ adb shell getprop ro.apex.updatable
+```
 
-## 추가 심화 재현 절차
+Treble이 켜져 있다는 것은 질문 1·2의 전제 — 프레임워크(system)와 벤더가 별도 파티션·별도 서명자·별도 SELinux 도메인으로 갈린다는 분리 — 가 이 기기에서 개념이 아니라 실물 상태로 존재한다는 뜻이다. `ro.apex.updatable` 활성은 시스템 구성요소가 APEX 모듈 단위로 독립 서명·업데이트된다는, 같은 "파티션이 곧 저자·신뢰의 신호"(질문 4) 원리의 연장이다.
 
-이 모듈을 **실측 글**로 승격하세요. C23·C28·C31·C33의 실측을 **하나의 신뢰 지도**로 엮는 종합 편입니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) `/data`는 별도 암호화 상태를 가진다.** `mount`와 FBE 속성 조회가 `/data`의 file-based encryption(`file`, `encrypted`)을 보여줬다 — 상단 검증 화면과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존한 값이다. 한 기기 안에서도 저장 영역마다 보호 상태가 균일하지 않다는, 질문 3의 "신뢰는 균일하지 않고 방향이 있다"를 저장소 측에서 확인해 주는 관측이다.
 
-1. **파티션별 라벨**: `ls -Z`로 파티션마다 다른 SELinux 타입을 실측.
-2. **정책 경계**: `sepolicy-analyze`로 coredomain↔vendor neverallow를 캡처.
-3. **서명 분리**: `avbtool info_image`로 vbmeta_system/vendor의 별도 키를 대조.
-4. **종합 서술**: 세 층이 같은 프레임워크/벤더 선을 강제함을 하나의 그림(실측 출력 기반)으로.
+**3) 신뢰 지도를 강제하는 세 층은 AOSP 소스로 확정했다.** 이 AVD가 AVB·정책 덤프를 노출하지 않아 이 세션의 실측 캡처는 (1)·(2)까지지만, 질문 3·6·7이 든 강제 메커니즘 자체는 소스에 명시돼 있다: `coredomain`↔벤더 도메인의 직접 IPC를 막는 SELinux neverallow(C23), 벤더 라이브러리를 사설 프레임워크 라이브러리에서 격리하는 링커 네임스페이스·VNDK(C33), 파티션마다 다른 키로 독립 서명하는 chained vbmeta(C28). Treble 활성(1)은 이 세 층이 실제로 놓일 분리 구조가 이 기기에 존재함을 뒷받침한다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 실측 캡처는 (1)·(2)까지다. 파티션 신뢰의 암호학적·정책적 앵커는 이 x86_64 Google APIs AVD 세션에서 새로 캡처하지 못했다.
+
+- **AVB 상태와 A/B 슬롯 속성을 이 AVD가 노출하지 않았다.** 그래서 `avbtool info_image`로 vbmeta_system과 vbmeta_vendor가 서로 다른 키로 체인됨을 이 세션에서 실물 덤프로 대조하지는 못했다 — 근거는 C28·AOSP Verified Boot 문서로 확정한 상태다.
+- **하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다.** 실제 롤백 인덱스 소비와 부트 ROM의 1차 서명 검증은 에뮬레이터가 아니라 실기기·SoC의 영역이라 이 세션에서 관측하지 않았다.
+- **파티션별 `ls -Z` 타입 대조와 coredomain↔vendor neverallow 덤프도 이 세션에서 새로 뜨지 않았다.** x86_64 에뮬레이터 정책이 실기기 벤더 정책과 동일하다는 보장이 없어, 정책 강제의 근거는 AOSP sepolicy 소스 쪽으로 확정해 두었다.
+
+관련 근거: [AOSP Partitions overview](https://source.android.com/docs/core/architecture/partitions) · [Android Verified Boot](https://source.android.com/docs/security/features/verifiedboot) · [SELinux for Android](https://source.android.com/docs/security/features/selinux) · [VNDK / linker namespaces](https://source.android.com/docs/core/architecture/vndk)
 
 ## 마치며
 

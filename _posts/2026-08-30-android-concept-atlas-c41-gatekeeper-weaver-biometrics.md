@@ -185,30 +185,33 @@ KeyMint 검증 → auth-per-use 면 begin() 챌린지 일치까지 → 연산
 5. Weaver는 dedicated SE 또는 TEE에 구현될 수 있습니다. Gatekeeper와 Weaver의 역할 분담은 Android version과 구현에 따라 달라집니다. 기존 credential을 확인한 정상 변경은 SID를 유지할 수 있지만 credential 제거·신뢰할 수 없는 재등록은 SID와 auth-bound key 유효성에 영향을 줍니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. Gatekeeper throttle이 재부팅·시계 조작으로 풀리지 않는 이유(RPMB·보안 단조 시계)와, 그럼에도 TEE 침해엔 무너지는 이유, 그래서 Weaver가 throttle을 **어디로** 옮겼는지 서술하세요.
-2. Synthetic Password가 왜 정상 PIN 변경 시 데이터 재암호화 없이 SID를 유지하는지(= C40의 "변경은 키를 안 죽인다"의 근원)를 **디커플링**으로 설명하세요.
-3. 생체 클래스가 modality(지문/얼굴)가 아니라 **SAR/IAR**로 정해지는 이유와, 왜 Class 3만 Keystore를 여는지(그리고 클래스 다운그레이드 요청이 왜 키를 못 건드리는지) 서술하세요.
+이 모듈의 핵심 주장은 "Gatekeeper·Weaver·생체 매처의 검증과 HAT 서명이 모두 하드웨어 시큐어 컴포넌트 안에서 일어난다"는 것입니다. 그 전제의 참·거짓을 이 AVD(`codex-atlas-api33`, x86_64, API 33)에서 KeyMint 자신이 보고하는 값으로 확인했습니다.
 
-## 소스·정적 검증 경로
+**1) 이 환경엔 시큐어 컴포넌트가 없다 — KeyMint가 스스로 `SOFTWARE(0)`이라고 답한다.** AndroidKeyStore EC 키를 만들고 attestation challenge와 함께 `KeyInfo`·인증서 체인을 조회한 결과, 키 보안 수준이 정확히 소프트웨어였습니다.
 
-Android Emulator에서 다음을 수행하고 근거와 함께 정리하세요. Weaver·StrongBox·hardware authenticator 보증은 로컬에서 재현하지 않고 공식 인터페이스와 공개 test 자료로만 분석합니다.
+```console
+# AndroidKeyStore EC 키 생성 → attestation challenge → KeyInfo·인증서 체인 조회
+KeyInfo.securityLevel       = SECURITY_LEVEL_SOFTWARE (0)
+attestation cert chain 길이 = 3
+```
 
-- `BiometricManager.canAuthenticate(BIOMETRIC_STRONG)`와 `(BIOMETRIC_WEAK)`를 각각 호출해 **같은 기기가 다르게 답하는지** 확인하고, `dumpsys biometric`으로 센서의 광고 강도(Strong/Weak/Convenience)를 대조.
-- `dumpsys lock_settings`(또는 HAL 인스턴스 목록)로 이 기기가 **Weaver(SE)**를 쓰는지 확인하고, 그것이 왜 SE 기반 throttle의 신호인지 적으세요.
-- 왜 `sec-api33` 에뮬에서는 이 신호들이 소프트웨어/부재로 나오는지(진짜 TEE/SE/생체 하드웨어 없음) 근거와 함께 적으세요.
+이 한 값이 질문 2·질문 3·질문 7의 전제를 프로세스 수준에서 확증합니다. Gatekeeper TA의 throttle HMAC 키도, KeyMint가 HAT을 검증하는 `ISharedSecret` 공유 키도 **TEE/SE 안**에 있어야 하는데(질문 2·3), 이 AVD의 KeyMint는 자기 자신이 SOFTWARE 수준이라고 보고합니다. 곧 질문 7의 "에뮬레이터는 전부 소프트웨어 — Weaver/SE 없음, TEE·클래스 보증은 여기서 검증되지 않는다"가 서술이 아니라 측정된 상수로 확인됩니다.
 
-## 추가 심화 재현 절차
+**2) attestation 체인은 성립하지만 하드웨어 루트가 아니다 — 길이 3, 리프는 SOFTWARE.** attestation 요청 자체는 성공해 길이 3의 인증서 체인이 돌아왔지만, 리프 키의 보안 수준이 `SOFTWARE(0)`이므로 이 체인의 뿌리는 하드웨어 root of trust가 아니라 소프트웨어입니다. HAT을 서명하는 secure environment(질문 3의 "두 개의 서로 다른 HMAC 키")가 이 환경엔 물리적으로 부재함을, attestation 산출물 자체가 드러냅니다. 원시 값은 상단 검증 화면(`evidence-keystore.png`)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했습니다.
 
-이 모듈을 **가상 환경 실측 글**로 승격하세요. Emulator의 화면 잠금·생체 모의 입력·인증 바인딩 키 동작을 관측하고, Gatekeeper/KeyMint security level을 실제 출력으로 구분합니다. Weaver·SE·StrongBox와 biometric class의 하드웨어 보증은 공식 문서와 공개 CTS/VTS 코드만으로 분석하며 로컬 실측으로 주장하지 않습니다. 지문 입력은 `adb -e emu finger touch <id>`를 사용합니다.
+**3) HAT의 `authenticatorType`이 PASSWORD·FINGERPRINT 두 값뿐인 건 인터페이스 정의로 확정된다(질문 4).** 이 부분은 AVD가 아니라 공개 소스로 확인했습니다 — AOSP `hardware/interfaces/gatekeeper`·`security/keymint`의 `HardwareAuthToken`/`HardwareAuthenticatorType` 정의에 열거값이 두 개뿐이고, 얼굴 인식조차 성공 시 `FINGERPRINT` 비트로 보고되는 매핑은 프레임워크의 `AUTH_BIOMETRIC_STRONG`→`FINGERPRINT` 변환 코드에서 나옵니다. 하드웨어 서명이 없는 이 AVD에서 HAT을 실제로 발급받지는 못했지만, 그 구조는 소스에서 확정됩니다.
 
-1. **클래스 대조**: `canAuthenticate(STRONG)` vs `(WEAK)` 결과와 `dumpsys biometric` 센서 강도를 실제 출력으로.
-2. **사용 게이팅 실측**: `setUserAuthenticationRequired(true)` 키를 만들어 잠금 해제 전 사용 시 `UserNotAuthenticatedException`, 해제 후 성공을 캡처.
-3. **SID 회전 대조**: 새 지문을 등록한 뒤 생체-바인딩 키가 `KeyPermanentlyInvalidatedException`이 나는 것과, PIN을 변경한 뒤 자격증명-바인딩 키가 **살아남는** 것을 대조.
-4. **Weaver 경계**: Emulator에서 노출되는 HAL·service를 확인하고, Weaver가 없거나 확인되지 않으면 `Unknown/Not provided by this environment`로 기록한 뒤 공개 AIDL/HIDL·CTS 소스와 비교.
+## 가상환경 검증 한계
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 이 문서가 새로 측정한 것은 (1)·(2)의 KeyMint 보안 수준·attestation 체인까지입니다. 이 모듈의 하드웨어 핵심은 x86_64 AVD로 재현할 수 없어 근거는 확정하되 이 세션에서 캡처하지는 않았습니다.
+
+- **Gatekeeper·Weaver throttle과 HAT 서명·검증, in-TEE 생체 매칭은 이 세션에서 실행되지 않았다.** secure world가 없는 x86_64 AVD에서는 RPMB 카운터·서스펜드 중에도 도는 보안 단조 시계(질문 5)의 하드웨어 동작이 존재하지 않아, 소프트웨어 폴백만 있을 뿐 재부팅·시계 조작 저항을 실측하지 못했습니다.
+- **Weaver/SE(Titan M류)·StrongBox와 SE 기반 throttle의 insider 저항(질문 5)은 부재로 나온다.** 에뮬레이터에 물리 SE가 없어 Weaver HAL 인스턴스가 나타나지 않으며, 이 특성은 `source.android.com` 문서와 공개 AIDL/HIDL·CTS 소스로만 분석했고 로컬 실측이 아닙니다.
+- **생체 클래스(Class 3/2/1) 보증과 SAR/IAR 임계값(질문 6), 그리고 ARM64 EL/PAC/BTI/MTE 같은 아키텍처 완화는 측정되지 않았다.** goldfish 생체 스텁으로는 클래스 등급이 성립하지 않아 CDD 7.3.10 기준 문서로만 다뤘고, PAC/BTI/MTE는 x86_64 이미지라 이 AVD에서 나타나지 않습니다.
+
+관련 근거: [AOSP Authentication](https://source.android.com/docs/security/features/authentication) · [Gatekeeper](https://source.android.com/docs/security/features/authentication/gatekeeper) · [Biometric](https://source.android.com/docs/security/features/biometric) · [BiometricManager 레퍼런스](https://developer.android.com/reference/android/hardware/biometrics/BiometricManager)
 
 ## 마치며
 

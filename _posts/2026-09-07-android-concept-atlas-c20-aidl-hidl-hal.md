@@ -140,28 +140,37 @@ passthrough(HIDL 마이그레이션): 프레임워크 ─Bs*래퍼→ 레거시 
 5. 공식 폐기 **공지는 Android 10**입니다. 13은 "신규 HIDL 중단"의 별개 마일스톤이고, 신규 칩셋 하드 금지는 **A15 VSR**입니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 레거시 in-process HAL과 Treble binderized HAL의 격리 차이가 왜 보안적 이득인지(메모리 손상이 프레임워크 권한으로 번지느냐)를 서술하세요.
-2. "HAL은 hwbinder를 쓴다"가 왜 HIDL에만 맞고 stable AIDL엔 틀린지, 세 binder 도메인(binder/hwbinder/vndbinder)의 용도를 구분해 서술하세요.
-3. `@VintfStability` + frozen 스냅샷 + VINTF가 함께 어떻게 "업데이트된 프레임워크와 옛 벤더 HAL의 호환성"을 강제하는지 서술하세요.
+전용 `codex-atlas-api33` AVD(Android 13/API 33, Google APIs x86_64)에서 이 모듈의 전송·등록 주장을 실제 명령으로 확인했다. 벤더 전용 HAL 트랜잭션은 범용 AVD에 없으므로, 격리 구조는 공식 소스·문서 근거까지 짚는다.
 
-## 소스·정적 검증 경로
+**1) 세 binder 도메인은 같은 드라이버의 별개 장치 노드로 실재한다.** 검증 블록의 명령이 세 노드를 모두 반환했다.
 
-- Cuttlefish에서 `lshal`과 `service list`를 사용해 제공되는 HAL/service instance를 확인하고, AOSP의 VINTF manifest와 `.hal`/`.aidl` 정의를 대조하세요. 특정 OEM HAL은 이 환경의 범위 밖입니다.
-- `service list`로 AIDL 서비스를, `hardware/interfaces`(AOSP)에서 특정 HAL의 `.hal`/`.aidl` 정의를 대조하세요.
-- 이 기기가 hwbinder를 여전히 쓰는 HIDL HAL을 가졌는지(레거시 잔존) 근거와 함께 판정하세요.
+```console
+$ ls -l /dev/{binder,hwbinder,vndbinder}
+```
 
-## 추가 심화 재현 절차
+`/dev/binder`·`/dev/hwbinder`·`/dev/vndbinder`가 binderfs에 세 노드로 함께 존재한다는 것이 관측 결과("binderfs의 세 Binder 노드")로 확인된다. 이것이 질문 4·질문 3의 물리적 전제다 — "HAL은 hwbinder를 쓴다"는 HIDL(hwbinder)에만 맞고, stable AIDL HAL의 전송(`/dev/binder`)과 벤더↔벤더(`/dev/vndbinder`)는 별개 도메인으로 같은 드라이버 위에 나뉘어 있다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) AIDL/Binder 서비스는 `/dev/binder` + servicemanager에 등록되어 열거된다.**
 
-1. **HAL 목록·transport**: `lshal` 출력으로 HIDL/AIDL 혼재와 transport를 캡처.
-2. **인터페이스 정의**: `hardware/interfaces`의 `.hal`/`.aidl` 하나를 골라 버전·메서드를 서술.
-3. **격리 서술**: binderized HAL이 별도 SELinux 도메인에 있음을 `ls -Z`/lshal로, passthrough와 대비.
-4. **전송 도메인**: 이 기기의 /dev/binder·hwbinder·vndbinder 사용을 C17 실측과 연결.
+```console
+$ service list
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+255개 서비스 등록이 관측됐다. 이들은 `/dev/binder` 도메인의 servicemanager가 관장하는 AIDL/Binder 서비스이며(질문 4의 전송 행), 프레임워크向 AIDL이 앱과 같은 `/dev/binder`를 쓴다는 주장을 서비스 열거 수준에서 확증한다. 상단 스크린샷(`evidence-binder.png`)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 원시 출력을 보존했다.
+
+**3) 레거시 in-process HAL과 binderized HAL의 격리 차이는 소스로 확정된다.** 이 AVD엔 실제 벤더 HAL이 없어 트랜잭션을 재현하진 못하지만, 레거시 경로가 `hw_get_module()`로 벤더 `.so`를 **호출 프로세스에 dlopen**한다는 것(같은 주소 공간·권한, 격리 없음)과 Treble binderized HAL이 별도 프로세스·SELinux 도메인에서 도는 이득은 AOSP `hardware/libhardware`(`hardware/hardware.h`)와 AIDL/HIDL HAL 공식 문서로 확정된다 — 질문 2·3의 신뢰 경계 서술의 근거다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 새 캡처는 세 binder 노드 존재와 서비스 열거까지다. 하드웨어·벤더 의존 항목은 근거는 확정했으나 이 x86_64 AVD 세션에서 새로 측정하지 않았다.
+
+- **실제 벤더 HAL의 transport(`lshal`)와 HIDL/AIDL 혼재는 측정하지 않았다.** 범용 AVD는 소프트웨어/디폴트 HAL만 제공하므로, 특정 OEM 기기의 hwbinder 잔존이나 HAL별 transport는 이 환경 밖이다(검증 블록의 "벤더 전용 HAL 트랜잭션 없음"과 일치).
+- **binderized HAL의 별도 SELinux 도메인·링커 네임스페이스 격리는 `ls -Z`로 직접 확인하지 않았다.** 실제 벤더 HAL 프로세스가 없어 passthrough 대비 격리를 프로세스 수준에서 관측하지 못했고, 소스·문서 근거까지만 짚었다.
+- **하드웨어 backed HAL(TEE/StrongBox keymaster 등)은 에뮬레이터라 소프트웨어 폴백이며, ARM64 PAC/BTI/MTE 같은 하드웨어 완화는 x86_64 AVD라 관측되지 않는다.** 메모리 안전 Rust/NDK 백엔드 HAL의 실 벤더 구현도 이 이미지엔 없다.
+
+관련 근거: [AIDL HALs](https://source.android.com/docs/core/architecture/aidl/aidl-hals) · [HIDL](https://source.android.com/docs/core/architecture/hidl) · [HAL types](https://source.android.com/docs/core/architecture/hal/hal-types) · [VINTF](https://source.android.com/docs/core/architecture/vintf)
 
 ## 마치며
 

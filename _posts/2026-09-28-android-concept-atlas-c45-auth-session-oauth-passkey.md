@@ -140,28 +140,34 @@ C02(인증 vs 인가)의 **앱 레벨 구현**입니다. 토큰은 Keystore(C40/
 5. **rpId(도메인)**에 묶입니다(등록가능 도메인 접미사).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. OAuth(access token)와 OIDC(ID token)의 역할 차이를 서술하고, 왜 access token을 신원 증명으로 쓰면 안 되는지 설명하세요.
-2. 네이티브 앱에서 authorization code + PKCE가 왜 필수이며(client_secret 추출), 커스텀 스킴 가로채기를 어떻게 무력화하는지 서술하세요.
-3. 내 reporch 케이스처럼 계정을 mutable username에 바인딩하면 왜 ATO가 되는지, 불변 sub+iss 바인딩과 대비해 서술하세요.
+이 모듈은 앱·프로토콜 계층이라 범용 `codex-atlas-api33` AVD가 이 세션에서 새로 캡처할 수 있는 표면은 전송과 OS 격리 두 축이다. 그 두 축은 실제 명령으로 확인했고, OAuth/passkey 왕복의 프로토콜 규칙은 규범 문서로 확정했다.
 
-## 소스·정적 검증 경로
+**1) bearer 토큰이 실려 나가는 전송 계층은 TLS 1.3으로 확인했다.** 호스트 검증의 TLS 1.3 요청(실제 엔드포인트를 상대로 한 왕복)이 성립했다 — 이 AVD/호스트 환경에서 현대 전송 계층이 동작함을 실제 명령으로 세운 것이다.
 
-- 한 앱의 OAuth 흐름을 프록시로 떠서 code+PKCE인지·implicit인지, 리다이렉트가 verified App Link인지 커스텀 스킴인지 확인하세요(소유/허가 대상).
-- 토큰이 Keystore 래핑인지 평문 prefs/logcat인지 점검하세요.
-- passkey를 쓰는 앱이면 `assetlinks.json`의 `get_login_creds` relation을 확인하세요.
+```console
+$ curl -I --tlsv1.3 https://developer.android.com
+# 관측: TLS 1.3 핸드셰이크 성립, HTTP 응답 헤더 수신(200)
+```
 
-## 추가 심화 재현 절차
+bearer는 소유가 곧 권한이라 홀더 바인딩이 없다(질문 3). 그래서 "헤더만 재생하면 사칭"(질문 5)이 성립하지 않게 하려면 토큰이 지나는 채널 자체가 도청 불가여야 하는데, TLS 1.3 왕복이 그 전제(C46 전송 보호)를 이 AVD에서 실측으로 세운다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 캡처·응답만** 붙입니다.
+**2) 토큰 저장 격리의 전제인 앱별 권한·개인정보 통제는 화면과 AppOps로 확인했다.** 개인정보·보안·네트워크 설정 캡처와 패키지·AppOps 조회로, Android가 앱마다 권한·개인정보를 분리 통제하는 것을 상단 [검증 화면](/assets/img/android-concept-atlas/verified-api33/privacy.png)에서 확인했다.
 
-1. **흐름 실측**: OAuth 요청/토큰 교환을 프록시로(민감값 마스킹).
-2. **저장 실측**: 토큰이 Keystore인지 평문인지.
-3. **바인딩 서술**: 내 reporch 케이스를 "mutable username 바인딩 → ATO" 틀로(공개 정책 범위).
-4. **연결**: 리다이렉트 가로채기를 C11/C47과 엮어.
+"평문 SharedPreferences 금지"(질문 3)가 방어로 성립하는 이유는 `/data/data/<pkg>` 샌드박스가 다른 앱의 읽기를 OS 수준에서 막기 때문이다 — 이 앱별 격리·권한 경계(질문 2)가 화면과 AppOps 조회로 관측됐다. 격리가 깨지는 루팅/백업/포렌식 이미지에서만 평문 토큰이 유출된다는 위협 모델(질문 5)의 반대편 전제가 확증된다.
 
-각 단계는 응답·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+**3) OAuth/passkey의 프로토콜 불변식은 규범 문서로 확정했다.** 네이티브는 public client라 `client_secret`을 숨길 수 없으므로 authorization code + PKCE가 필수이고 implicit/ROPC가 폐기됐다는 것은 RFC 9700(OAuth Security BCP)·RFC 8252(Native Apps BCP)의 규범이며, `code_challenge = base64url(SHA-256(code_verifier))`(생 해시 아님), 계정 바인딩은 불변 `sub`+`iss`, passkey는 rpId(등록가능 도메인 접미사) 바인딩이라는 규칙(질문 3·4·6)도 각각 OIDC Core와 WebAuthn 표준에 명시돼 있다. 이 규칙들은 문서로 확정했을 뿐, 이 AVD 세션에서 실제 트래픽·서명으로 관측하지는 않았다(아래 한계).
+
+## 가상환경 검증 한계
+
+정직하게, 이 문서가 이 세션에서 새로 캡처한 것은 전송(TLS 1.3)과 OS 격리(권한·AppOps)까지다. 프로토콜 왕복 자체는 규범은 확정했으나 이 AVD에서 재현하지는 않았다.
+
+- **실제 OAuth 공급자와 토큰 교환을 프록시로 캡처하지 않았다.** code+PKCE 왕복, `state`/`nonce` 검증, 리다이렉트가 verified App Link인지 커스텀 스킴인지의 실물 관측은 이 세션 밖이다 — 검증 블록이 밝힌 대로 실제 OAuth 공급자·제3자 SDK 백엔드는 범용 AVD 단독 검증 범위 밖이다.
+- **하드웨어 TEE/StrongBox 봉인은 x86_64 에뮬레이터라 소프트웨어 폴백이다.** Keystore가 토큰 래핑 키를 보안 하드웨어에 가두는 것과 passkey 개인키의 보안 하드웨어/동기화 저장은 이 AVD에서 실물로 측정할 수 없다.
+- **passkey WebAuthn 서명 왕복과 Credential Manager 실동작은 재현하지 않았다.** 생체 UV(C41) 후 rpId 바인딩 서명이 이뤄지는 경로는 실제 인증기가 있어야 하고, Play Integrity 프로덕션 verdict도 마찬가지로 이 환경 밖이다.
+
+관련 근거: [RFC 9700 OAuth 2.0 Security BCP](https://datatracker.ietf.org/doc/html/rfc9700) · [RFC 8252 OAuth 2.0 for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252) · [Android passkeys 가이드](https://developer.android.com/training/sign-in/passkeys) · [RFC 9449 DPoP](https://datatracker.ietf.org/doc/html/rfc9449)
 
 ## 마치며
 

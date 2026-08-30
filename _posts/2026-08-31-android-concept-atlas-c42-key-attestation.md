@@ -164,27 +164,38 @@ KeyDescription ::= SEQUENCE {
 5. 2026-02-01부터 새 **P-384 루트**가 서명을 시작해, 레거시 RSA와 **둘 다 핀**해야 합니다. 하나만 핀하면 전환 후 정상 기기를 거부합니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 공장 배치 키의 세 가지 문제(영구·배치 전체 blast radius·공유 지문)와, RKP가 각각을 어떤 설계 요소로 해결하는지 1:1로 대응해 서술하세요.
-2. `hardwareEnforced`와 `softwareEnforced` 목록의 차이가 왜 이 스키마의 핵심 보안 불변식인지, 잘못된 목록에서 태그를 검증하면 무엇이 뚫리는지 서술하세요.
-3. C28의 `RootOfTrust`가 이 attestation 확장으로 들어와 원격 서버가 "잠긴·검증부팅된 기기"를 확인하는 경로를 설명하고, 그럼에도 이것이 **증명하지 않는 것**(런타임 앱 무결성)은 무엇인지 서술하세요.
+가상 실습 환경(`codex-atlas-api33` AVD, Android 13/API 33, x86_64)에서 이 모듈의 검증 규칙 중 온디바이스로 관측 가능한 부분을 실제로 확인했다. 상단 검증 블록의 관측 결과와 `evidence-keystore.png` 화면이 근거다.
 
-## 소스·정적 검증 경로
+**1) getCertificateChain은 리프 한 장이 아니라 다중 인증서 체인을 돌려준다 — 리프 가정 금지의 실물 근거.** 검증 블록에서 EC 키 생성과 attestation 요청이 성공했고, 반환된 인증서 체인 길이는 3이었다.
 
-- `sec-api33` 에뮬에서 `setAttestationChallenge`로 키를 만들고 `getCertificateChain`으로 체인을 뽑아, `openssl asn1parse`로 OID `1.3.6.1.4.1.11129.2.1.17` 확장을 열어 `attestationVersion`·`attestationSecurityLevel`·`RootOfTrust`를 읽으세요. **`securityLevel`이 `Software`로 나옴**과, 리프의 `serialNumber=1`·`CN=Android Keystore Key` 상수를 확인하고, 왜 에뮬에서 하드웨어 보증이 검증되지 않는지 적으세요.
-- 공식 Android attestation 문서와 공개 인증서/test vector에서 `TrustedEnvironment`/`StrongBox`, `deviceLocked`와 `verifiedBootState` 형식을 대조하세요. 공개 예시는 로컬 환경의 보증으로 취급하지 않습니다.
+```console
+# AndroidKeyStore EC 키 생성 + setAttestationChallenge(server nonce)
+# KeyStore.getInstance("AndroidKeyStore").getCertificateChain(alias)
+→ 체인 길이 = 3   (리프 한 장이 아니라 세 장)
+```
 
-## 추가 심화 재현 절차
+리프 한 장이 아니라 세 장이 온다는 사실 자체가 질문 3·오개념 2("리프를 읽으면 된다")를 프로세스 수준에서 반증한다. KeyDescription 확장(OID `.17`)의 "첫 등장"을 찾으려면 체인 전체를 순회해야 하며, 리프에만 있다고 가정할 근거가 이 환경에서도 성립하지 않는다.
 
-이 모듈을 **가상 환경 실측 글**로 승격하세요. Emulator에서 생성한 체인의 실제 security level과 extension을 파싱하고, 하드웨어 Root of Trust는 공식 문서와 공개 test vector로만 비교합니다. 로컬 결과가 `Software`이면 그 사실만 관측값으로 기록하고 TrustedEnvironment/StrongBox 보증을 주장하지 않습니다.
+**2) 이 AVD의 보안 수준은 정확히 `SOFTWARE(0)`였다 — Software 거부 규칙이 실제로 걸리는 지점.** `KeyInfo`가 보고한 키 보안 수준은 `SOFTWARE(0)`로, `TrustedEnvironment(1)`·`StrongBox(2)`가 아니었다.
 
-1. **확장 파싱**: 에뮬에서 체인을 뽑아 OID `.17` 확장을 `openssl`로 열고 `securityLevel=Software`·`origin=GENERATED`·`RootOfTrust` 필드를 실제 출력으로.
-2. **형식 대조**: 공개 test vector에서 `TrustedEnvironment`/`StrongBox`, `deviceLocked`와 `verifiedBootState`를 읽고 로컬 `Software` 결과와 증거 등급을 분리.
-3. **검증 규칙 실증**: 로컬에서 만든 인증서와 공개 test vector를 이용해 챌린지 불일치, `softwareEnforced` 태그와 leaf 고정 가정이 왜 잘못인지 실제 파싱 결과로 서술.
-4. **루트 전환**: `android.googleapis.com/attestation/root`의 JSON에서 레거시 RSA + 새 P-384 루트가 둘 다 있음을 확인(정적 조회).
+```console
+# KeyInfo.getSecurityLevel()
+→ SOFTWARE(0)
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+질문 4의 `SecurityLevel` 값(`Software(0)`·`TrustedEnvironment(1)`·`StrongBox(2)`) 중 가장 낮은 값이다. 질문 7이 예고한 "에뮬레이터는 Software 레벨"이 실측으로 확인됐고, 검증 서버라면 이 값을 거부해야 한다(질문 3, 그리고 호출 흐름 4단계의 "Software 거부"). 즉 이 AVD는 attestation의 *형식*은 정직하게 만들어내지만 하드웨어 보증은 담지 못하며, 이것이 다음 절의 한계로 이어진다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 세션에서 실측한 것은 체인 길이(3)와 소프트웨어 보안 수준(`SOFTWARE(0)`)까지다. 이 모듈의 핵심 주장 대부분은 하드웨어 전용이라 이 x86_64 AVD에서 새로 캡처하지 못했고, 본문의 하드웨어 서술은 공식 문서·공개 소스를 근거로 삼았다.
+
+- **TEE·StrongBox의 하드웨어 attestation은 이 AVD에서 증명할 수 없었다.** 물리 보안 하드웨어가 없어 KeyMint가 소프트웨어 폴백으로 동작했고, 그래서 보안 수준이 `SOFTWARE(0)`로 나온다. `origin=GENERATED`·`hardwareEnforced` 목록의 보증은 형식만 존재할 뿐, 이 환경에서 하드웨어가 실제로 보장한 값이 아니다.
+- **RootOfTrust(`verifiedBootState`·`deviceLocked`·`verifiedBootKey`)는 실물 검증 부팅 상태로 채워지지 않았다.** 부트로더가 측정한 잠금/부팅 상태는 에뮬레이터에 존재하지 않으므로, "잠긴·검증부팅된 기기"라는 원격 판정은 이 세션에서 재현하지 못했다.
+- **핀된 Google 루트로의 체인 검증과 폐기 상태 목록 대조는 오프디바이스 절차라 이 온디바이스 실습에 포함되지 않았다.** 레거시 RSA + 새 P-384 두 루트 핀과 `attestation/status` JSON 조회는 서버 측 로직으로, 본문은 공식 문서 기준으로만 서술했다.
+
+관련 근거: [Android Key Attestation 스키마(source.android.com)](https://source.android.com/docs/security/features/keystore/attestation) · [Security key attestation(developer.android.com)](https://developer.android.com/privacy-and-security/security-key-attestation) · [android/keyattestation 검증 라이브러리](https://github.com/android/keyattestation) · [KeyInfo(developer.android.com)](https://developer.android.com/reference/android/security/keystore/KeyInfo)
 
 ## 마치며
 

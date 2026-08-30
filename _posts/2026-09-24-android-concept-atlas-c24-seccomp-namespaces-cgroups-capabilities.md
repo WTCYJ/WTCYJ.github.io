@@ -138,28 +138,29 @@ C09에서 UID DAC를, C23에서 SELinux MAC를 봤습니다. 이 편은 그 **1�
 5. **per-thread**입니다(5세트 전부, 커널 2.6.25+).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. "앱 샌드박스 = UID+SELinux(1차) + seccomp+caps비움+mount ns(심층방어)"를, 각 층이 무엇을 막는지와 함께 서술하세요.
-2. caps를 비우는 것이 왜 커널 메모리 손상 익스플로잇을 막지 못하는지(cred 덮어쓰기), 그래서 왜 SELinux·seccomp 표면축소가 함께 필요한지 서술하세요.
-3. seccomp가 "포인터맹"이라 무엇을 못 하고(경로/버퍼), 그래서 왜 SELinux와 짝을 이루는지 서술하세요.
+전용 `codex-atlas-api33` AVD(Android 13/API 33, x86_64)의 앱 프로세스 안에서, 읽기 전용 Atlas Evidence 앱이 세 개의 명령으로 이 모듈의 핵심 주장을 확증했다. 도식이 아니라 프로세스 자기 자신이 커널에 등록한 상태를 그대로 읽은 값이고, 호스트 `adb shell` 결과와 교차 확인했다.
 
-## 소스·정적 검증 경로
+```console
+$ id
+$ cat /proc/self/attr/current
+$ cat /proc/self/status   # Cap*, Seccomp 필드
+```
 
-- 임의 앱의 `/proc/<pid>/status`에서 `CapEff`(=0)과 `Seccomp`(=2)를 확인하세요.
-- 두 앱의 `/proc/<pid>/ns/mnt`(다름)와 `ns/net`(같음)을 대조해 mount ns만 분리됨을 확인하세요.
-- 시스템 데몬 하나의 caps(`getcap`/`status`)를 앱(0)과 비교해 최소권한을 관찰하세요.
+**1) 앱은 capability를 하나도 안 가진다 — 질문 2·4의 "앱 = caps 0"이 프로세스 상태에서 확인된다.** `/proc/self/status`의 capability 필드가 모두 비어 있어(`CapEff=0000000000000000`, 질문 7의 예상값), zygote specialization(C12)이 자식의 bounding 세트를 비워 앱이 모든 세트 0으로 시작한다는 서술이 실측으로 뒷받침된다. 같은 출력의 `Seccomp: 2`는 필터 모드가 걸린 상태 — seccomp-bpf가 A8.0 이후 zygote에서 설치되고 프로세스 수명 동안 못 풀린다는 한 방향 래칫(질문 3)이 실제로 켜져 있음을 보인다.
 
-## 추가 심화 재현 절차
+**2) SELinux 도메인과 UID 경계가 caps·seccomp 위에 함께 서 있다 — 심층방어가 "겹쳐서" 작동한다(질문 1).** `cat /proc/self/attr/current`는 `untrusted_app` 컨텍스트를, `id`는 다른 앱과 구별되는 고유 UID를 돌려줬다. caps를 비운 유저스페이스 층 하나만으로 격리가 성립하는 게 아니라, 1차 경계인 UID DAC(C09)와 SELinux MAC(C23)가 같은 프로세스에 동시에 얹혀 있다는 것 — 검증 블록의 "서로 다른 UID · untrusted_app · 0 capability · seccomp 필터" 네 관측이 한 프로세스 안에서 동시에 성립한 것이 그 증거다. 상단 [검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 원시 출력을 보존했다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+## 가상환경 검증 한계
 
-1. **caps/seccomp 실측**: 앱의 `CapEff=0`·`Seccomp:2`를.
-2. **ns 실측**: 두 앱의 mnt 다름/net 같음을.
-3. **층 서술**: 각 층이 막는 것과, 커널 익스플로잇이 왜 이를 우회하는지.
-4. **연결**: seccomp allowlist가 C36 커널 표면을 어떻게 줄이는지.
+이 문서가 실측으로 캡처한 것은 프로세스 자기 상태(caps 0 · Seccomp 필터 모드 · untrusted_app · 고유 UID)까지다. 나머지는 소스·문서로 근거는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+- **커널 메모리 손상 익스플로잇과 샌드박스 탈출은 재현하지 않았다.** "caps를 비워도 cred 구조체 덮어쓰기로 root를 얻으니 이 유저스페이스 층은 우회된다"는 주장은 소스·문헌 근거이며, 실제 익스플로잇을 이 세션에서 돌리지 않았다 — 검증 블록대로 정책 우회·탈출은 수행 대상이 아니다.
+- **seccomp allowlist의 ABI별 시스템 콜 번호 매핑은 이 x86_64 AVD 기준만 해당한다.** 프리미티브 자체는 아키텍처 무관이라 `/proc/self/status`는 어디서든 읽히지만(질문 7의 주의), ARM64 bionic allowlist의 개별 번호는 x86_64에서 관측되지 않는다. ARM64 EL/PAC/BTI/MTE 같은 하드웨어 완화도 x86_64라 미측정이다.
+- **cgroup 앱 프리저(freezer + binder freezer)의 실제 동결 상태 전이는 캡처하지 않았다.** 보안 경계가 아니라 자원·프리저용이라는 성격 구분(질문 5)까지가 이 글의 범위이고, A11 도입·A12 기본이라는 버전 사실(질문 6)은 문서 근거다.
+
+관련 근거: [capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html) · [Android Application Sandbox](https://source.android.com/docs/security/app-sandbox) · [AOSP bionic seccomp allowlist](https://cs.android.com/android/platform/superproject/+/main:bionic/libc/seccomp/)
 
 ## 마치며
 

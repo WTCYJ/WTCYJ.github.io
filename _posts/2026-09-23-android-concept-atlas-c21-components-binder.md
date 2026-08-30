@@ -140,28 +140,37 @@ C17에서 Binder를, C19에서 AMS/system_server를 봤습니다. 앱의 4대 �
 5. 앱→system_server(ATMS/AMS) Binder → 대상 앱의 `IApplicationThread`로 이어지는 **왕복**입니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 4대 컴포넌트가 각각 어떻게 Binder/AMS로 연결되는지(Activity=왕복, bindService/Provider=이후 직접 채널) 서술하세요.
-2. `exported`와 `android:permission`의 관계(exported=필요조건, false=같은 UID만)를 정확히 서술하고, 왜 검사가 system_server에 있어야 하는지(호출자 UID 위조 불가, C22) 설명하세요.
-3. intent redirection과 PendingIntent 하이재크가 어떻게 피해자 앱의 정체성을 악용하는지 서술하세요.
+전용 `codex-atlas-api33` AVD(Android 13/API 33, x86_64)에서, 4대 컴포넌트 호출이 올라타는 전송·브로커 계층을 실제 명령으로 확인했다.
 
-## 소스·정적 검증 경로
+**1) 컴포넌트 호출이 타는 Binder 전송 계층이 커널 노드로 실재한다.** 상단 검증 화면(`evidence-binder.png`)의 값은 다음 명령으로 얻었다.
 
-- 한 앱의 매니페스트에서 `exported`·`android:permission`을 컴포넌트별로 뽑아 외부 도달 가능 집합을 만드세요(소유/테스트 앱 대상).
-- `am start`/`content query`로 exported 컴포넌트 하나를 찔러 동작을 관찰하세요.
-- `pm get-app-links <pkg>`로 App Link 검증 상태를 확인하고, 그것이 exported와 별개 개념임을 서술하세요.
+```console
+$ ls -l /dev/{binder,hwbinder,vndbinder}
+```
 
-## 추가 심화 재현 절차
+binderfs의 세 노드(`binder`=앱↔프레임워크, `hwbinder`=HAL, `vndbinder`=벤더 도메인)가 모두 존재함을 확인했다. `startActivity`·`bindService`·`sendBroadcast`·ContentProvider 접근이 전부 Binder 트랜잭션이라는 질문 2의 주장이, 그 트랜잭션이 실제로 지나가는 커널 디바이스 수준에서 확인된다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 레퍼런스 모니터가 named Binder 서비스로 system_server에 등록돼 있다.**
 
-1. **열거 실측**: 매니페스트·`dumpsys package`로 exported 컴포넌트를.
-2. **도달 실측**: `am start`/`content query`로 exported 하나를 찔러.
-3. **게이트 서술**: exported=false(같은 UID) vs exported+permission을 구분해.
-4. **연결**: intent redirection을 개념으로(내 펜테스트 경험, C22).
+```console
+$ service list
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+255개 서비스 등록을 확인했다 — 컴포넌트 브로커인 `activity`(AMS)·`activity_task`(ATMS)가 이 목록에 등록된 Binder 서비스로 존재한다. 컴포넌트 시작·바인드·브로드캐스트 요청이 앱이 아니라 이 system_server 서비스로 라우팅된다는 것, 즉 "검사는 앱이 아니라 system_server에 있어야 한다"는 질문 3의 불변식이 서비스 등록 수준에서 확인된다.
+
+**3) exported 게이트와 권한 검사의 위치는 AOSP 소스로 확정한다.** 호출자 UID(`Binder.getCallingUid`, 커널이 각인해 위조 불가, C22)로 exported·`android:permission`을 검사하는 코드는 ATMS/AMS와 매니페스트 파서에 있다. 이 지점 자체는 AVD에서 새로 실행해 캡처하지 않았고(아래 한계 참조), 위 (1)·(2)가 확인해 주는 것은 그 검사가 앉아 있는 전송·브로커 토대까지다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 문서에서 새로 캡처한 실측은 (1)·(2)까지다. 나머지는 근거는 소스로 확정했으나 이 x86_64 AVD 세션에서 명령 출력으로 재현하지 않았다.
+
+- **타 앱 exported 컴포넌트로의 크로스-앱 도달 테스트는 이 세션에서 재현하지 않았다.** 범용 AVD에는 대상이 될 취약 앱이 없고(검증 블록의 한계 줄과 동일), `am start`·`content query`로 타 앱 컴포넌트를 찌르는 실전 테스트는 소유·테스트 앱 한정 원칙에 따라 수행하지 않았다.
+- **intent redirection·mutable PendingIntent 하이재크는 개념·소스로만 다뤘다.** 피해자 앱과 공격 앱 한 쌍으로 confused deputy 경로를 라이브 익스플로잇하는 재현은 이 문서 범위 밖이다.
+- **hwbinder/vndbinder 위의 실제 벤더 HAL 트랜잭션은 미측정이다.** 노드 존재는 확인했으나, 벤더 전용 HAL·하드웨어 서비스는 범용 x86_64 AVD에 실체가 없어 그 위의 트랜잭션을 관측할 수 없다.
+
+관련 근거: [앱 컴포넌트 기초](https://developer.android.com/guide/components/fundamentals) · [android:exported (activity 매니페스트)](https://developer.android.com/guide/topics/manifest/activity-element) · [PendingIntent 가변성(A12)](https://developer.android.com/about/versions/12/behavior-changes-12#pending-intent-mutability) · [PendingIntent 레퍼런스](https://developer.android.com/reference/android/app/PendingIntent)
 
 ## 마치며
 

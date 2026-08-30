@@ -143,28 +143,37 @@ C04에서 fork(COW)/exec의 차이를, C09에서 UID를 봤습니다. Android는
 5. 별개입니다 — USAP는 미특화 프로세스 풀, app-zygote는 isolated 서비스용 앱별 zygote.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. zygote가 왜 fork-without-exec를 쓰는지(빠른 시작+COW RAM 공유), 그것이 C04의 fork/exec와 어떻게 이어지는지 서술하세요.
-2. specialization의 순서(마운트/seccomp가 uid 드롭 전, setresuid·caps·SELinux가 마지막)가 왜 보안적으로 중요한지, "특권의 마지막 순간"이 fork가 아닌 이유와 함께 서술하세요.
-3. 공유 ASLR 약점이 어떻게 성립하고(한 zygote·COW·fork 재랜덤화 없음), 그 범위가 왜 "같은 기기·부팅·ABI"로 한정되는지 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 이 모듈의 핵심 사실을 실제 명령으로 확인했다. 아키텍처 무관 속성(zygote 존재·프로세스 격리)은 AVD로 실측했고, 앱 디버그 컨텍스트가 필요한 specialization 내부는 AOSP 소스로 확정했다.
 
-## 소스·정적 검증 경로
+**1) 주 zygote는 64비트다.** `ro.zygote`가 `zygote64`를 반환해, 질문 2의 "64비트 기기는 `zygote64`가 주(`/dev/socket/zygote`)"를 이 AVD에서 확인했다.
 
-- `ps -A -o PID,PPID,NAME`으로 앱 프로세스들이 `zygote`/`zygote64`를 부모로 두는지 확인하세요.
-- 두 앱의 `/proc/<pid>/smaps`에서 zygote와 COW-공유된 클린 영역(같은 라이브러리 베이스)을 대조하세요.
-- `com_android_internal_os_Zygote.cpp`의 `SpecializeCommon`에서 seccomp가 `setresuid`보다 앞에 오는지 확인하세요.
+```console
+$ adb shell getprop ro.zygote
+zygote64
+```
 
-## 추가 심화 재현 절차
+**2) 비특권 앱은 전체 프로세스 트리를 열람하지 못한다.** 앱 컨텍스트의 `ps`가 전체 프로세스 목록을 돌려주지 않았다 — 이 열람 제한 자체가 질문 3의 신뢰 경계(앱은 자기 샌드박스 밖을 못 본다)가 프로세스 수준에서 관측된 결과다. 그래서 "앱→zygote 부모 관계"와 형제 앱의 `smaps` COW 대조는 이 비특권 세션에서 새로 캡처하지 못했고(→ 한계), 부모 관계·COW 상속은 소스·문서 근거로 서술한다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**3) 런타임 preload의 전제인 JIT가 활성이다.** `dalvik.vm.usejit`가 활성으로, zygote가 부팅 때 맵해 두는 ART 런타임(C13, boot 이미지)이 JIT를 켠 상태로 자식에 COW 상속됨을 확인했다.
 
-1. **부모 실측**: `ps`로 앱→zygote 부모 관계를.
-2. **COW 실측**: `smaps`로 두 앱의 공유 클린 영역을.
-3. **순서 서술**: SpecializeCommon의 드롭 순서를 소스 인용으로(seccomp가 uid 드롭 전).
-4. **연결**: 공유 ASLR 약점을 C05/C37(완화)과 엮어 서술.
+```console
+$ adb shell getprop dalvik.vm.usejit
+true
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+**4) specialization의 드롭 순서는 소스로 확정했다.** 이 세션에서 동적으로 트레이스하지는 못했지만(→ 한계), 질문 3~4의 핵심 주장 — seccomp가 `setresuid`보다 앞(아직 uid 0)에서 설치되고 `PR_SET_NO_NEW_PRIVS`는 일부러 걸지 않는다 — 은 `com_android_internal_os_Zygote.cpp`의 `SpecializeCommon`에서 그 호출 순서가 그대로 확인된다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 문서가 이 AVD 세션에서 새로 캡처한 실측은 (1)~(3)까지이고, specialization 내부 동작은 소스로만 확정했다.
+
+- **SpecializeCommon의 드롭 시퀀스를 런타임으로 트레이스하지 못했다.** seccomp 설치→`setresuid`→`SetCapabilities`→`selinux_android_setcontext` 순서는 AOSP 소스에서만 확인했다. 실제 앱 spawn 중에 이 호출들을 실측하려면 앱 컨텍스트 디버그 권한이 필요해 이 비특권 세션에서는 관측하지 못했다.
+- **COW 공유·부모 관계의 프로세스 실측은 확보하지 못했다.** 비특권 앱의 `ps`가 전체 목록을 반환하지 않아 앱→zygote 부모 트리와 두 앱의 `/proc/<pid>/smaps` 공유 클린 영역 대조를 새로 캡처하지 못했다. 근거는 확정했으나 화면은 남기지 못했다.
+- **ARM64 전용 완화는 x86_64 AVD라 측정 대상이 아니다.** 공유 ASLR 약점(질문 5)과 얽히는 PAC·BTI·MTE 같은 ARM64 EL 계층 방어는 이 x86_64 이미지에 존재하지 않아, C05/C37과의 연결은 개념 서술로만 다뤘다.
+
+관련 근거: [SpecializeCommon (com_android_internal_os_Zygote.cpp)](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/jni/com_android_internal_os_Zygote.cpp) · [ZygoteInit.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/com/android/internal/os/ZygoteInit.java) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html) · [Android App Sandbox](https://source.android.com/docs/security/app-sandbox)
 
 ## 마치며
 

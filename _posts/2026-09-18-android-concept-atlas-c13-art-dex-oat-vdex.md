@@ -141,28 +141,33 @@ DEX(C07)를 실행하는 **런타임**입니다. C06의 APK 안 DEX가 여기서
 5. **ISA·부트이미지·DEX 체크섬에 묶여** 비이식입니다(무효화→재컴파일).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. DEX→OAT/VDEX/ART이미지 파이프라인에서 각 산출물이 무엇을 담는지(OAT=네이티브, VDEX=dex+검증, .art=힙 스냅샷) 서술하고, 왜 리버서가 DEX를 분석 대상으로 삼는지 설명하세요.
-2. A7.0 하이브리드(인터프리트+JIT+프로필→백그라운드 speed-profile)가 "설치 시 완전 AOT" 모델을 어떻게 바꿨는지 서술하세요.
-3. OAT/VDEX가 왜 ISA·부트이미지·DEX 체크섬에 묶여 비이식인지, 그것이 포렌식/분석에 주는 함의와 함께 서술하세요.
+가상 실습 환경(codex-atlas-api33, x86_64, ART 13/API 33)에서 이 모듈이 전제하는 런타임 상태를 검증 블록의 명령으로 확인했다.
 
-## 소스·정적 검증 경로
+**1) 이 기기의 ART는 JIT를 켠 A7+ 하이브리드 런타임이다.** 블록에 기록한 세 명령을 그대로 실행해 `zygote64`와 JIT 활성 상태를 관측했다.
 
-- 임의 앱의 `/data/app/<pkg>/oat/<isa>/`에서 `base.odex`·`base.vdex`를 찾고, `dumpsys package <pkg>`로 현재 컴파일 필터를 확인하세요.
-- `oatdump` 또는 `vdexExtractor`로 vdex에서 DEX를 복원해, 원본 `classes.dex`와 동등한지 대조하세요.
-- `cmd package compile -m speed -f <pkg>` 전후로 OAT 크기·필터가 어떻게 바뀌는지 관찰하세요.
+```console
+$ getprop ro.zygote
+$ getprop dalvik.vm.usejit
+$ ps
+```
 
-## 추가 심화 재현 절차
+`ro.zygote`가 `zygote64`라는 것은 64비트 ART 프로세스가 부트 이미지를 맵한다는 뜻이고(질문 8의 C12 연결), `dalvik.vm.usejit` 활성은 앱이 인터프리트+JIT로 돌며 프로필을 모으는 파이프라인의 진입 경로가 켜져 있다는 뜻이다. 질문 4의 하이브리드 동작이 프로퍼티 수준에서 확인되고, "모든 앱은 설치 시 완전 AOT"라는 오개념 4가 이 한 기기에서 곧바로 반증된다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) DEX를 실행하는 앱 프로세스는 격리돼 있다.** 같은 캡처에서 비특권 앱의 전체 프로세스 열람이 막히는 것을 함께 관측했다(`ps` 접근 거부). ART가 DEX를 인터프리트/JIT 실행하는 무대가 EL0의 격리된 앱 프로세스라는 질문 2의 전제가, 예상된 격리 결과로 뒷받침된다. 원시 출력은 검증 블록의 API 33 기준 로그에, 화면은 상단 검증 스크린샷(`evidence-runtime.png`)에 보존돼 있다.
 
-1. **산출물 실측**: `oat/<isa>/`의 odex/vdex와 `dumpsys` 컴파일 필터를.
-2. **DEX 복원**: vdex→dex 복원 후 baksmali로 분석 가능함을.
-3. **분석 서술**: OAT(네이티브)가 아니라 DEX를 분석 대상으로 삼는 이유를.
-4. **연결**: 네이티브 `.so`(JNI, C15)가 왜 별개 표면인지.
+DEX가 진실의 원천이고 OAT/VDEX가 그 파생 산출물이라는 이 모듈의 중심 불변식은 AOSP `art/dex2oat`·`oatdump`와, VDEX가 원본 DEX를 그대로 담아 재검증을 생략한다는 소스 사실로 확정했다. 다만 이 AVD 세션에서 산출물 파일 자체를 캡처하지는 않았다(아래 한계).
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 신규 캡처는 (1)·(2)의 런타임 프로퍼티까지다. DEX→OAT→VDEX 파이프라인의 산출물 수준 증거는 소스·문서로 근거를 확정했으나 이 세션에서 새로 캡처하지는 않았다.
+
+- **`oat/<isa>/base.odex`·`base.vdex` 산출물과 `dumpsys package` 컴파일 필터는 이 세션에서 캡처하지 않았다.** OAT/VDEX 생성은 빌드·프로필 상태에 따라 달라져(검증 블록 각주와 동일), 한 번의 x86_64 AVD 캡처를 모든 Android 버전으로 일반화하지 않는다.
+- **vdex→dex 복원(vdexExtractor/oatdump)과 baksmali 대조도 이 세션에서 실행하지 않았다.** DEX 보존은 VDEX 포맷의 문서화된 속성이지만, 실제 복원 출력을 이 문서의 관측 결과로 주장하지는 않는다.
+- **ARM64 전용 OAT는 이 x86_64 AVD로 측정할 수 없다.** `.odex`의 네이티브 코드는 타깃 ISA에 종속되므로, ARM64 Cuttlefish/QEMU의 OAT와 여기서 본 x86_64 런타임을 섞지 않는다.
+
+관련 근거: [ART 개요 (source.android.com)](https://source.android.com/docs/core/runtime) · [Configuring ART](https://source.android.com/docs/core/runtime/configure) · [AOSP art/dex2oat](https://cs.android.com/android/platform/superproject/+/main:art/dex2oat/)
 
 ## 마치며
 

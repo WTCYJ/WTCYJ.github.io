@@ -139,28 +139,30 @@ C04에서 Android 앱이 평범한 Linux 프로세스라 했습니다. 이 편�
 5. **같은 서명 키**여야만 가능합니다(그래서 신뢰 근거가 서명).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 앱↔앱 격리가 "커널 UID DAC"라는 것을, `/data/data/<pkg>` 소유권과 커널의 `open()` 검사로 서술하고, 왜 이게 SELinux MAC과 별개 층인지 설명하세요.
-2. 멀티유저/워크프로필 격리가 `uid = userId×100000 + appId`로 어떻게 실현되는지, 같은 appId가 왜 프로필별로 다른 커널 uid가 되는지 서술하세요.
-3. sharedUserId가 왜 샌드박스를 넓히고(한 앱 침해→그룹 전체) 왜 비가역적인지, isolatedProcess와 대비해 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, Google APIs x86_64)에서 이 모듈의 핵심 불변식을 실제로 확인했다. UID 샌드박스는 아키텍처 무관이라 이 x86_64 AVD에서도 설치·등록 경로가 그대로 관측된다.
 
-## 소스·정적 검증 경로
+**1) 설치 = 서명 검증 → PMS의 UID 등록.** 증거 앱 APK를 직접 빌드해 v2/v3 서명을 검증한 뒤 설치했고, Package Manager가 그 앱을 **별도 UID로 등록**했다.
 
-- 임의 앱 하나에 대해 `dumpsys package <pkg>`로 `userId=`(appId)·`dataDir`·`sharedUser=`를 확인하고, `ps -A`에서 그 앱의 `u0_aXX`를 대조하세요.
-- `packages.xml`(또는 `packages.list`)에서 한 sharedUserId 그룹을 찾아, 같은 appId를 공유하는 앱들을 나열하세요.
-- 시스템 프로세스(uid 1000)와 셸(2000)이 `ps`에서 심볼릭 이름으로 나오는지 확인하세요.
+```console
+$ apksigner verify --print-certs app.apk
+$ adb install -r app.apk
+```
 
-## 추가 심화 재현 절차
+이 한 줄이 질문 2(설치 시 PMS가 고유 appId 할당)와 질문 4의 입력→출력(서명·매니페스트 → 프로세스 UID + 데이터 디렉터리 소유권)을 동시에 확증한다. 서명 검증이 설치보다 **앞서** 성공한다는 사실이 곧 질문 3의 오개념 5("다른 키로도 묶인다")를 반증한다 — appId를 키잉하는 신뢰 근거는 서명(C08)이다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 앱마다 별도 UID = 앱↔앱 1차 경계.** 상단 검증 화면([apps.png](/assets/img/android-concept-atlas/verified-api33/apps.png))의 값은 실행 중인 앱 프로세스에서 수집해 호스트 `adb shell` 결과와 교차 확인했고, 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했다. "앱을 별도 UID로 등록"은 질문 1·질문 3의 핵심 불변식 그 자체다 — 앱마다 고유 UID가 있어야 커널이 `/data/data/<pkg>`의 소유 UID를 `open()`/`stat()`마다 검사해 다른 UID의 사적 파일을 막을 수 있다. 관측된 UID 경계가 이 DAC 검사가 설 토대다.
 
-1. **UID 실측**: `dumpsys package`·`ps -A`로 앱의 appId와 `u0_aXX`를.
-2. **격리 실측**: 두 앱의 서로 다른 UID와 `/data/data/<pkg>` 소유권(`ls -n`)을.
-3. **3층 서술**: DAC(UID) vs SELinux(C23) vs seccomp를 구분해, 각각이 무엇을 막는지.
-4. **연결**: 한 sharedUserId 그룹을 찾아, 그것이 왜 샌드박스를 넓히는지 서술.
+## 가상환경 검증 한계
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 이 세션의 실측은 위 (1)·(2)까지다. 이 모듈의 나머지 사실은 근거(소스·문서)로 확정했으나 이 AVD에서 새로 캡처하지는 않았다.
+
+- **`/data/data/<pkg>`의 숫자 uid 소유권과 0700 mode를 직접 캡처하지 않았다.** 내부 소유권 확인(`ls -n /data/data/<pkg>`)은 루팅·디버그 앱 컨텍스트라야 가능해, 이 세션은 커널의 파일 소유 UID 검사를 "별도 UID 등록"에서 추론했을 뿐 per-file mode를 열람하지 않았다.
+- **멀티유저 합성 uid를 실측하지 않았다.** 이 AVD는 user 0만 있어, `uid = userId×100000 + appId`로 같은 appId가 user 10에서 `1010123`이 되는 것은 소스(`UserHandle.PER_USER_RANGE`)로 확인했을 뿐 두 번째 프로필에서 관측하지 않았다.
+- **sharedUserId 그룹을 packages.xml에서 열거하지 않았다.** API 29(Android 10)부터 deprecated인 레거시라 이 증거 앱에는 없고, 병합의 샌드박스 확대·비가역성은 문서·소스 근거로만 서술했다. AAB의 Play 서버 변환과 Play App Signing도 검증 블록대로 로컬 Google APIs AVD로는 재현하지 않았다.
+
+관련 근거: [Android App Sandbox](https://source.android.com/docs/security/app-sandbox) · [android_filesystem_config.h (AID 상수)](https://cs.android.com/android/platform/superproject/+/master:system/core/libcutils/include/private/android_filesystem_config.h) · [UserHandle.java (PER_USER_RANGE·getAppId)](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/os/UserHandle.java) · [&lt;manifest&gt; android:sharedUserId](https://developer.android.com/guide/topics/manifest/manifest-element)
 
 ## 마치며
 

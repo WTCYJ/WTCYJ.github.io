@@ -137,28 +137,32 @@ excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린
 5. 아닙니다. `checkPermission(perm,pid,uid)`은 넘긴 uid를 검사하는 중립 API. 함정은 **`*OrSelf*` 변형**(IPC 밖에서 자기 정체성 폴백).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 인증(AuthN)과 인가(AuthZ)의 차이를 정의하고, 왜 인가가 "각 객체/행위마다" 재검사돼야 하는지 서술하세요.
-2. 객체수준(IDOR/BOLA)과 함수수준(BFLA) 인가 파손의 차이를, 내 HSPACE PII 케이스를 예로 서술하세요.
-3. Android에서 호출자 UID(AuthN, C22)와 권한 검사(AuthZ, C10)가 왜 별개이며, `checkCallingPermission` vs `*OrSelf*`가 왜 취약 패턴인지 서술하세요.
+이 모듈의 두 축이 **한 앱 프로세스 안에 서로 다른 레이어로 동시에 존재한다**는 것을, 가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 검증 블록에 기록한 네 명령으로 확인했다. 위 [검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)의 값이 그대로다.
 
-## 소스·정적 검증 경로
+```console
+$ adb shell id                          # → 앱 UID 10174   (AuthN: 커널이 각인한 정체성)
+$ adb shell cat /proc/self/attr/current # → untrusted_app  (AuthZ: SELinux MAC 도메인)
+$ adb shell cat /proc/self/status       # → CapEff=0, Seccomp=2  (AuthZ: 능력·시스템콜 제한)
+$ adb shell uname -a                    # → Linux 5.15     (커널)
+```
 
-- 한 API/앱 기능에 대해 진단 질문 쌍(정체성 확인? AND 이 객체 인가?)을 적용해, 인가가 빠진 곳을 찾으세요(소유/허가 대상).
-- Android 앱의 exported 컴포넌트를 비특권 앱으로 호출해, 권한 가드 없이 도달되는지(AuthZ 부재) 확인하세요.
-- 코드에서 `checkCallingPermission`과 `checkCallingOrSelfPermission` 사용을 구분해 후자의 위험을 서술하세요.
+**1) "누구"(AuthN)는 앱이 고르는 값이 아니라 커널이 박은 UID다.** `id`가 보고한 앱 UID 10174는 프로세스 생성 시 커널이 각인한 정체성이지 앱이 선언한 값이 아니다. 질문 2의 불변식 "IPC 호출자 = 커널이 각인한 호출자 UID(위조 불가)"가 프로세스 수준에서 그대로 관측되며, Binder AuthZ(`Binder.getCallingUid`, C22)가 소비하는 게 바로 이 값이다.
 
-## 추가 심화 재현 절차
+**2) "무엇을 해도 되나"(AuthZ)는 그 정체성과 별개의 레이어다.** 같은 프로세스에서 `/proc/self/attr/current`는 `untrusted_app` SELinux 도메인을 보고했다. 정체성(UID 10174)과 접근 결정(SELinux MAC 도메인, C23)이 한 프로세스 안에 나란히, 서로 다른 축으로 존재한다 — 질문 3의 "AuthN은 시작이지 끝이 아니다"가 눈으로 확인된다. UID를 알아도 무엇이 허용되는지는 도메인 정책이 별도로 결정한다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 화면·응답만** 붙입니다.
+**3) 인증된 앱이라도 특권은 기본 차단이다.** `/proc/self/status`의 `CapEff=0`(유효 capability 없음)과 `Seccomp=2`(seccomp 필터 활성)는, "로그인/실행됐으니 뭐든 된다"가 아니라 인가 관문이 항상 돈다는 질문 2의 "인가는 항상 도는 관문"을 뒷받침한다. 정체성 확인과 무관하게 능력과 시스템콜 표면이 좁혀져 있다.
 
-1. **IDOR 재서술**: 내 HSPACE PII 케이스를 "인증했으나 인가 누락" 틀로(공개 정책 범위 내, 민감정보 마스킹).
-2. **Android 실측**: exported 컴포넌트 하나를 비특권 앱으로 호출한 결과를(소유 앱).
-3. **API 서술**: `checkCallingPermission` vs `*OrSelf*` 차이를 코드로.
-4. **연결**: 이 구분이 C10·C22·C23과 어떻게 이어지는지.
+## 가상환경 검증 한계
 
-각 단계는 응답·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 이 문서의 실측 캡처는 위 세 값(UID · SELinux 도메인 · CapEff/Seccomp)까지다. 나머지는 근거는 소스로 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
+
+- **`checkCallingOrSelfPermission`의 `OrSelf` 폴백은 라이브로 재현하지 않았다.** 두 앱 사이에 실제 IPC를 걸어 "IPC 밖이면 서비스 자기 정체성으로 통과"를 관측한 것이 아니라, 동작은 AOSP 소스 정의로만 확정했다. 질문 3·5의 핵심 함정이지만 이 세션의 관측 결과는 아니다.
+- **exported 컴포넌트를 비특권 앱으로 호출한 응답은 이 세션에서 찍지 않았다.** 소유 앱 두 개(호출자·피호출자)를 띄워 권한 가드 유무를 실제 응답으로 증적화하는 절차는 실행하지 않았다.
+- **ARM64 EL·PAC·BTI·MTE는 x86_64 AVD라 런타임으로 관측하지 못했다.** 검증 블록의 한계 줄과 동일하게, 이 하드웨어 완화들은 공개 소스 경로로만 판정한다.
+
+관련 근거: [OWASP A01:2021 Broken Access Control](https://owasp.org/Top10/A01_2021-Broken_Access_Control/) · [OWASP API Security Project (BOLA/BFLA)](https://owasp.org/www-project-api-security/) · [Android Context.checkCallingOrSelfPermission](https://developer.android.com/reference/android/content/Context) · [Android Binder.getCallingUid](https://developer.android.com/reference/android/os/Binder)
 
 ## 마치며
 

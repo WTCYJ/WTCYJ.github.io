@@ -210,27 +210,34 @@ Boot ROM ──검증──▶ 부트로더 단계들 ──검증──▶ 최�
 5. 강제는 **잠금 상태 + 하드웨어 RoT**에 게이트됩니다. 에뮬은 언락 + 퓨즈 RoT 없음이라 안 보이는 게 정상입니다. 언락하면 ORANGE + 강제 꺼짐이고, `--disable-verity/--disable-verification` 플래그는 언락에서만 먹힙니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 신뢰의 뿌리가 "퓨즈된 전체 키"가 아니라 "퓨즈된 키 해시 + vbmeta 안의 키"인 이유를, 자가서명 vbmeta가 왜 잠긴 기기에서 거부되는지로 설명하세요.
-2. HASH 디스크립터와 HASHTREE 디스크립터를 구분하고, 왜 `system`은 부팅 때 전체를 해시하지 않고 dm-verity로 읽을 때마다 검증하는지 서술하세요.
-3. 부팅 상태 색(GREEN/YELLOW/ORANGE/RED)이 로컬 경고 화면을 넘어 원격 서버까지 신뢰되는 경로(attestation `RootOfTrust`)를 서술하고, 왜 침해된 OS가 GREEN을 위조하지 못하는지 설명하세요.
+이 모듈은 하드웨어 신뢰의 뿌리에 묶인 속성이 많아, 가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 잴 수 있는 것과 없는 것이 갈립니다. 위 실행 보고서의 관측을 이 모듈의 주장과 하나씩 이었습니다.
 
-## 소스·정적 검증 경로
+**1) 이 AVD에는 AVB 강제 신호가 실제로 부재한다 — 질문 8의 핵심.** 실행 보고서의 검증 한계가 그대로 기록합니다: 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 질문 7이 부팅 상태를 읽는 창구로 든 `ro.boot.verifiedbootstate`·`ro.boot.vbmeta.digest`가 이 AVD에서는 빈 값이고(보고서 각주 그대로 — 빈 속성은 AVD가 값을 제공하지 않았다는 뜻), 이것이 곧 질문 8의 주장을 세션 내에서 확증합니다: **강제는 잠금 상태 + 하드웨어 신뢰의 뿌리에 게이트되며, 에뮬레이터는 둘 다 없어 아무것도 강제되지 않는다.** 15~16주차의 "에뮬에선 안 보인다"가 빌드 변종 탓이 아니라 RoT 부재 탓이라는 정정과 일치합니다.
 
-- **공개 AOSP 또는 공식 배포 이미지**의 `vbmeta.img`와 `boot.img`를 호스트에서 `avbtool info_image`로 열어 descriptor 종류(Hash·Hashtree·Chain Partition), `rollback index`, `flags`와 알고리즘을 읽으세요.
-- Cuttlefish를 부팅할 수 있으면 `getprop ro.boot.verifiedbootstate`·`ro.boot.vbmeta.digest`와 `/dev/block/dm-*`를 캡처하고, 일반 AVD에서 같은 신호가 빠질 수 있는 이유를 가상화된 Root of Trust의 한계로 설명하세요.
+**2) Treble/APEX 파티션 분할은 이 AVD에서 활성이다 — 체인 파티션 위임의 전제.** 실행 보고서의 실제 명령으로 확인했습니다.
 
-## 추가 심화 재현 절차
+```console
+$ getprop ro.treble.enabled
+$ getprop ro.apex.updatable
+```
 
-이 모듈을 **실측 글**로 승격하세요. 환경 특성을 먼저 명시합니다: `sec-api33` 에뮬은 사실상 언락 + 퓨즈 RoT 없음이라 **강제가 보이지 않습니다**(15~16주차 관찰의 진짜 원인 = 빌드가 아니라 잠금 상태·RoT 부재). 그러나 **`avbtool info_image`는 호스트에서 아무 이미지에나 돌릴 수 있으므로 구조 자체는 실측 가능**합니다. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+두 속성 모두 활성으로 관측됐습니다(보고서: Treble/APEX 활성화). 질문 1·8이 CHAIN_PARTITION 디스크립터(`vbmeta_system`·`vbmeta_vendor`의 별도 키·롤백 슬롯)를 Treble의 파티션 분할(C31/C32)에 걸어 설명했는데, 그 분할 자체가 이 AVD에 실재함을 뒷받침합니다. 다만 체인 vbmeta의 강제 검증은 1)의 이유로 이 AVD에서 노출되지 않아 한계로 넘깁니다.
 
-1. **구조 실측**: 공개 이미지의 `vbmeta.img`·`boot.img`·system 관련 이미지를 `avbtool info_image`로 열어 Hash·Hashtree·Chain Partition descriptor를 실제 출력으로 보이기.
-2. **가상 부팅 상태**: Cuttlefish/QEMU의 `ro.boot.*` 속성과 `/dev/block/dm-*`로 제공되는 Verified Boot·dm-verity 신호를 캡처하고, 하드웨어 보증과 같다고 주장하지 않기.
-3. **두 전략 대조**: HASH descriptor(boot)와 HASHTREE descriptor(system) 출력을 나란히 붙여 "전체 이미지 digest"와 "블록 단위 검증"의 차이를 실제 산출물로 설명하기.
-4. **attestation 다리**(가능하면): 하드웨어 attestation 인증서를 하나 뽑아 `RootOfTrust`의 `verifiedBootState`를 읽어 부팅 상태 색과 연결.
+**3) `/data`가 FBE로 암호화돼 "AVB ≠ 기밀성" 경계가 mount 출력에서 갈린다 — 질문 5.** 보고서의 `mount` 관측은 `/data`를 file-based encryption(`file`, `encrypted`)으로 보였습니다. 질문 5와 마치며가 그은 경계 — **AVB는 정지상태 무결성 + 롤백 방지일 뿐, 기밀성은 FBE(C43)의 몫** — 이 이 AVD의 실제 mount 산출물로 확인됩니다. 무결성 앵커(AVB)와 기밀성(FBE)이 별개 메커니즘임이 관측으로 구분됩니다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
+vbmeta 봉투(256바이트 헤더·매직 `AVB0`·인증 블록 제외 해시)와 HASH/HASHTREE/CHAIN 디스크립터, dm-verity 머클 루트가 서명된 vbmeta에 앵커된다는 구조적 주장(질문 4·5)은 libavb 소스와 공식 문서에 근거하며, 아래 근거 링크가 그 출처입니다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 세션의 실측 캡처는 위 (1)~(3)의 부재·활성·경계 신호까지입니다. 하드웨어 신뢰의 뿌리에 묶인 부분은 근거는 확정했으나 이 AVD에서 새로 측정하지 못했습니다.
+
+- **이 세션에서 `avbtool info_image`/`verify_image`를 실제 이미지에 돌린 출력은 캡처하지 않았다.** 질문 4·7의 vbmeta 디스크립터·롤백 인덱스·flags 구조는 libavb(`external/avb`) 소스와 공식 문서 기준이지, 이 AVD가 뜬 산출물이 아니다.
+- **하드웨어 신뢰의 뿌리 자체가 에뮬레이터에 없다.** OTP/eFuse의 키 해시, RPMB/TEE 롤백 저장소, 부트 ROM, ARM64 EL3 시큐어 모니터는 이 x86_64 AVD에 존재하지 않아 측정 대상이 아니고, PAC/BTI/MTE 같은 아키텍처 신뢰 경계도 x86_64라 미측정이다.
+- **dm-verity의 읽기시 블록 검증과 실패 모드(restart/eio)는 재현하지 않았다.** 이 AVD에는 verity 매핑된 `/dev/block/dm-*` 파티션이 없어, 머클 트리의 lazy 검증은 소스·문서 서술까지만 다뤘다.
+
+관련 근거: [Android Verified Boot](https://source.android.com/docs/security/features/verifiedboot) · [Key Attestation·RootOfTrust](https://source.android.com/docs/security/features/keystore/attestation) · [AOSP external/avb (libavb)](https://cs.android.com/android/platform/superproject/+/main:external/avb/) · [Linux dm-verity](https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/verity.html)
 
 ## 마치며
 

@@ -144,28 +144,32 @@ C09에서 앱이 UID로 격리된다 했습니다. 그런데 그 UID **안에는
 5. **Privacy Sandbox의 SDK Runtime**(A13+)도 있습니다. 단 일반 SDK는 인프로세스 풀권한.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. SDK가 앱과 같은 UID·권한으로 도는 것(격리 없음)이 왜 공급망 위험의 뿌리인지, "앱 표면 = 내코드 ∪ 모든 SDK"로 서술하세요.
-2. 전이 의존성 트리가 왜 미감사 표면인지, event-stream/dependency-confusion을 예로 서술하고 SBOM·dependency verification이 무엇을 막는지 설명하세요.
-3. 하나의 침해된 SDK가 왜 O(N) 앱 규모의 공격이 되는지, Joker 같은 사례와 함께 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈의 뿌리 주장을 확인했다. SDK 백엔드와 라이브 침해는 검증 범위 밖인 연구 모듈이라, 측정 가능한 경계는 실행으로, 나머지는 공개 소스·표준 문서로 확정했다.
 
-## 소스·정적 검증 경로
+**1) 권한은 패키지(UID) 단위로만 부여된다 — SDK별 통제 지점이 없다.** 검증 블록의 "패키지·AppOps 조회"와 개인정보·보안 설정 캡처(위 `privacy.png`)에서, 권한·AppOps 부여는 전부 **패키지 단위**로 나타났다. 화면과 조회 어디에도 "이 라이브러리에만 위치 허용" 같은 SDK별 스코핑은 존재하지 않는다. 이것이 질문 2·3의 불변식을 화면 수준에서 확증한다 — 사용자가 앱에 준 권한은 곧 그 앱에 실린 **모든 SDK**에 준 것이며, 경계는 패키지(UID)이지 라이브러리가 아니다. 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했다.
 
-- 소유/허가 앱을 apktool로 열어 패키지 prefix·`lib/<abi>`·병합 매니페스트로 임베디드 SDK를 열거하세요.
-- (소스 있으면) `./gradlew :app:dependencies`로 전이 트리를 떠서 직접 선언과의 차이(미감사 표면)를 확인하세요.
-- Exodus로 앱의 트래커를 조회하고, 각 SDK가 앱의 어떤 권한을 상속하는지 정리하세요.
+**2) SDK의 네트워크는 앱의 네트워크 주체로 나간다.** 호스트 검증에서 앱 경로의 TLS는 1.3으로 협상되고 HTTP 200을 받았다.
 
-## 추가 심화 재현 절차
+```console
+$ curl --tlsv1.3 ...     # 호스트 검증 로그
+→ TLS 1.3 세션 · HTTP 200
+```
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 출력·화면만** 붙입니다.
+인프로세스 SDK는 이 소켓 스택을 그대로 공유하므로, SDK가 보내는 트래픽도 앱의 UID·네트워크 권한·인증 컨텍스트를 타고 나간다 — 질문 2의 "네트워크를 앱으로서"가 확인된다. 앱과 호스트 관측은 분리 기록해 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 남겼다.
 
-1. **열거 실측**: apktool/패키지 prefix로 임베디드 SDK 목록을.
-2. **트리 실측**: `./gradlew :app:dependencies`의 전이 트리를(또는 Exodus 리포트).
-3. **권한 서술**: SDK가 상속하는 앱 권한을 매핑해 "앱 표면 = 내코드 ∪ SDK"를.
-4. **연결**: 침해 SDK가 왜 공급망 공격인지(event-stream/Joker).
+**3) 전이 트리·SBOM은 공개 소스·표준으로 확정했다(AVD 측정 대상 아님).** 개발자가 직접 선언한 dep 아래로 Maven이 재귀 해소한 전이 트리는 `./gradlew :app:dependencies`로 드러나며(질문 7), 그 산출물의 컴포넌트 인벤토리 표준은 ISO/IEC 5962:2021로 채택된 SPDX 2.2.1과 CycloneDX 1.6이다(질문 6). Gradle dependency verification(6.2+)은 체크섬·PGP 서명을 `verification-metadata.xml`에 고정해 event-stream·dependency-confusion류 오염을 빌드 단계에서 차단한다 — 여기까지는 문서와 소스로 확정한 사실이며, 이 AVD가 새로 측정한 값이 아니다.
 
-각 단계는 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 실측은 (1)·(2)의 경계까지다. 나머지는 근거는 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지 않았다.
+
+- 실제 악성·침해 SDK를 심어 앱 스케일의 PII·클립보드·위치 유출을 관측하는 실험은 이 세션에서 하지 않았다. event-stream·Joker의 O(1)→O(N) 증폭은 공개 사고 보고서에 근거한 사례이지 라이브 재현이 아니다.
+- 제3자 SDK 백엔드(광고·분석 서버)와 실제 OAuth 공급자로의 왕복 트래픽은 범용 AVD 단독 검증 범위 밖이다(검증 블록의 한계와 동일). SDK가 실제 무엇을 전송·수신하는지의 엔드투엔드 관측은 미측정으로 남았다.
+- Privacy Sandbox의 SDK Runtime 별도 프로세스 격리는 별도 SDK·구성이 필요한 A13+ 기능이라 이 기본 AVD에서 인스턴스화해 관측하지 않았고, isolatedProcess(C25)의 격리 동작도 소스·문서 근거까지만 다뤘다.
+
+관련 근거: [Android 권한 개요](https://developer.android.com/guide/topics/permissions/overview) · [Privacy Sandbox on Android](https://developer.android.com/design-for-safety/privacy-sandbox) · [Gradle dependency verification](https://docs.gradle.org/current/userguide/dependency_verification.html) · [SPDX](https://spdx.dev/)
 
 ## 마치며
 

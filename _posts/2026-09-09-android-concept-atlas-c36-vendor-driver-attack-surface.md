@@ -161,28 +161,32 @@ Arm/Qualcomm 수정 ──(몇 달)──▶ SoC 벤더 ──▶ OEM ──▶ 
 5. HAL은 원래 유저스페이스이고 여전히 ioctl로 커널 드라이버를 몹니다 — 커널 드라이버를 HAL로 바꿀 순 없습니다. EL1을 벗어나는 진짜 방향은 **하드웨어 격리(pKVM)**입니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 왜 Android 커널 LPE의 대다수가 코어 커널이 아니라 벤더 드라이버에서 나오는지(검토·수·패치 트랙)를 서술하세요.
-2. GPU 드라이버가 왜 유독 앱 도달 가능한 EL0→EL1 표적인지(렌더링·`untrusted_app` 접근·복잡도)와, 두 층(HAL/드라이버)의 차이를 서술하세요.
-3. "패치 갭"이 왜 벤더 특유인지, Treble/GKI가 무엇을 고치고 무엇을 못 고치는지, 그리고 그것이 제 CVE 시리즈의 EL0→EL1 서사와 어떻게 맞물리는지 서술하세요.
+이 모듈은 SoC/OEM의 out-of-tree GPU 드라이버라는 하드웨어 전용 표면을 다룬다. 범용 x86_64 AVD(`codex-atlas-api33`)에는 벤더 GPU 드라이버가 올라오지 않으므로 커널 노드 자체는 실측하지 못했다 — 그러나 바로 그 부재가 이 글의 전제 하나를 확증한다.
 
-## 소스·정적 검증 경로
+**1) 이 AVD에는 벤더 GPU 노드가 없다 — 질문 7의 "존재를 가정하지 말라"가 실측으로 맞다.** 검증 블록의 커널 확인 명령이 보여주는 건 순수 x86_64 범용 커널이다.
 
-- Cuttlefish/QEMU가 제공하는 가상 device node와 SELinux label을 `ls -Z /dev`로 확인하고, 공개 AOSP/vendor kernel source의 device node 및 sepolicy 선언과 비교하세요. `/dev/mali0`·`/dev/kgsl-3d0`가 존재한다고 가정하지 않습니다.
-- 최근 몇 달치 **Android Security Bulletin**에서 "Arm/Qualcomm components" 절을 열어 벤더 드라이버 CVE 비율과 in-the-wild 악용 플래그를 세어 보세요(스크립트로 집계 — 제 24주 교훈: 집계는 스크립트가).
-- Project Zero "Mind the Gap"에서 패치 갭의 구체 사례(CVE-2022-33917/36449)를 확인하세요.
+```console
+$ uname -a
+$ cat /proc/cpuinfo
+```
 
-## 추가 심화 재현 절차
+관측 결과는 Android 13 기반 **Linux 5.15 x86_64** 커널이었다(상단 검증 스크린샷 `evidence-kernel.png`, [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)). 이 커널에는 Arm `kbase`·Qualcomm KGSL 같은 SoC KMD가 컴파일되어 있지 않으니 `/dev/mali0`·`/dev/kgsl-3d0`도 없다. 질문 7이 "`/dev/mali0`·`/dev/kgsl-3d0`가 존재한다고 가정하지 않는다"고 못박은 그대로, 범용 이미지에서는 이 공격 표면이 아예 실재하지 않는다는 것을 커널 수준에서 확인한 셈이다.
 
-이 모듈을 **실측/조사 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 출력·화면만** 붙입니다.
+**2) EL0 네이티브 발판은 이 세션에서 실제로 빌드·실행했다.** 검증 블록대로 NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다([호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)). 이것이 이 모듈이 잇는 체인의 **앞쪽 절반**(EL0, `untrusted_app`의 네이티브 코드)이다 — 미디어/BT 버그가 서던 그 유저스페이스 층이 이 AVD에서 동작함을 확인했다. 뒤쪽 절반인 GPU 커널 드라이버 LPE(EL1 피벗)만이 하드웨어 없이는 닿지 않는 부분이다.
 
-1. **노드 접근 실측**: `ls -Z /dev` GPU 노드와 sepolicy로 `untrusted_app` 접근을 캡처.
-2. **불리틴 집계**: 최근 ASB의 Arm/Qualcomm 절 CVE를 스크립트로 집계해 "벤더 드라이버가 대다수"를 근거로.
-3. **패치 갭 서술**: "Mind the Gap"과 이 기기의 벤더 SPL을 대조.
-4. **시리즈 연결**: 내 미디어/BT EL0 버그(4·7·8편)를 이 GPU/벤더 드라이버 EL1 단계와 하나의 체인으로 서술.
+**3) GPU가 유일한 앱-도달 커널 표면이라는 핵심 주장은 문서·불리틴이 1차 근거다.** `untrusted_app`이 `gpu_device`만 열도록 허용된다는 것은 AOSP SELinux 정책의 설계이고(질문 3), Mali kbase·Qualcomm KGSL의 in-the-wild 0-day 연쇄(질문 5의 CVE-2022-38181, CVE-2023-33106/33107 등)는 Android Security Bulletin의 "Arm/Qualcomm components" 절과 Project Zero "Mind the Gap"이 남긴 공개 기록이다. 이 부분은 범용 AVD의 관측이 아니라 공식 소스에서 확정한 사실로 서술한다.
 
-각 단계는 명령 출력·실제 스크린샷/집계로만 증적화하고, 미확인·추정 항목은 "못 한 것/추정"으로 분리하세요.
+## 가상환경 검증 한계
+
+정직하게, 이 글의 새 실측은 (1)·(2)까지다. 이 모듈의 본체인 GPU 드라이버 LPE는 근거는 공식 소스로 확정했으나 이 x86_64 AVD 세션에서 새로 캡처한 것이 아니다.
+
+- **`/dev/mali0`·`/dev/kgsl-3d0`의 ioctl 경로와 UAF/OOB 클래스는 실측하지 못했다.** 범용 AVD에 벤더 KMD가 없어 노드 자체가 부재하므로, `ls -Z /dev`로 `gpu_device` 라벨을 캡처하는 것도 이 이미지에서는 성립하지 않는다.
+- **EL0→EL1 상승과 ARM64 확장은 이 커널에서 측정 대상이 아니다.** x86_64 AVD에는 ARM64의 EL 경계가 없고, PAC/BTI/MTE(질문 6의 완화)도 존재하지 않아 GPU UAF의 EL1 완화 효과는 재현하지 못했다.
+- **라이브 GPU LPE 익스플로잇과 벤더 SPL 대조(패치 갭 실측)는 재현하지 않았다.** 실제 SoC 기기·벤더 이미지가 있어야 하는 부분으로, 이 글은 그것을 공개 CVE·불리틴 타임라인으로만 서술한다.
+
+관련 근거: [Android Security Bulletins](https://source.android.com/docs/security/bulletin) · [Android SELinux](https://source.android.com/docs/security/features/selinux) · [NVD CVE-2023-33107 (KGSL)](https://nvd.nist.gov/vuln/detail/CVE-2023-33107) · [NVD CVE-2022-38181 (Mali kbase UAF)](https://nvd.nist.gov/vuln/detail/CVE-2022-38181)
 
 ## 마치며
 

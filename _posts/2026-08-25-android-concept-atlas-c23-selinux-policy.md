@@ -212,30 +212,32 @@ u:r:untrusted_app:s0:c145,c256,c512,c768   ← ps -Z 로 보이는 그 문자열
 5. 도구는 **바이너리 정책**(`/sys/fs/selinux/policy`, `precompiled_sepolicy`)에 돌립니다 — `.te` 소스는 AOSP 트리에만 있습니다. 그리고 `dontaudit`·permissive가 거부를 숨기거나 바꾸므로, avc 부재는 허용의 증거가 아닙니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 15~16주차에서 `ps -Z`로 본 `u:r:untrusted_app:s0:c145,c256,c512,c768`의 네 필드를 각각 설명하고, **어느 필드가 두 앱을 구분하며** 그 강제가 TE가 아니라 무엇(무슨 제약)에서 오는지 서술하세요.
-2. `neverallow`가 런타임이 아니라 컴파일/CTS 시점 단언이라는 사실이, OEM/벤더가 스스로에게 위험한 `allow`를 추가하지 못하게 하는 데 왜 결정적인지 서술하세요.
-3. 미디어/블루투스 EL0 침해(제 CVE 시리즈)가 SELinux로 "그 도메인이 접근 가능한 타입 집합"에 어떻게 갇히는지, 그리고 `permissive` 도메인이 그 가둠을 어떻게 무력화하는지 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서, 이 모듈의 주장 중 앱 프로세스 안에서 관측할 수 있는 부분을 실제 명령으로 확인했다.
 
-## 소스·정적 검증 경로
+**1) MAC 라벨은 DAC UID 위에 실제로 겹쳐 있다(질문 1·질문 3).** 같은 앱 프로세스 안에서 UID와 SELinux 컨텍스트를 나란히 읽었다.
 
-Android Emulator 또는 Cuttlefish에서 다음을 수행하고 정리하세요. **SELinux 정책과 label 관찰은 x86_64 에뮬레이터(`sec-api33`)에서도 대부분 가능합니다.**
+```console
+$ id
+$ cat /proc/self/attr/current
+```
 
-- `ps -A -Z | grep untrusted_app`로 서로 다른 두 앱이 **같은 도메인인데 카테고리 꼬리가 다름**을 확인하세요 — 그 꼬리가 앱-대-앱 샌드박스입니다.
-- `sepolicy-analyze <policy> permissive`로 permissive 도메인 목록을, `sesearch -A -s untrusted_app -t app_data_file -c file`로 실제 확장된 권한 집합을 뽑으세요(대상은 바이너리 정책).
-- `dmesg | grep avc` 거부 한 줄을 골라 `scontext`/`tcontext`/`tclass`/`{ perm }`로 **어떤 `allow`가 빠졌는지**(또는 어떤 `mlsconstrain`인지)를 역산해, "정책 한 줄을 읽고 허용/거부를 예측한다"는 완료 기준을 채우세요.
+`id`가 준 UID는 C09의 앱 샌드박스(DAC)이고, `/proc/self/attr/current`가 준 `u:r:untrusted_app:s0:c...`는 그 위에 얹힌 두 번째 겹(MAC)이다. 검증 블록의 관측 결과 줄이 기록한 "서로 다른 UID + `untrusted_app` SELinux 컨텍스트"가 한 프로세스에서 함께 나온다는 것 자체가, "MAC는 DAC 위에 더해지고 둘 다 통과해야 한다"는 질문 3의 불변식을 프로세스 속성 수준에서 확증한다. 원시 출력은 상단 검증 화면과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 있다.
 
-## 추가 심화 재현 절차
+**2) 관측한 세 번째 필드가 곧 도메인=타입이다(질문 4·배경 개념).** `/proc/self/attr/current`가 돌려준 컨텍스트의 세 번째 필드 `untrusted_app`이, 파일에 붙으면 타입이고 실행 중 주체에 붙었기에 도메인이라 부르는 하나의 타입 이름공간의 같은 이름이다. 15~16주차에서 `ps -Z`로 "봤을" 뿐이던 그 라벨을, 이번에는 질문 4에서 분해한 네 필드(`user:role:type:level`)의 구조로 실제 프로세스에서 다시 읽었다 — 판정을 지배하는 것은 이 세 번째 필드다.
 
-이 모듈을 **실측 글**로 승격하세요. 앞의 세 모듈(C05·C37·C33)과 달리 이 주제는 **`sec-api33` 에뮬로 대부분 실측 가능**합니다(SELinux는 x86에도 있음). 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**3) 두 앱이 같은 도메인을 공유한다는 사실(격리를 타입이 못 하는 이유)의 절반을 관측했다(질문 5).** 이 AVD의 서드파티 앱 프로세스는 모두 같은 `untrusted_app` 컨텍스트를 갖는다 — 즉 TE 타입만으로는 앱 A와 B가 구분되지 않는다는 질문 5의 전제가 관측으로 성립한다. 두 앱을 실제로 가르는 나머지 절반(카테고리 꼬리 `c145,c256,...`와 그 `mlsconstrain` 강제)은 이 세션에서 새로 캡처하지 않았고, 근거는 AOSP `system/sepolicy`의 `seapp_contexts`(`levelFrom=all`)·`mls`에서 확정했다.
 
-1. **라벨 실측**: `getenforce`·`id -Z`·`ps -A -Z`·`ls -Z` 출력을 실제 화면으로. 15~16주차에서 라벨만 봤던 것을 이제 네 필드로 분해해 설명.
-2. **앱-대-앱 격리를 실제 출력으로**: 교육용 앱 두 개를 에뮬레이터에 설치해 카테고리 꼬리가 다름을 캡처하고, 한 앱에서 다른 앱의 데이터 접근을 시도해 실패를 보이기.
-3. **정책 한 줄 읽기(완료 기준)**: `sesearch`로 `untrusted_app`의 allow 엣지 하나를 뽑아, 주체·대상 타입·클래스·권한으로 소리 내어 읽기.
-4. **거부 귀속**: 위 2의 접근 시도가 남긴 `avc: denied`(또는 억제됐다면 `dontaudit` 때문임을 확인)를 캡처하고, 그것이 allow 부재인지 `mlsconstrain`인지 귀속.
+## 가상환경 검증 한계
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 이 문서가 이 세션에서 새로 캡처한 실측은 위 (1)·(2)와 (3)의 앞 절반(공유 도메인)까지다. 정책 언어 자체의 검증은 근거는 확정했으나 이 AVD에서 새로 실행하지는 않았다.
+
+- 앱-대-앱 MLS 카테고리 격리를 실제 거부로는 재현하지 않았다. 교육용 앱 두 개를 설치해 카테고리 꼬리가 다름을 캡처하고 한쪽에서 다른 앱 데이터 접근이 `mlsconstrain`으로 막히는 `avc: denied`를 받는 실측은 이번 검증 블록 범위 밖이며, 관측은 라벨의 도메인 부분까지다.
+- 바이너리 정책에 도구를 돌린 출력은 이 세션에 없다. `sesearch --allow -s untrusted_app`의 확장된 권한 집합과 `sepolicy-analyze <policy> permissive`의 permissive 벤더 도메인 목록은 x86_64 AVD에서도 원리상 가능하지만 이번에는 포함하지 않았고, 질문 5·7의 정책 분석은 AOSP 소스와 문서 근거로만 서술했다.
+- `neverallow`·CTS 게이트는 빌드/CTS 시점 산출물이라 런타임 AVD로는 관측 대상이 아니다. 그것이 컴파일(`secilc`)과 `SELinuxNeverallowRulesTest`에서 강제된다는 사실은 문서로 확정했을 뿐, 이 실행 세션에서 재현할 수 있는 항목이 아니다.
+
+관련 근거: [SELinux concepts (source.android.com)](https://source.android.com/docs/security/features/selinux/concepts) · [Implementing SELinux](https://source.android.com/docs/security/features/selinux/implement) · [AOSP system/sepolicy](https://cs.android.com/android/platform/superproject/+/main:system/sepolicy/)
 
 ## 마치며
 

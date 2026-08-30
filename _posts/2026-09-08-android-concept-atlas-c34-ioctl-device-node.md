@@ -146,28 +146,36 @@ VFS: (major,minor) → cdev → file_operations 설치
 5. `isolated_app`은 가장 잠긴 도메인이라 GPU 노드를 **못 엽니다**. GPU 노드를 여는 건 `untrusted_app`입니다(렌더링).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. ioctl이 왜 "불투명한 드라이버 RPC"이고, 그래서 왜 request의 크기 필드가 자문일 뿐 강제가 아닌지 서술하세요.
-2. GPU 드라이버가 왜 유독 앱 도달 가능한 EL0→EL1 표적인지(렌더링·untrusted_app 접근·복잡도)와, `isolated_app`과의 차이를 서술하세요.
-3. PAN이 막는 것과 막지 못하는 것을 구분하고, 그래서 왜 드라이버 저자가 여전히 모든 size/bounds/포인터 검사를 책임지는지 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 이 모듈의 핵심 주장을 검증 블록의 실제 관측에 붙여 확인했다. ioctl 표면은 대부분 벤더 하드웨어에 있어, 이 범용 AVD로는 (1) 실행 커널의 정체, (2) 그 커널에서 인코딩이 문서대로인지, (3) 벤더 GPU 스택이 애초에 존재하는지를 확정하고, 하드웨어 종속 세부는 공개 소스·sepolicy 근거로 서술한다.
 
-## 소스·정적 검증 경로
+**1) 실행 커널이 실제 Linux 5.15 x86_64라, ioctl request 인코딩은 문서가 아니라 이 커널의 UAPI다.**
 
-- Android Emulator/Cuttlefish에서 `ls -l /dev`와 `ls -Z /dev`로 가상 character/block device, major/minor와 SELinux type을 확인하세요. OEM GPU node를 가정하지 말고 실제로 제공된 goldfish/virtio/binder device만 기록합니다.
-- 앱 프로세스를 `strace`(가능하면)해 `ioctl(fd, 0x…, …)`의 인코딩된 request를 관측하고, 매크로(`_IOWR('b',1,…)`)로 디코딩하세요.
-- 커널 `security/selinux/hooks.c`의 `ioctl_has_perm`에서 xperm이 어느 비트로 필터하는지 한 곳 인용하세요.
+```console
+$ uname -a
+Linux ... 5.15 ... x86_64      # codex-atlas-api33 · Android 13/API 33
+```
 
-## 추가 심화 재현 절차
+질문 4의 request 인코딩(`nr` 8비트 / `type` 8비트 / `size` 14비트 / `dir` 2비트, `_IOC_READ=2`)은 바로 이 커널 라인의 `include/uapi/asm-generic/ioctl.h`에 박힌 정의이고, `BINDER_WRITE_READ = _IOWR('b', 1, struct binder_write_read)`도 같은 헤더로 디코딩된다. 인코딩 불변식이 문서 예시가 아니라 실행 중인 커널에 붙는다는 것을, 검증 블록의 커널 버전 관측(Linux 5.15 x86_64)이 확증한다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) x86_64 Google APIs 이미지라 ARM SoC GPU 벤더 스택이 구조적으로 없다.**
 
-1. **노드 실측**: `ls -l /dev`·`ls -Z /dev`·`cat /proc/devices`로 문자 장치·major/minor·SELinux 타입을 캡처.
-2. **ioctl 관측**: `strace`로 실제 ioctl request를 잡아 인코딩을 디코딩.
-3. **표면 서술**: GPU 노드가 왜 `untrusted_app`에 열려 있고 그것이 왜 위험한지를 `ls -Z`와 sepolicy로.
-4. **연결**: C17(Binder=ioctl)과 CVE 시리즈(EL0 버그의 EL1 상승)를 이 채널로 엮기.
+`uname -a`가 보고한 `x86_64`는 검증 블록의 "범용 AVD에 없는 벤더 드라이버" 기록과 일치한다. 질문 5의 최상위 표적인 Mali `kbase`(`/dev/mali0`)·Qualcomm KGSL(`/dev/kgsl-3d0`)은 ARM SoC 벤더 드라이버라, 이 x86_64 범용 이미지에는 노드 자체가 없다. "앱이 실제로 열 수 있는 GPU 노드가 최상위 표적"이라는 주장에서, 그 노드가 벤더 이미지에서만 존재한다는 경계를 이 플랫폼 측정이 함께 확인해 준다 — 핸들러 표면의 세부는 공개 소스·sepolicy 근거로 남긴다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+**3) 검증 블록이 빌드·실행한 것은 EL0 네이티브 계층이고, 이 ioctl 채널은 그 위 EL1로의 상승 단계다.**
+
+검증 블록은 NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다. 이것이 질문 8이 가리키는 "CVE 시리즈의 EL0 메모리 안전 버그"가 사는 자리 — EL0 네이티브 코드 계층이다. 이 모듈의 ioctl 핸들러는 그 EL0 버그가 EL1로 올라가는 두 번째 단계이고, 이번 세션은 그 사슬의 EL0 절반(네이티브 툴체인·UBSan 대조)까지를 실측했다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 실측은 실행 커널·아키텍처·EL0 네이티브 빌드까지다. ioctl 표면의 하드웨어 종속 부분은 근거를 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지는 않았다.
+
+- **벤더 GPU ioctl 핸들러(Mali kbase·Qualcomm KGSL)의 실제 request·응답은 이 세션에서 캡처하지 않았다.** 범용 x86_64 이미지에 `/dev/mali0`·`/dev/kgsl-3d0` 노드가 없어, `ls -Z`나 `strace`로 인코딩된 request를 관측할 대상 자체가 없었다.
+- **ARM64 전용 요소(PAN/PXN의 실 하드웨어 동작, SELinux xperm의 실 적용, MTE·BTI·PAC)는 x86_64라 미측정이다.** 검증 블록이 기록한 x86_64 커널에는 ARM64형 EL0/EL1·PAN이 존재하지 않아, 질문 3·5의 PAN 경계와 질문 6의 xperm 필터는 소스·아키텍처 문서 근거로만 다뤘다.
+- **KASAN 계측 커널과 double-fetch·정수 오버플로·UAF의 라이브 트리거는 재현하지 않았다.** 검증 블록의 "KASAN 커널은 실행하지 않았다"와 일치하며, 질문 5의 버그 클래스는 소스 수준 설명에 머문다.
+
+관련 근거: [ioctl(2) man page](https://man7.org/linux/man-pages/man2/ioctl.2.html) · [Linux ioctl number 인코딩·등록부](https://www.kernel.org/doc/html/latest/userspace-api/ioctl/ioctl-number.html) · [커널 ioctl 인터페이스 설계](https://www.kernel.org/doc/html/latest/driver-api/ioctl.html) · [Android SELinux](https://source.android.com/docs/security/features/selinux)
 
 ## 마치며
 

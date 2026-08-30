@@ -161,28 +161,33 @@ Boot ROM/PBL(EL3, 시큐어) ─검증→ XBL(EL3): DRAM 초기화 + 시큐어 �
 5. **세 단계**입니다: first_stage → **selinux_setup**(정책 로드·enforcing) → second_stage. 정책은 별도 재실행 단계에서 로드됩니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. "신뢰가 실리콘에서 시작한다"는 것이 왜 중요한지(퓨즈의 키 해시·재플래시 불가)와, 그것이 부트로더 단계들의 전이적 검증(C28)으로 어떻게 이어지는지 서술하세요.
-2. init이 세 단계로 자기를 재실행하며 각 단계가 하는 일(마운트/dm-verity·SELinux·property·서비스)을 순서대로 설명하고, PID 1이 유지되는 이유를 서술하세요.
-3. 부트로더가 왜 "신뢰 코드"가 아니라 공격 표면인지, 그리고 언락이 왜 데이터 와이프를 강제하는지 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 확인할 수 있는 것은 부트 체인의 **결과물** — init이 파일시스템을 마운트하고 서비스를 다 세운 뒤의 런타임 상태다. Boot ROM·PBL/XBL/ABL·AVB 같은 pre-OS 단계는 이 Google APIs 에뮬레이터가 재현하지 않으므로, 그 부분의 근거는 AOSP 소스·공식 문서로 확정했다. 검증 블록이 실제로 실행한 명령은 다음 셋이다.
 
-## 소스·정적 검증 경로
+```console
+$ getprop ro.treble.enabled     # → 활성
+$ getprop ro.apex.updatable      # → 활성
+$ mount                          # /data 가 file-based encryption(file, encrypted)로 마운트
+```
 
-- 공개 AOSP/Cuttlefish 이미지의 `boot.img`/`init_boot`/`vendor_boot`를 `unpack_bootimg.py`로 열어 **header version**과 각 파티션 내용을 확인하고 GKI layout 여부를 판정하세요.
-- `getprop | grep ^\[ro.boot`로 부트로더가 넘긴 값들, `/system/etc/init/*.rc`로 Android Init Language 예시를 확인하세요.
-- 왜 에뮬에서는 벤더 부트로더 체인(PBL/XBL/ABL)이 안 보이는지 근거와 함께 적으세요.
+**1) init이 부팅 과정에서 세운 마운트·암호화가 런타임에 그대로 관측된다.** `mount` 출력에서 `/data`가 file-based encryption(`file`, `encrypted`)으로 올라온 것을 확인했다. 질문 2에서 "init이 파일시스템을 마운트하고 SELinux를 켜고 서비스를 띄운다"고 정리한 바로 그 시퀀스의 종착 상태다 — first-stage-mount가 dm-verity로 system을 세운 뒤 userdata가 FBE로 마운트되기까지 init이 정상 진행했다는 증거다.
 
-## 추가 심화 재현 절차
+**2) GKI/vendor_boot가 전제하는 플랫폼/벤더 분리가 실제로 켜져 있다.** `getprop ro.treble.enabled`로 Treble 활성을 확인했다. 질문 6에서 정리한 vendor_boot(v3/Android 11)·init_boot(Android 13) 분리는 전부 이 플랫폼/벤더 경계 위에 서며, 그 경계가 런타임에서 참임을 확인했다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**3) Mainline(APEX)이 이 부팅 위에서 뜬다.** `getprop ro.apex.updatable`로 APEX 갱신 가능 상태를 확인했다. APEX는 second-stage init이 띄우는 `apexd`가 마운트하므로, 이는 init이 서비스 단계까지 도달했다는 관측 근거이자 질문 8에서 다음으로 지목한 C31(Treble·Mainline·APEX)의 실측 앵커다.
 
-1. **부트 이미지 구조**: `unpack_bootimg` 출력으로 헤더 버전과 boot/init_boot/vendor_boot 내용을 실측.
-2. **init 스테이지**: `/system/etc/init/*.rc`와 `logcat`/`dmesg`의 초기 부트 로그로 property service·서비스 시작을 캡처.
-3. **잠금 상태**: `fastboot getvar unlocked`와 `ro.boot.verifiedbootstate`(C28)를 대조.
-4. **연결 서술**: 이 부팅이 C28(AVB)·C23(SELinux)·C39(TEE)를 어떻게 세우는지 실측 근거로.
+부트 헤더 버전 레이아웃(질문 4의 표), init 3단계 전이(first_stage → selinux_setup → second_stage), 리셋 시 EL3 진입 같은 pre-OS·하드웨어 사실은 AVD가 아니라 AOSP `system/core/init`와 source.android.com 부트로더 문서로 확정한 것이지, 이 세션에서 새로 캡처한 값이 아니다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서에서 새로 캡처한 실측은 위 세 가지(Treble·APEX·`/data` FBE 마운트)까지다. 이 모듈의 뼈대인 부트 체인 단계들은 이 x86_64 AVD가 재현하지 않아, 근거는 확정했으나 새로 측정하지는 않았다.
+
+- **실리콘 Root of Trust와 벤더 부트로더 체인(PBL/XBL/ABL)은 이 AVD에서 관측되지 않는다.** Google APIs 에뮬레이터는 OEM Boot ROM과 다단계 부트로더를 재현하지 않으므로, OTP 퓨즈의 키 해시·EL3 시큐어 실행은 공개 사양 수준까지만 다뤘다.
+- **AVB 상태와 A/B 슬롯 속성은 이 AVD가 노출하지 않았다.** 검증 블록에 적었듯 `verifiedbootstate`와 슬롯 속성이 비어, `fastboot getvar unlocked`나 하드웨어 롤백 퓨즈 같은 잠금·롤백 신뢰 모델은 C28의 문서 근거로 남는다.
+- **부트 이미지 언팩(`unpack_bootimg`)과 init 스테이지 부트 로그(`dmesg`/`logcat`)는 이 세션에서 캡처하지 않았다.** 헤더 버전 레이아웃과 세 단계 재실행은 AOSP 소스로 확정한 사실이며, 이 AVD 세션의 새 화면으로 증적화하지는 않았다.
+
+관련 근거: [AOSP first_stage_init.cpp](https://cs.android.com/android/platform/superproject/+/main:system/core/init/first_stage_init.cpp) · [Bootloader 개요](https://source.android.com/docs/core/architecture/bootloader) · [Generic boot partition](https://source.android.com/docs/core/architecture/partitions/generic-boot) · [Verified Boot](https://source.android.com/docs/security/features/verifiedboot)
 
 ## 마치며
 

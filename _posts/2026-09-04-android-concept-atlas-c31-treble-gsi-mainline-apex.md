@@ -150,28 +150,32 @@ Google Play 시스템 업데이트 → 모듈(APK 또는 APEX)
 5. VTS는 **기기 자체 빌드**로 벤더 인터페이스/HAL 적합성을 검사합니다. GSI가 필요한 건 **CTS-on-GSI**입니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. Treble의 프레임워크/벤더 분리가 SELinux(C23)·링커 네임스페이스(C33)·AVB(C28)에서 각각 어떻게 표현되는지, 그리고 그것이 왜 하나의 신뢰 경계인지 서술하세요.
-2. Mainline/APEX가 왜 보안 패치 갭을 줄이는지, 그리고 APEX가 어떻게 무결성(서명·dm-verity·읽기전용·롤백)을 보장하는지 서술하세요.
-3. APEX와 APK의 차이(마운트 시점·내용·용도)를 설명하고, 왜 ART/tzdata 같은 부품은 APEX여야 하는지 서술하세요.
+가상 실습 환경(codex-atlas-api33 AVD · Android 13/API 33 · Google APIs x86_64)에서 이 모듈의 핵심 경계 두 가지를, 검증 블록에 기록한 속성 조회로 실제 확인했다.
 
-## 소스·정적 검증 경로
+**1) 이 부팅 이미지에서 Treble 벤더 인터페이스가 실제로 켜져 있다.** 프레임워크/벤더 분리는 이 글의 개념이 아니라 이 이미지의 속성으로 관측된다.
 
-- Cuttlefish에서 `ls /apex`와 `pm list packages --apex-only`로 Mainline 모듈을 확인하고, 제공되는 경우 `lshal`과 `service list`로 HAL/service transport를 관찰하세요.
-- `cat /vendor/etc/vintf/manifest.xml`로 벤더가 제공하는 HAL/버전을 보고, VINTF 매니페스트=제공 / 호환성 행렬=요구 구조를 근거로 설명하세요.
-- 이 기기가 GSI인지(`ro.build.flavor`) 확인하세요.
+```console
+$ getprop ro.treble.enabled
+$ getprop ro.apex.updatable
+```
 
-## 추가 심화 재현 절차
+두 속성 모두 활성(참) 값을 돌려줬고, 이것이 검증 블록의 "Treble/APEX 활성화 … 확인했다"는 관측 결과의 근거다. `ro.treble.enabled`가 참이라는 것은 이 AVD의 `/system`과 `/vendor`가 질문 1~3에서 말한 VINTF 경계로 분리된 채 부팅했다는 뜻 — 질문 3의 "벤더 인터페이스는 빌드 경계가 아니라 신뢰 경계"라는 불변식이 부팅한 이미지 수준에서 성립함을 확인한다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) APEX가 갱신 가능한 형태로 활성화되어 있다.** `ro.apex.updatable`가 참이므로, 이 이미지의 `/apex` 모듈들은 질문 2·5의 Mainline 경로(스테이징 후 재부팅에 활성화, 읽기전용 마운트)로 갱신될 수 있는 형식이다. 원시 출력은 상단 스크린샷(`evidence-boot.png`)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했다.
 
-1. **모듈 목록**: `/apex`와 `pm list packages --apex-only` 출력으로 이 기기가 실제로 받는 Mainline 부품을 실측.
-2. **HAL transport**: `lshal` 출력으로 HIDL/AIDL 혼재와 transport를 캡처.
-3. **파티션·VINTF**: 파티션 목록과 `vintf` 매니페스트를 캡처해 프레임워크/벤더 경계를 서술.
-4. **패치 갭 서술**: 특정 Mainline 모듈(예: media, conscrypt)이 OEM OTA 없이 패치되는 경로를 CVE 시리즈의 패치 갭과 연결.
+**3) `/data`가 file-based encryption으로 마운트되어 있다.** 같은 세션의 `mount` 조회에서 `/data`가 `file`·`encrypted` 옵션으로 올라온 것을 확인했다 — Treble이 가른 파티션들이 실제로 각자의 속성대로 마운트되어 부팅한다는 것을 보여주는 부수 관측이다.
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 세션의 실측은 위 세 가지(속성·마운트 관측)까지다. 나머지는 근거는 공개 소스로 확정했으나 이 x86_64 Google APIs AVD가 새로 캡처하지는 못했다.
+
+- **AVB 상태와 A/B 슬롯 속성은 이 AVD가 노출하지 않았다.** 검증 블록에 적었듯 이 Google APIs 이미지는 vbmeta·슬롯 속성을 제공하지 않아, APEX 페이로드의 dm-verity 검증과 vbmeta 체인(C28)은 이 세션에서 관측되지 않았다.
+- **APEX 롤백 방지와 하드웨어 롤백 퓨즈는 재현하지 않았다.** 서명 실패·다운그레이드가 실제로 거부되는 경로는 부트 ROM·퓨즈 영역이라 에뮬레이터 검증 범위 밖이다.
+- **`lshal`·`/apex` 목록·VINTF 매니페스트의 라이브 덤프는 이 세션에 포함하지 않았다.** HIDL/AIDL transport 혼재와 벤더 매니페스트(제공)/호환성 행렬(요구) 구조는 개념과 공개 소스로만 다뤘고, 이 AVD에서 새로 캡처하지는 않았다.
+
+관련 근거: [VINTF (Treble 호환성)](https://source.android.com/docs/core/architecture/vintf) · [Modular System / Mainline](https://source.android.com/docs/core/ota/modular-system) · [VNDK](https://source.android.com/docs/core/architecture/vndk)
 
 ## 마치며
 

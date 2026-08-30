@@ -227,30 +227,36 @@ TEE OS(S-EL1) → KeyMint TA(S-EL0) ──── 평문 키는 오직 이 두 �
 5. 하드웨어 백업 키는 TEE(S-EL0/S-EL1)나 StrongBox에 있고 논시큐어 메모리로 나오지 않습니다. 커널을 완전히 장악해도 서명·복호 연산을 **요청**할 수 있을 뿐 원본 키는 못 뺍니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. 1~4주차에서 "UID 샌드박스와 SELinux 두 겹"이라고 했습니다. 이 두 겹이 **같은 EL(EL1)**에서 강제된다는 사실이 방어자 관점에서 왜 중요한지, "단일 실패 도메인" 개념을 써서 서술하세요.
-2. 당신의 CVE 재현들(미디어 정수 결함, 블루투스 버퍼)은 어느 예외 수준에서 실행됩니까? 그것이 왜 "커널 장악"이 아니라 "발판"인지, 커널(EL1)에 닿으려면 무엇이 더 필요한지 서술하세요.
-3. PAN과 PXN이 각각 막는 것을 구분하고, 각각이 실패했을 때 되살아나는 고전 익스플로잇 기법(사용자 포인터 역참조 / ret2usr)을 연결하세요.
+이 모듈은 ARM64 하드웨어 속성을 다루지만, 실행 환경은 x86_64 `codex-atlas-api33` AVD였습니다. 그래서 런타임으로 굳힐 수 있었던 것은 **EL0 논시큐어 앱이 어떤 격리 아래 놓여 있는가**까지고, ARM64 전용 특권 층 자체는 질문 7의 공개 소스 경로로 판정했습니다. 검증 블록의 네 명령이 확증한 것을 하나씩 붙입니다.
 
-## 소스·정적 검증 경로
+```console
+$ id                                # 관측: 앱 UID 10174
+$ cat /proc/self/attr/current       # 관측: untrusted_app
+$ cat /proc/self/status             # 관측: CapEff=0, Seccomp=2
+$ uname -a                          # 관측: Linux 5.15
+```
 
-Android Emulator 또는 Cuttlefish(API 33 이상)에서 다음을 수행하고 근거와 함께 한 문단으로 정리하세요. ARM64 전용 feature가 필요하면 ARM64 QEMU나 공개 CPU feature 자료를 사용합니다.
+**1) 질문 2·3의 "내가 통제하는 코드는 전부 EL0 논시큐어이고, 그 위 격리는 UID와 SELinux 두 겹"이 한 프로세스에서 동시에 관측됩니다.** `id`가 준 UID 10174(DAC)와 `/proc/self/attr/current`가 준 `untrusted_app` 도메인(MAC)이 같은 앱 프로세스에 함께 걸려 있습니다. 질문 3에서 "이 두 겹은 특권 층으로 보면 같은 EL1 한 층"이라고 했는데, 그 두 겹이 실제로 한 EL0 프로세스에 겹쳐 찍혀 있음을 두 값으로 확인했습니다.
 
-- `adb shell cat /proc/cpuinfo`의 `Features` 줄과 `adb shell dmesg | grep -i "cpu features"`(권한이 없으면 커널 config)를 떠서, 이 기기가 (a) PAN을 쓰는지, (b) `paca`/`pacg`(PAC)·`bti`·`mte`가 있는지 판정하세요.
-- **왜 `pan`과 `pauth` 문자열을 `/proc/cpuinfo`에서 찾으면 안 되는지** 근거와 함께 적으세요.
-- Linux `arch/arm64/include/asm/pgtable-prot.h`에서 `PTE_PXN` 또는 `PTE_UXN`이 사용자/커널 매핑 pgprot 정의에 들어가는 한 곳을 인용하고, 그것이 질문 5의 "정책은 소프트웨어, 강제는 하드웨어"를 어떻게 뒷받침하는지 한 줄로 연결하세요.
+**2) `CapEff=0`은 이 앱이 커널 특권을 한 조각도 들고 있지 않다는 뜻입니다.** 질문 5의 "위로 올라가는 길은 오직 예외(EL0→EL1)뿐"과 이어집니다. 앱이 이미 가진 capability로 올라가는 지름길이 없으므로, EL1에 닿으려면 시스템 콜/`ioctl`/Binder 표면을 통한 별도 커널 버그가 반드시 필요합니다 — 질문 5가 "발판과 커널 LPE는 별개의 2단계"라고 못 박은 그 이유입니다.
 
-## 추가 심화 재현 절차
+**3) `Seccomp=2`는 앱의 유일한 특권 호출인 `SVC` 표면마저 필터 뒤에 있다는 뜻입니다.** 배경 개념에서 "앱이 쓸 수 있는 특권 호출은 오직 `SVC` 하나"라고 세웠는데, 그 하나의 문(EL0→EL1 시스템 콜)조차 seccomp가 다시 좁히고 있음을 관측값이 보여 줍니다.
 
-이 개념 모듈을 **실측 글**로 승격하세요. 제 블로그 원칙대로, 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 증적으로 붙입니다(위의 사다리 그림은 개념 설명용이고, 발행본에는 실측 캡처가 들어가야 합니다).
+**4) `uname -a`의 Linux 5.15는 질문 6 버전 표의 좌표를 맞춰 줍니다.** 표에서 "Android 13 (GKI 5.15) — AVF + pKVM(EL2)"라고 적은 그 커널 베이스라인이 이 AVD에서 실측됩니다. pKVM 자체는 EL2라 x86_64에서 관측할 수 없지만, 그것이 올라앉는 커널 버전은 확인되었습니다.
 
-1. **앱이 EL0임을 간접 확인**: 테스트 앱에서 syscall 하나를 일으키고 `strace`(또는 가능한 관측)로 `SVC`가 발생하는 지점을 잡아, "앱의 유일한 특권 호출은 SVC"를 실측으로 보이기.
-2. **이 기기의 메모리 보호 프리미티브 목록 캡처**: 소스 탐색 과제의 `/proc/cpuinfo`·`dmesg`·config 출력을 실제 화면으로.
-3. **같은 `SVC`가 EL1 커널로 트랩되는 지점**을 커널 소스에서 지목(진입 벡터/`el0_sync`).
-4. **Keystore 키 한 개 생성 후 key attestation**으로 "이 키가 TEE 뒤에 있다"(security level=TRUSTED_ENVIRONMENT/STRONGBOX)를 실제 출력으로 확인 — 질문 3의 비대칭을 가상 환경에서 검증.
+ARM64 예외 층·MMU 권한 비트(AP/PXN/UXN)·PAC/BTI/MTE는 이 AVD로 런타임 측정하지 못했고, 질문 7이 지목한 소스(Arm ARM Part D, 커널 `pgtable-prot.h`·`uaccess.h`·`cpufeature.c`)에서 근거만 확정했습니다. 측정하지 못한 사실은 아래로 넘깁니다.
 
-각 단계는 명령 출력 또는 실제 스크린샷으로만 증적화하고, 재현 불가능하거나 확인 못 한 항목은 "못 한 것"으로 분리해 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 런타임 실측은 위 네 값(EL0 격리·커널 버전)까지입니다. 나머지는 소스로 근거는 확정했으나 이 x86_64 세션에서 새로 캡처하지는 않았습니다.
+
+- **ARM64 예외 수준 전이와 하드웨어 메모리 보호는 런타임으로 관측하지 못했습니다.** EL0→EL1의 `SVC` 트랩, PAN/PXN의 하드웨어 강제, PAC/BTI/MTE는 x86_64 AVD에 존재하지 않아 `/proc/cpuinfo`의 `paca`/`pacg`·`bti`·`mte`도 뜨지 않습니다. 이 항목들은 질문 7의 공개 소스 경로로만 판정했습니다.
+- **질문 3의 키 비대칭을 실물 시큐어 월드로 재확인하지는 못했습니다.** 에뮬레이터의 Keystore/KeyMint는 하드웨어 TEE가 아니라 소프트웨어 폴백이라, key attestation의 security level이 실제 `TRUSTED_ENVIRONMENT`/`STRONGBOX`로 뒷받침되는지는 이 AVD에서 증명되지 않습니다. "평문 키는 시큐어 월드 밖으로 안 나온다"는 소스·문서 근거로만 성립합니다.
+- **pKVM(EL2) 보호 VM 격리와 커널 LPE(EL0→EL1) 같은 라이브 익스는 이 세션에서 재현하지 않았습니다.** 질문 5가 든 CVE들(Bad Binder, Mali 드라이버 버그)의 EL 위치는 소스 대조로 설명했을 뿐, 실행 재현은 이 가상 환경의 범위 밖입니다.
+
+관련 근거: [Linux arm64 문서(메모리 레이아웃·부팅·HWCAP)](https://www.kernel.org/doc/html/latest/arch/arm64/index.html) · [Arm Architecture Reference Manual(예외 모델·VMSA)](https://developer.arm.com/documentation/ddi0487/latest) · [Android Keystore 하드웨어 백업 키](https://source.android.com/docs/security/features/keystore) · [Android Virtualization Framework(pKVM)](https://source.android.com/docs/core/virtualization)
 
 ## 마치며
 

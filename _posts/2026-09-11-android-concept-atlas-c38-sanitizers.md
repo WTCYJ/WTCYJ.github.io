@@ -137,27 +137,32 @@ C37의 "탐지기 vs 장벽" 이분법에서 **탐지기 쪽의 실제 도구들
 5. **Armv8.5-A FEAT_MTE2**입니다. 실기 실리콘이 Armv9 코어일 뿐 MTE는 Armv9 전용이 아닙니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. ASan의 리드존(인접 OOB)과 격리(UAF)가 각각 어떤 버그 클래스를 결정적으로 잡는지, 그리고 왜 먼 오버플로는 놓칠 수 있는지 서술하세요.
-2. HWASan이 TBI 상위바이트 태그로 어떻게 ASan보다 싼 메모리로 전체 디바이스 계측을 가능케 하고, 왜 탐지가 확률적인지 서술하세요.
-3. "탐지기 vs 프로덕션 완화" 구분에서, 유저 폰에 실제로 실리는 것(MTE/GWP-ASan/Scudo/IntSan)과 실리지 않는 것(ASan/HWASan/KASAN)을 C37과 일관되게 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 이 모듈의 주장 가운데 유저스페이스 계측으로 확인 가능한 부분을 실제 빌드·실행으로 검증했다. 상단 검증 블록의 `실행 명령·코드`(`uname -a`, `/proc/cpuinfo`, NDK JNI 빌드, UBSan 패치 전·후 실행)와 `관측 결과`(Android 13 기반 Linux 5.15 x86_64 커널 확인, NDK 27로 JNI 공유 라이브러리와 UBSan 대조군 빌드·실행)가 근거다.
 
-## 소스·정적 검증 경로
+**1) 새니타이저 계측은 배포 이미지가 아니라 컴파일러가 계측한 target에만 붙는다(질문 2·7·8/C33).** UBSan 대조군은 일반 release 이미지에서 나온 게 아니라, NDK 27 툴체인으로 `-fsanitize` 계측 빌드를 새로 만들어 실행한 것이다. 이 빌드 과정 자체가 질문 7의 주의사항 — "sanitizer는 계측해 빌드한 target에서만 동작하며 일반 release image에 자동으로 존재한다고 가정하지 말라" — 를 그대로 보여준다. 유저 폰의 release 바이너리에는 이 런타임이 없다(질문 3).
 
-- 네 퍼징 하네스(libFuzzer/AFL) 하나를 `-fsanitize=address`로 빌드해 ASan 리포트의 리드존/격리 메시지를 캡처하세요.
-- 그 OOB/UAF가 리드존형인지 UAF형인지 리포트로 판정하고, HWASan(`-fsanitize=hwaddress`)에서 같은 버그의 태그-불일치 리포트와 대조하세요.
+**2) UBSan은 정의되지 않은 동작을 겨냥하는 탐지기다(질문 4·5).** NDK 27로 JNI 공유 라이브러리를 빌드하고, 같은 코드에 UBSan을 계측한 대조군을 패치 전·후로 나눠 빌드·실행했다. 결함을 그대로 둔 빌드와 고친 빌드를 나눠 돌리는 이 대조 구성이, UBSan이 정의되지 않은 동작(정수 오버플로·시프트·정렬)을 런타임에 드러내는 탐지기임을 확인하는 절차다 — 질문 5의 "IntSan이 정수 오버플로를 조용한 wrap 대신 통제된 abort로 바꾼다"가 이 대조군이 겨냥한 불변식이고, 프로덕션 미디어의 최소 IntSan(A7.0+)이 상시로 남기는 것도 바로 이 abort 동작이다.
 
-## 추가 심화 재현 절차
+**3) AVD 커널 세대는 KASAN 모드 타임라인과 맞물린다(질문 6).** `uname -a`로 커널을 확인했다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 리포트·화면만** 붙입니다.
+```console
+$ uname -a
+# → Android 13 기반 Linux 5.15 · x86_64
+```
 
-1. **ASan 실측**: 내 CVE 4·7편 재현 하네스를 ASan으로 돌려 리포트를 캡처.
-2. **버그 클래스 판정**: 리드존/격리/태그-불일치로 OOB vs UAF를 근거와 함께.
-3. **탐지 vs 완화 서술**: 같은 버그가 프로덕션 IntSan(A7.0+)이면 abort로, MTE면 태그체크로 어떻게 달라지는지.
-4. **연결**: C36 벤더 드라이버 버그를 KASAN+syzkaller로 잡는 그림.
+질문 6의 KASAN 타임라인(generic 4.0 · SW_TAGS 5.4 · HW_TAGS 5.11)에 비추면 5.15 커널은 세 KASAN 모드를 모두 담을 수 있는 세대다. 다만 이 범용 AVD 커널은 `CONFIG_KASAN` 없이 빌드돼 있어 커널 리포트 자체는 이 세션에서 캡처하지 못했다(아래 한계).
 
-각 단계는 실제 새니타이저 리포트·스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서의 실측 캡처는 유저스페이스 UBSan 대조군까지다. 나머지는 clang·AOSP·커널 문서로 근거는 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지는 않았다.
+
+- **ASan/HWASan의 실제 리포트는 이 세션에서 캡처하지 않았다.** `-fsanitize=address`/`hwaddress`로 하네스를 돌려 리드존·격리·태그-불일치 메시지를 얻는 부분은 문서 근거만 확정했고, 실행 증적은 UBSan 대조군까지만 남겼다.
+- **HWASan/MTE의 arm64 태깅은 x86_64라 원리상 측정할 수 없었다.** HWASan의 TBI 상위바이트 태그도, MTE(Armv8.5-A FEAT_MTE2)의 하드웨어 4비트 태그 체크도 이 아키텍처·에뮬레이터에는 실물이 없다. `aosp_<device>_hwasan`(Android 10+) 디바이스 이미지 역시 이 범용 AVD로는 다루지 못했다.
+- **KASAN 커널·라이브 벤더 드라이버 재현은 하지 않았다.** 범용 `codex-atlas-api33` AVD에는 `CONFIG_KASAN`도, C36의 벤더 `.ko`도 없어, syzkaller로 커널 OOB/UAF를 잡는 그림은 공개 소스·설정 분석까지만 다뤘다.
+
+관련 근거: [Clang AddressSanitizer](https://clang.llvm.org/docs/AddressSanitizer.html) · [HardwareAssistedAddressSanitizerDesign](https://clang.llvm.org/docs/HardwareAssistedAddressSanitizerDesign.html) · [Clang UndefinedBehaviorSanitizer](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html) · [Kernel KASAN 문서](https://www.kernel.org/doc/html/latest/dev-tools/kasan.html)
 
 ## 마치며
 

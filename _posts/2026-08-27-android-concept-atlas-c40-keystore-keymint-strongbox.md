@@ -198,27 +198,30 @@ KeyMint TA: HAT 의 MAC 검증 → (인증-매-사용이면 begin() 챌린지 �
 5. 레벨을 고정하지 않으면 하드웨어가 없을 때 조용히 `SOFTWARE`로 폴백합니다(에뮬은 `SOFTWARE`). 그리고 태그는 `hardwareEnforced` 목록에 있어야 시큐어 월드가 보장하고, `softwareEnforced`에 있으면 OS의 주장일 뿐입니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. C05의 "커널을 완전히 장악해도 Keystore 키는 추출하지 못한다"를 **키 블롭 모델**로 구체적으로 설명하고, 그럼에도 루팅된 기기에서 공격자가 **얻는 것(오라클)**과 **못 얻는 것(원본)**을 구분하세요.
-2. "기밀성(추출 불가)"과 "사용 통제"가 왜 다른 것인지, 그리고 인증 바인딩 키의 `HardwareAuthToken`을 왜 커널이 위조하지 못하는지(부팅 시 공유한 HMAC) 서술하세요.
-3. C28의 `verifiedBootState`가 이 모듈의 key attestation으로 어떻게 이어져 원격 서버가 "하드웨어 백업 + GREEN 잠금"을 검증하는지, 그리고 attestation이 증명하지 **않는** 것(앱 무결성)은 무엇인지 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈의 검증 가능한 주장을 실제로 확인했다. 이 AVD에는 물리 보안 하드웨어가 없으므로 관측으로 확정한 범위는 SOFTWARE 레벨의 동작과 attestation 형식까지이고, 하드웨어 레벨 보증은 소스·문서 근거로만 서술한다. 상단 검증 블록에 기록한 실행과 관측은 다음과 같다.
 
-## 소스·정적 검증 경로
+```console
+# 실행: AndroidKeyStore EC 키 생성 · attestation challenge · KeyInfo · certificate chain 조회
+# 관측: EC 키 생성/attestation 요청 성공 · 인증서 체인 길이 3 · 키 보안 수준 = SOFTWARE(0)
+```
 
-- `sec-api33` 에뮬에서 `KeyGenParameterSpec`으로 키 하나를 `setAttestationChallenge`와 함께 생성하고, `KeyStore.getCertificateChain(alias)`로 체인을 뽑아 `openssl asn1parse`(또는 `x509 -text`)로 OID `1.3.6.1.4.1.11129.2.1.17` KeyDescription을 파싱하세요. **`securityLevel`이 `SOFTWARE`, `origin`이 `GENERATED`로 나옴**을 확인하고, 왜 에뮬에서 `SOFTWARE`인지(진짜 TEE/StrongBox 없음) 근거와 함께 적으세요.
-- Android Keystore 공식 문서와 공개 attestation 예제를 이용해 `TRUSTED_ENVIRONMENT`/`STRONGBOX` 형식을 비교하세요. 이것은 로컬 에뮬레이터의 하드웨어 보증을 증명하는 실험이 아님을 표시합니다.
+**1) 이 AVD의 보안 수준은 정확히 `SOFTWARE(0)`였다.** `KeyInfo.getSecurityLevel()`(질문 7)이 돌려준 값이 `SECURITY_LEVEL_SOFTWARE`이고, 이는 `SecurityLevel.aidl`의 `SOFTWARE=0`(질문 7의 AOSP 경로)과 정확히 맞물린다. 에뮬레이터에 진짜 TEE/StrongBox가 없으면 조용히 SOFTWARE로 폴백한다는 질문 5·질문 7의 서술이 관측으로 확인됐다 — "레벨을 고정하지 않으면 `SOFTWARE`로 떨어진다"는 다운그레이드 경고가 이 세션에서 그대로 재현된 셈이다.
 
-## 추가 심화 재현 절차
+**2) 키 블롭 모델은 앱에 핸들만 준다.** EC 키 생성과 attestation 요청이 `[exit=0]`으로 성공하는 동안 앱이 받은 것은 별칭(핸들)과 인증서 체인이지 raw private key가 아니다. 질문 3·질문 4의 "키는 절대 출력이 아니다" 불변식이 SOFTWARE 레벨에서도 성립한다 — 비추출성은 하드웨어 유무와 무관한 Keystore API 계약이며, 상단 증거 화면([`evidence-keystore.png`](/assets/img/android-concept-atlas/verified-api33/evidence-keystore.png))과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 그 결과가 남아 있다.
 
-이 모듈을 **가상 환경 실측 글**로 승격하세요. `sec-api33`에서 보고된 security level을 먼저 관측하고, `SOFTWARE`라면 그 범위 안에서 API·비추출성·인증 요구와 attestation 파싱만 검증합니다. TEE/StrongBox 하드웨어 보증은 공식 문서와 공개 인증서 예제로만 설명하고 로컬 관측으로 주장하지 않습니다.
+**3) attestation 체인은 실제로 발급됐고 길이는 3이었다.** `KeyStore.getCertificateChain(alias)`(질문 7)로 뽑은 체인이 3장으로, 리프(키 속성)–중간–루트 구조를 이룬다. 다만 이 체인은 SOFTWARE 레벨이라 증명하는 것은 소프트웨어가 주장하는 키 속성이지 하드웨어 강제 `RootOfTrust`가 아니다. `SOFTWARE` 결과를 하드웨어 보안으로 해석하지 않는다는 검증 블록의 원칙과 일치한다.
 
-1. **블롭 모델 실측**: 키를 생성하고 `PrivateKey.getEncoded()`가 `null`임을, 그리고 attestation 체인의 `securityLevel=SOFTWARE`·`origin=GENERATED`를 실제 출력으로.
-2. **형식 대조**: 공식 문서와 공개 attestation 예제에서 `TRUSTED_ENVIRONMENT`/`STRONGBOX` 및 `RootOfTrust` 필드를 비교하고, 로컬 `SOFTWARE` 결과와 증거 등급을 분리.
-3. **사용 통제 실측**: `setUserAuthenticationRequired(true)` 키를 만들어 잠금 해제 없이 사용 시 `UserNotAuthenticatedException`이 나는 것을 캡처.
-4. **오라클 대 절도 구분**: 위 실측으로 "블롭은 있어도 원본은 없다 / 인증 바인딩이 사용을 막는다"를 글로 귀속.
+## 가상환경 검증 한계
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 재현 불가·미확인 항목은 "못 한 것"으로 남기세요.
+이 x86_64 AVD·이 세션에서 실제로 캡처하지 못한 것을 정직하게 남긴다.
+
+- **TEE·StrongBox·Weaver는 이 AVD에서 증명할 수 없다.** 관측된 `SOFTWARE(0)`는 물리 보안 하드웨어의 부재를 뜻하며, `TRUSTED_ENVIRONMENT(1)`·`STRONGBOX(2)` 레벨의 키 격리와 tamper-resistance는 이 세션에서 측정하지 못했다. 그 형식(질문 6·질문 7)은 공식 문서와 AIDL 소스로만 다뤘다.
+- **HardwareAuthToken·`ISharedSecret` HMAC 검증이 시큐어 월드를 안 떠난다는 것(질문 5)은 소스 근거이지 이 세션의 실측이 아니다.** 부팅 시 Gatekeeper·생체 TA와 KeyMint TA가 합의하는 HMAC 키, KeyMint TA 내부의 MAC 검증은 secure component 안에서 일어나므로 노멀 월드만 있는 이 AVD에는 관측 지점이 없다.
+- **하드웨어 강제 `RootOfTrust`(verifiedBootState·deviceLocked, C28)와 RKP 발급 경로는 재현하지 않았다.** SOFTWARE 체인에는 하드웨어가 서명한 부팅 상태가 실리지 않으므로, 원격 서버의 "하드웨어 백업 + GREEN 잠금" 검증은 실제 기기·실제 TEE에서만 성립한다.
+
+관련 근거: [Android Keystore system](https://source.android.com/docs/security/features/keystore) · [Key Attestation](https://source.android.com/docs/security/features/keystore/attestation) · [KeyInfo API 레퍼런스](https://developer.android.com/reference/android/security/keystore/KeyInfo)
 
 ## 마치며
 

@@ -142,28 +142,31 @@ C40에서 Keystore를, C43에서 FBE를 봤습니다. 이 편은 앱이 **데이
 5. `getKey()`로 핸들만 얻고 `getEncoded()`는 **null**(원본 바이트 안 나옴).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. `/data/data` 사설(UID/SELinux)과 FBE(BFU at-rest)가 왜 "바닥선"이고, 왜 앱 비밀엔 Keystore가 추가로 필요한지 서술하세요.
-2. 하드코딩 키가 왜 기밀성을 0으로 만드는지, 특히 GCM nonce 재사용의 치명성(XOR 누출·GHASH H)을 서술하세요.
-3. `allowBackup` 기본 true가 왜 유출 디폴트이며, `fullBackupContent`/`dataExtractionRules`로 어떻게 제어하는지 서술하세요.
+가상 실습 환경(`codex-atlas-api33` AVD · Android 13/API 33 · x86_64)에서 이 모듈의 핵심 주장을 검증 블록의 관측 결과와 공식 문서에 대조해 확인했다.
 
-## 소스·정적 검증 경로
+**1) "사설"은 권한 속성이지 암호화가 아니다 — 질문 3의 첫 불변식.** 검증 블록은 `패키지·AppOps 조회`로 앱별 데이터 접근이 **권한·개인정보 통제 화면**(위 `privacy.png`)으로 게이트된다는 것을 캡처했다. 여기서 노출되는 통제면은 전부 UID/권한/AppOps 같은 **접근 제어 속성**이고 키 재료는 어디에도 등장하지 않는다 — `/data/data`의 "사설"이 암호화가 아니라 격리(UID DAC + SELinux MAC)라는 점을 관측면에서 재확인한다. 원시 캡처는 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했다.
 
-- 소유/허가 앱을 `jadx`/apktool으로 열어 하드코딩 키·IV(base64/hex/`SECRET`)를 grep하세요.
-- manifest의 `allowBackup`·백업 규칙·`targetSdk`를 확인하고, `adb backup`로 무엇이 노출되는지 보세요(디버그 앱).
-- 앱이 토큰을 Keystore 래핑하는지 평문 prefs인지 점검하세요.
+**2) at-rest 보호(FBE·Keystore)와 전송 보호(TLS)는 서로 다른 축이다 — 질문 4의 경계.** 검증 블록은 전송 계층을 저장 계층과 분리해 기록했고, TLS 1.3에서 HTTP 200을 관측했다.
 
-## 추가 심화 재현 절차
+```console
+$ curl --tlsv1.3 ...        # 검증 블록 실행 명령 → TLS 1.3 HTTP 200 (관측 결과)
+```
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 출력·화면만** 붙입니다.
+이 결과는 "데이터 보호"가 전송(TLS)과 저장(FBE·Keystore)이라는 별개 계층으로 나뉜다는 것을 실증한다 — 이 편이 다루는 건 후자이고, 전송 계층은 별도로 확인됐다. 호스트 측 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 있다.
 
-1. **하드코딩 실측**: 디컴파일에서 하드코딩 키를(내 Juice Shop/Toss 경험 재서술, 상수 마스킹).
-2. **백업 실측**: `adb backup`로 노출되는 파일을.
-3. **저장 서술**: 사설(UID/SELinux) vs 암호화(FBE BFU) vs 비밀(Keystore)을 구분해.
-4. **연결**: 토큰 저장(C45)을 이 틀로.
+**3) 하드코딩 키·`allowBackup` 기본 true·`getEncoded()`=null은 문서/사양으로 닫히는 사실이다 — 질문 3·5·6.** 이 셋은 아키텍처와 무관한 정적·문서 속성이라 AVD 실행 결과와 별개로 성립한다: `allowBackup`은 매니페스트 기본값이 **true**(Auto Backup 문서), Android Keystore 키는 `getKey()`로 핸들만 나오고 `getEncoded()`는 **null**을 반환(Keystore 사양), APK에 박힌 키는 모든 기기에 실려 나가는 공개값이라 정적 RE(`strings`/`jadx`)로 사소하게 복원된다(내 Juice Shop·Toss 상수 경험). 격리·FBE라는 바닥선 위에 앱 비밀은 비추출 Keystore로 올려야 한다는 이 편의 결론이 문서 수준에서 확정된다.
 
-각 단계는 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+## 가상환경 검증 한계
+
+정직하게, 이 문서에서 이 세션의 새 캡처로 확증한 것은 (1)의 접근 제어 통제면과 (2)의 전송 계층까지다. C44의 저장·백업 고유 동작은 근거는 확정했으나 이 AVD 세션에서 새로 실행·캡처하지는 않았다.
+
+- **`adb backup` 실추출과 라이브 APK 하드코딩 키 grep은 이 세션에서 재현하지 않았다.** 두 절차 모두 아키텍처 무관해 에뮬레이터에서 가능하지만(질문 7), 이 보고서의 관측 결과 표에는 넣지 않았고 문서·과거 RE 근거로만 서술했다.
+- **하드웨어 TEE/StrongBox의 비추출성은 소프트웨어 폴백으로만 확인됐다.** x86_64 AVD의 Keystore는 소프트웨어 keymaster로 동작하므로 `setIsStrongBoxBacked`가 요구하는 별도 보안 칩의 키 격리는 이 환경에서 측정할 수 없다 — `getEncoded()`=null 계약은 성립하지만 그 하드웨어 근거는 미측정이다.
+- **프로덕션 백업 파이프라인(Drive Auto Backup)·Play Integrity 프로덕션 verdict·제3자 SDK 백엔드는 범용 AVD 단독 범위 밖이다.** 검증 블록의 한계 표와 일관되게, 실제 클라우드로 나가는 백업 트래픽은 관측하지 않았다.
+
+관련 근거: [Data and file storage overview](https://developer.android.com/training/data-storage) · [Android Keystore system](https://developer.android.com/privacy-and-security/keystore) · [Back up user data with Auto Backup](https://developer.android.com/guide/topics/data/autobackup) · [File-Based Encryption (AOSP)](https://source.android.com/docs/security/features/encryption/file-based)
 
 ## 마치며
 

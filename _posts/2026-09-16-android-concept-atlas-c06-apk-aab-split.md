@@ -139,28 +139,34 @@ C08(서명)·C07(DEX)·C09(UID)가 전부 "APK"라는 단위를 전제합니다.
 5. **Play App Signing**이면 배포 서명 키는 **Google**이 쥡니다(개발자는 업로드 키만).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. APK(설치 단위)와 AAB(발행 포맷)의 차이, 그리고 Play/bundletool이 어떻게 기기별 split을 생성·서명하는지 서술하세요.
-2. 한 앱이 여러 split으로 설치될 때 "한 패키지·한 UID·같은 키"라는 불변식이 왜 보안적으로 중요한지, 그리고 정적 분석이 왜 모든 split을 당겨야 하는지 서술하세요.
-3. Play App Signing이 배포 서명 키를 개발자에서 Google로 옮기는 것이 신뢰 모델(C49)에 어떤 변화인지 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, Google APIs x86_64)에서 이 모듈의 핵심 주장 중 **아키텍처 무관하게 로컬에서 재현되는 부분**을 실제 명령으로 확인했다. 상단 검증 블록의 `실행 명령·코드`·`관측 결과` 줄이 그 근거다.
 
-## 소스·정적 검증 경로
+**1) APK는 소스에서 빌드된 ZIP 산출물이고, 그 서명은 v2/v3 블록에 실린다.** 증거 앱을 소스부터 빌드해 서명을 검증한 뒤 설치했다. 검증 블록에 기록된 파이프라인이 그대로다.
 
-- 임의 앱에 `adb shell pm path <pkg>`로 base와 모든 split 경로를 나열하고, `dumpsys package <pkg>`의 `splits=`와 대조하세요.
-- 한 APK를 `apktool`로 풀어 `AndroidManifest.xml`이 AXML임을(텍스트 grep 실패) 확인하고, exported 컴포넌트를 나열하세요.
-- `unzip -l`로 `classes.dex`·`resources.arsc`·`lib/<abi>/`·`META-INF/`를 식별하세요.
+```console
+$ javac ...          # 소스 → .class
+$ d8 ...              # .class → classes.dex
+$ aapt ...            # 리소스 컴파일·패키징(AXML 매니페스트 포함)
+$ zipalign ...        # ZIP 정렬
+$ apksigner verify ...   # v2/v3 서명 검증
+$ adb install -r ...     # AVD에 설치
+```
 
-## 추가 심화 재현 절차
+`javac→d8→aapt→zipalign`가 질문 4의 "소스 → 빌드 → APK" 입력·출력을 실물 산출물로 확증한다. `apksigner verify`가 v2/v3 서명을 통과시킨 것은 질문 3의 불변식 — "v2/v3만 APK Signing Block에" — 을 실제 검증 도구로 확인한 결과다. 매니페스트가 `aapt` 단계에서 AXML로 컴파일돼 ZIP에 들어가므로, 질문 3의 "AndroidManifest는 텍스트가 아니라 AXML" 주장도 빌드 산출물 수준에서 일관된다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 설치 단위 하나에 별도 UID가 부여된다.** `adb install -r` 후 Package Manager가 이 앱을 별도 UID로 등록했다(검증 블록 `관측 결과`). 이는 질문 3·질문 8의 "한 패키지·한 UID(C09)" 불변식 중 **UID 격리** 절반을 설치 시점에 실제로 확인한 것이다. 상단 [Atlas Evidence 앱 화면](/assets/img/android-concept-atlas/verified-api33/apps.png)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)가 이 등록 결과의 증적이다.
 
-1. **구조 실측**: `unzip -l`·`apktool`로 APK 멤버와 AXML을.
-2. **split 실측**: `pm path`로 한 앱의 모든 split을.
-3. **분석 서술**: base만 vs 전체 split을 대조해 왜 전부 필요한지.
-4. **연결**: 서명자 해시(C08)가 모든 split에서 같은지 확인.
+## 가상환경 검증 한계
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 위 실측은 (1)·(2)까지다. 이 모듈의 나머지 주장은 근거(문서·소스)는 확정했으나 이 로컬 AVD 세션에서 새로 캡처하지는 않았다.
+
+- **AAB→split 변환과 Play App Signing은 이 세션에서 재현하지 않았다.** 검증 블록의 `검증 한계`대로, `.aab`의 Play 서버 측 변환·서명은 로컬 Google APIs AVD만으로는 재현되지 않는다. 따라서 "같은 키로 서명된 여러 split"과 "배포 서명 키를 Google이 쥔다(질문 3·5)"는 developer.android.com / Play Console 문서 근거까지만이고, 로컬 실측 산출물은 단일 base APK다.
+- **다중 split 앱의 `pm path`·`install-multiple` 실측은 캡처하지 않았다.** 증거 앱은 단일 base로 빌드·설치했으므로, base + config split이 한 UID로 병합되는 모습을 실제 다중 split 앱으로 확인하지는 못했다. 개념·명령 형태는 질문 7에 정리돼 있으나 이 세션의 관측 결과에는 없다.
+- **서명자 인증서 해시가 모든 split에서 동일함을 실측으로 대조하지 않았다.** 단일 APK만 서명·검증했기 때문에, 여러 split 간 서명자 일치(C08)는 소스 규격상 보장되는 불변식으로만 서술했다.
+
+관련 근거: [About Android App Bundles](https://developer.android.com/guide/app-bundle) · [APK Signature Scheme v2](https://source.android.com/docs/security/features/apksigning/v2) · [Play App Signing](https://developer.android.com/studio/publish/app-signing) · [bundletool](https://developer.android.com/tools/bundletool)
 
 ## 마치며
 

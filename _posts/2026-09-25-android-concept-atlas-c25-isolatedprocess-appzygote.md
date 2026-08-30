@@ -143,28 +143,31 @@ C24에서 seccomp·caps·SELinux가 앱 샌드박스를 겹겹이 두른다 했�
 5. 앱 **사적 데이터**는 못 열지만 자기 APK·world-readable은 읽습니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. isolatedProcess의 봉쇄(격리 UID·isolated_app·무권한·유일 Binder 통로)가 왜 "뚫려도 쓸모없는 워커"를 만드는지 서술하세요.
-2. isolatedProcess와 `android:process=":x"` 분리의 차이(UID·데이터 공유)를 서술하세요.
-3. app zygote가 무엇을 최적화하고 왜 샌드박스를 약화하지 않는지, WebView 렌더러 사용을 예로 서술하세요.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 이 모듈이 "극단으로 조인다"고 말하는 **앱 샌드박스 기준선**을 실제 명령으로 확인했다.
 
-## 소스·정적 검증 경로
+**1) 격리가 조여 들어가는 출발점(untrusted_app 기준선)을 앱 프로세스 내부에서 측정했다.**
 
-- 에뮬레이터에서 WebView 페이지를 띄우고 `ps -AZ | grep u0_i`로 격리 렌더러와 그 SELinux 컨텍스트(`isolated_app`)를 확인하세요.
-- 그 격리 UID가 99000–99999(시스템 zygote) 또는 90000–98999(app zygote) 중 어디인지 판정하세요.
-- 일반 앱(`u0_aXX`)과 격리(`u0_iXX`)의 접근 가능 서비스 차이를 서술하세요.
+```console
+$ id
+$ cat /proc/self/attr/current
+$ cat /proc/self/status
+```
 
-## 추가 심화 재현 절차
+관측 결과는 **서로 다른 UID**, **`untrusted_app` SELinux 컨텍스트**, **0 capability**, **seccomp 필터**였다(상단 검증 블록·`evidence-sandbox.png`). 질문 3이 "isolated는 untrusted_app이 아니라 **그보다 빡빡한 isolated_app**"이라고 말할 때의 바로 그 untrusted_app 기준선이 프로세스 메모리 수준에서 확정된 것이다 — isolatedProcess의 추가 봉쇄(앱 사적 데이터 없음·네트워크 없음·GPU 없음·격리 UID)는 이 "before"에서 조여 들어가는 델타로 읽힌다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) 격리 UID 두 범위와 도메인은 AOSP 소스로 고정된다.** 질문 7의 소스 경로 — `android_filesystem_config.h`의 `AID_ISOLATED_START..END`(시스템 zygote 자식 **99000–99999**), ActivityManagerService/ProcessList의 격리 UID 할당(`mNextIsolatedProcessUid`, app zygote 자식 **90000–98999**), sepolicy `isolated_app.te` — 이 세 곳이 격리 UID 범위와 isolated_app 도메인을 정의한다. 이건 이 세션에서 실측한 값이 아니라 소스로 확정한 사실이며, isolatedProcess가 API 16부터, app zygote가 A10/API 29부터라는 버전 경계(질문 6)도 같은 소스 계보에서 나온다.
 
-1. **격리 실측**: `ps -AZ`로 WebView 렌더러의 `u0_iXX`·`isolated_app`을.
-2. **UID 판정**: 격리 UID 범위로 시스템 zygote vs app zygote를.
-3. **봉쇄 서술**: 격리가 못 닿는 것(데이터/서비스/네트워크/GPU)과 유일 Binder 통로를.
-4. **연결**: 이것이 C24 프리미티브를 어떻게 극단화한 것인지.
+## 가상환경 검증 한계
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 이 문서의 실측 캡처는 일반 앱(untrusted_app) 기준선까지다. 나머지는 근거는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
+
+- **WebView/Chrome 격리 렌더러를 이 세션에서 실제로 띄워 캡처하지 않았다.** 검증 블록의 관측은 untrusted_app 앱 프로세스이며, `ps -AZ`의 `u0_iXX`·`u:r:isolated_app:s0`와 90000–98999 대역의 app zygote 격리 UID는 AOSP 소스로만 확정했다.
+- **격리 봉쇄를 공격적으로 검증(정책 우회·샌드박스 탈출)하지 않았다.** 검증 블록대로 접근 거부는 통제가 작동한 대조군으로만 관측했고, "뚫려도 쓸모없는 워커"라는 설계 주장을 익스플로잇으로 반증하거나 확증하지는 않았다.
+- **ARM64 전용 하드웨어 프리미티브(PAC·BTI·MTE)는 x86_64 AVD라 격리 워커 위에서 측정 대상이 아니었다.** isolatedProcess 자체는 아키텍처 무관이지만, 격리 UID·isolated_app·seccomp는 소프트웨어로 확인되는 반면 하드웨어 완화는 이 에뮬레이터에서 관측되지 않는다.
+
+관련 근거: [`<service>` android:isolatedProcess](https://developer.android.com/guide/topics/manifest/service-element) · [`<application>` android:zygotePreloadName](https://developer.android.com/guide/topics/manifest/application-element) · [ZygotePreload](https://developer.android.com/reference/android/app/ZygotePreload) · [Android 앱 샌드박스](https://source.android.com/docs/security/app-sandbox)
 
 ## 마치며
 

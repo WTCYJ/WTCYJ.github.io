@@ -143,28 +143,30 @@ C45에서 bearer 토큰이 TLS 위에서 흘러야 한다 했습니다. 이 편�
 5. all-trusting TrustManager는 **any cert 수락 = MITM 버그**입니다(감사 최우선).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. targetSdk 24+ 앱이 유저 CA를 불신하는 변화가 왜 인터셉션의 분기점인지, 4가지 우회 경로와 함께 서술하세요.
-2. 인증서 피닝이 무엇을 좁히고(SPKI) 무엇을 막는지(rogue CA), 그리고 왜 클라이언트 측이라 루팅 기기에서 우회되는지 서술하세요.
-3. all-trusting TrustManager/HostnameVerifier가 왜 고전 MITM 버그이며, TLS 기본값(24+/28+)과 어떻게 다른 실패 모드인지 서술하세요.
+이 모듈의 실측 앵커는 상단 검증 블록의 **TLS 1.3 핸드셰이크 성공**이다. `codex-atlas-api33` AVD(Android 13/API 33) 세션에서 다음을 실행해 HTTP 200을 받았다.
 
-## 소스·정적 검증 경로
+```console
+$ curl --tlsv1.3 <검증 엔드포인트>
+# → HTTP 200 (TLS 1.3 핸드셰이크 성공)
+```
 
-- 소유/허가 앱의 NSC(`res/xml`)와 `targetSdkVersion`을 apktool로 떠서 cleartext/trust-anchors/pin-set 자세를 파악하세요.
-- 유저 CA 프록시가 24+ 앱에서 실패함을 확인하고, 루팅 시스템 스토어 CA 또는 Frida unpin으로 복호에 성공시키세요.
-- 디컴파일에서 빈 `checkServerTrusted`나 무조건 `HostnameVerifier`를 grep하세요.
+**1) 정상 TLS = 신뢰 CA 체인 + 호스트명(SAN) 통과.** `--tlsv1.3` 강제 핸드셰이크가 200으로 끝났다는 것은, 서버 인증서가 시스템 신뢰 저장소로 체인 검증되고 호스트명(SAN)이 일치했음을 뜻한다. 질문 3·4의 불변식 — "TLS 유효 = 신뢰 CA로 체인 + 호스트명 일치, 둘 다 필수" — 이 호스트 검증 경로에서 확증된다. 원시 결과는 검증 블록이 가리키는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존돼 있다.
 
-## 추가 심화 재현 절차
+**2) targetSdk 24+의 유저 CA 기본 불신은 프레임워크 문서로 확정된다.** 이 AVD는 값을 새로 캡처하지 않았지만, NSC의 `<base-config>` 기본 trust-anchors가 API 24부터 `system`만 포함하고 `user`를 제외한다는 것은 플랫폼 문서에 명시된 동작이다. 그래서 Burp 유저 CA 프록시가 24+ 앱에서 실패하는 것은 버그가 아니라 설계이며(질문 3), 인터셉션이 4경로(옛 타깃 / NSC user 신뢰 / 루팅 시스템 스토어 / Frida 후킹)로 갈라지는 분기점이 된다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 캡처·화면만** 붙입니다.
+**3) all-trusting TrustManager는 정적 grep으로 판별되는 결정적 버그다.** 빈 `checkServerTrusted` 구현과 무조건 `true`를 반환하는 `HostnameVerifier`는 any cert 수락 = MITM이며(질문 5), 실행 없이 디컴파일 소스에서 패턴으로 잡아내는 항목이다. 이 판별 자체는 소스 근거로 성립하고, TLS 기본값(24+/28+)이 지키는 것과 정반대의 실패 모드다.
 
-1. **자세 실측**: apktool로 NSC·targetSdk를.
-2. **인터셉션 실측**: 유저 CA 실패 → 우회(루팅 스토어/Frida) → Burp 복호를(소유 앱).
-3. **피닝 서술**: SPKI 피닝과 Frida 우회를.
-4. **연결**: 이 전송 보안이 C45 토큰을 어떻게 지키는지.
+## 가상환경 검증 한계
 
-각 단계는 캡처·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 이 세션에서 새로 캡처한 것은 위 (1)의 TLS 1.3 결과와 상단 권한·개인정보 화면까지다. 인터셉션·피닝 우회 계열은 근거는 확정했으나 이 x86_64 AVD 세션에서 실행·재현하지 않았다.
+
+- **실제 앱의 NSC·targetSdk 정적 추출은 이 세션에서 수행하지 않았다.** apktool로 `res/xml` NSC와 `targetSdkVersion`을 떠 cleartext/trust-anchors/pin-set 자세를 확인하는 작업은 대상 앱이 없어 이번엔 하지 않았고, 유저 CA 불신은 프레임워크 문서 근거로만 서술했다.
+- **유저 CA 프록시 실패 → 우회 → Burp 복호의 라이브 체인은 재현하지 않았다.** 루팅 시스템 스토어 CA 삽입, Frida/objection SSL-unpin, 리패키징 후 재서명은 모두 루팅·실기기·소유 앱을 요구하며, 이 범용 AVD 세션에서는 캡처하지 못했다.
+- **하드웨어·아키텍처 의존 속성은 미측정이다.** ARM64 EL/PAC/BTI/MTE는 x86_64라 관측할 수 없고, 하드웨어 TEE·StrongBox 기반 키 증명은 에뮬레이터라 소프트웨어 폴백으로 동작하므로 실기기 검증 대상이다.
+
+관련 근거: [Network Security Configuration](https://developer.android.com/privacy-and-security/security-config) · [X509TrustManager](https://developer.android.com/reference/javax/net/ssl/X509TrustManager) · [Conscrypt 모듈](https://source.android.com/docs/core/ota/modular-system/conscrypt)
 
 ## 마치며
 

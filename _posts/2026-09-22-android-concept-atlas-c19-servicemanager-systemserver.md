@@ -135,28 +135,35 @@ Binder 네임스페이스의 **부트스트랩**(servicemanager) + 프레임워�
 5. servicemanager는 init이 zygote·system_server보다 **먼저** 띄우는 별도 네이티브 데몬입니다(그래야 서비스들이 등록할 대상이 존재).
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. handle 0이 왜 Binder 네임스페이스의 부트스트랩인지, `BINDER_SET_CONTEXT_MGR`와 이름 레지스트리(add/get/check)로 서술하세요.
-2. system_server가 왜 고가치 표적이면서도 "root가 아니다"인지, UID 1000·SELinux 도메인·호스트하는 서비스로 서술하세요.
-3. 서비스 도달성의 이중 게이트(`service_contexts` SELinux find + 서비스 자체 호출자 검사)가 무엇을 각각 막는지 서술하세요.
+가상 실습 환경(codex-atlas-api33, Android 13/API 33, x86_64)에서 이 모듈의 핵심 불변식 두 개를 실제 명령으로 확인했다. 위 검증 화면(evidence-binder.png)이 그 근거다.
 
-## 소스·정적 검증 경로
+**1) handle 0은 전역 하나가 아니라 컨텍스트별이다.** Binder 디바이스 노드를 나열하면 셋이 각각 실재한다.
 
-- `service list`로 등록된 서비스와 인터페이스를 떠서 프레임워크 Binder 공격면을 지도화하세요.
-- `ps -A | grep system_server`로 그 UID(1000)와, 그것이 부모(zygote)에서 fork됐음을 확인하세요.
-- `/dev/binder`·`/dev/vndbinder`·`/dev/hwbinder`의 존재와 각 `*service_contexts`를 대조하세요.
+```console
+$ ls -l /dev/{binder,hwbinder,vndbinder}
+```
 
-## 추가 심화 재현 절차
+binderfs의 세 노드(`/dev/binder`·`/dev/hwbinder`·`/dev/vndbinder`)가 모두 존재한다는 것은, 각 컨텍스트가 자기 컨텍스트 매니저와 handle 0을 따로 가진다는 뜻이다 — 질문 3의 "컨텍스트별 handle 0" 불변식, 그리고 오개념 판별 2번("전역 하나뿐")의 반증이 디바이스 계층에서 그대로 확인된다.
 
-이 모듈을 **실측 글**로 승격하세요. 도식은 직접 그리지 말고 **실제 명령 출력·화면만** 붙입니다.
+**2) servicemanager는 이름→binder 레지스트리이고, 그 등록 목록이 곧 프레임워크 Binder 공격면이다.** `service list`는 handle 0에 트랜잭션해 등록된 서비스 이름과 인터페이스를 통째로 떠온다.
 
-1. **레지스트리 실측**: `service list`·`dumpsys -l`로 등록 서비스를.
-2. **호스트 실측**: `ps`로 system_server(UID 1000)와 그 자식 관계를.
-3. **게이트 서술**: `service_contexts`로 이름→라벨과 SELinux add/find를.
-4. **연결**: 한 서비스(예: activity)를 `getService`로 얻어 C17 트랜잭션이 이어짐을.
+```console
+$ service list
+```
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+이 AVD에서 255개 서비스 등록을 확인했다(검증 블록 관측 결과). AMS·PMS·WMS를 포함한 이 목록의 항목 하나하나가 `addService`로 발행되어 `getService`로 조회 가능한 핸들이며(질문 4), 질문 7이 말한 "프레임워크 Binder 공격면 지도"의 실체가 바로 이 출력이다.
+
+## 가상환경 검증 한계
+
+정직하게, 이 세션이 새로 캡처한 실측은 위 두 명령(`ls -l /dev/{binder,hwbinder,vndbinder}`, `service list`)까지다. 나머지는 AOSP 소스로 근거는 확정했으나 이 AVD에서 새 출력으로 붙이지는 않았다.
+
+- **system_server의 UID 1000·zygote 자식 관계는 이 세션에서 `ps`로 새로 캡처하지 않았다.** `forkSystemServer`(exec 없음)와 AID_SYSTEM은 SystemServer.java·zygote 소스에서 확정한 사실이며, 프로세스 목록 실측은 이 문서의 검증 범위 밖이었다.
+- **`service_contexts`의 이름→라벨 매핑과 SELinux add/find 게이트는 정책 파일을 직접 떠서 대조하지 않았다.** 벤더 전용 HAL 트랜잭션이나 취약한 서비스 호출은 범용 AVD에 존재하지 않아(검증 블록 검증 한계) 공개 인터페이스·소스 분석으로 제한된다.
+- **ARM64 전용 하드 격리(EL/PAC/BTI/MTE)와 하드웨어 TEE는 x86_64 에뮬레이터라 측정 대상이 아니다.** system_server가 갇히는 SELinux 도메인 상한은 정책·소스로 확인되지만, 커널/디바이스 접근을 실제로 시도해 막히는 것을 재현하지는 않았다.
+
+관련 근거: [AOSP servicemanager](https://cs.android.com/android/platform/superproject/+/master:frameworks/native/cmds/servicemanager/) · [IServiceManager.cpp](https://cs.android.com/android/platform/superproject/+/master:frameworks/native/libs/binder/IServiceManager.cpp) · [SystemServer.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/services/java/com/android/server/SystemServer.java) · [android.os.IBinder](https://developer.android.com/reference/android/os/IBinder)
 
 ## 마치며
 

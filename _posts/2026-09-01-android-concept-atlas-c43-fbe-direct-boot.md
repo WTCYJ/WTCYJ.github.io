@@ -168,31 +168,33 @@ CE 마운트 → ACTION_BOOT_COMPLETED → 일반 앱 데이터 사용 가능
 5. 일반 단일 사용자 폰에서 화면 잠금은 CE 키를 제거하지 **않습니다**(재부팅해야 RAM이 지워짐). 잠금 시 키 제거는 work profile/멀티유저(Android 12+ 옵션)의 별개 기능입니다. 그리고 FBE는 7.0부터 있었고 10에서 의무가 됐습니다.
 </details>
 
-## 서술형 문제 3개
+## 실측으로 확인한 것
 
-1. DE와 CE의 키 **보호**가 어떻게 다른지(하드웨어 바인딩 vs 자격증명+하드웨어)와, 그래서 왜 DE는 잠금해제 전에 읽히고 CE는 안 읽히는지 서술하세요.
-2. CE가 "2요소(자격증명 + 온디바이스 하드웨어)"라는 것이 왜 **뽑아낸 플래시 이미지의 오프라인 브루트포스**를 막는지, C41의 Gatekeeper/Weaver throttle과 연결해 서술하세요.
-3. FBE/메타데이터 암호화가 "정지 상태 기밀성"일 뿐 **실행 중 기기**·**무결성(C28)**과 어떻게 다른지, 각각을 무엇이 담당하는지 서술하세요.
+이 AVD(`codex-atlas-api33` · Android 13/API 33 · x86_64)에서 실제로 캡처한 측정은 KeyStore/attestation 한 건이고, 그 값이 이 모듈이 그어 둔 하드웨어 경계를 그대로 확증합니다.
 
-## 소스·정적 검증 경로
+**1) 이 AVD의 키 보안 수준은 `SOFTWARE(0)`다 — CE 키를 봉인할 KeyMint가 여기선 하드웨어가 아니다.** 검증 블록의 명령(AndroidKeyStore EC 키 생성 → attestation challenge → `KeyInfo` → 인증서 체인 조회)은 모두 성공했고, `KeyInfo`가 보고한 보안 수준은 정확히 `SOFTWARE(0)`, attestation 인증서 체인 길이는 3이었습니다.
 
-`sec-api33` 에뮬(FBE를 소프트웨어로 지원)에서 다음을 수행하세요.
+```console
+$ # AndroidKeyStore EC 키 생성 + attestation challenge → KeyInfo/체인 조회
+KeyInfo.getSecurityLevel()          = SOFTWARE (0)
+attestation certificate chain length = 3
+```
 
-- `getprop ro.crypto.type`(=`file` 확인)과 `/proc/mounts`의 dm/verity/암호화 매핑을 캡처.
-- `android:directBootAware="true"` 리시버를 만들어 **잠금해제 전** `ACTION_LOCKED_BOOT_COMPLETED`에 뜨는지, 일반 리시버는 `ACTION_BOOT_COMPLETED`까지 안 뜨는지 대조.
-- `createDeviceProtectedStorageContext()`로 DE에 쓴 값이 잠금해제 전 읽히고, 기본(CE) 컨텍스트에 쓴 값은 잠금해제 전 안 읽히는지 대조.
-- 왜 이 관측이 에뮬에서도 되는지(FBE 소프트웨어 지원), 그리고 **무엇이 안 되는지**(하드웨어 키 바인딩·throttle의 실측)를 적으세요.
+질문 2와 질문 8은 "CE 키를 봉인하는 하드웨어 키가 KeyMint 키"라고 못박습니다. 그런데 이 AVD의 KeyMint는 `SOFTWARE(0)`로 떨어집니다 — CE 클래스 키를 감쌀 TEE/StrongBox가 물리적으로 없다는 뜻입니다. 질문 7이 "하드웨어 키 바인딩만 소프트웨어일 뿐"이라고 미리 못박은 경계가, 상단 [검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-keystore.png)의 키 보안 수준 값으로 확인됩니다. attestation 자체는 소프트웨어 폴백에서도 인증서 체인(길이 3)을 만들어 내지만, 그 뿌리가 하드웨어가 아니므로 CE 봉인과 Gatekeeper/Weaver throttle의 **하드웨어 보증은 이 값으로 주장할 수 없습니다**.
 
-## 추가 심화 재현 절차
+**2) FBE의 클래스 분리와 키 파생 구조는 커널·AOSP 문서로 확정했다.** DE/CE storage class가 각각 다른 마스터 키로 독립 언랩된다는 점, 파일별 키가 클래스 마스터 키 + 각 inode의 nonce에서 HKDF-SHA512(fscrypt 정책 v2, Android 11+ 기본)로 파생된다는 점, 내용은 AES-256-XTS·파일명은 AES-256-CBC-CTS(Android 14+·가속 하드웨어에서 HCTR2 선호)라는 점은 커널 `fscrypt.rst`와 source.android.com의 file-based encryption 문서에서 대조해 확인했습니다. 이는 소스·문서 근거이며 이 AVD의 새 측정이 아닙니다.
 
-이 모듈을 **가상 환경 실측 글**로 승격하세요. Emulator로 FBE/Direct Boot의 DE/CE 동작, broadcast와 context를 관측합니다. 하드웨어 키 바인딩과 throttle 보증은 공식 문서·공개 AOSP 소스까지만 분석하고 `가상 환경의 검증 한계`로 표시합니다.
+**3) "CE = 2요소" 불변식은 봉인이 온디바이스라는 전제 위에 선다.** 뽑아낸 플래시 이미지만으로는 자격증명이 없어 SP를 못 열고, 자격증명만으로는 그 기기의 KeyMint 키가 없어 봉인을 못 풉니다(질문 3·5, 직접 그릴 수 있는 호출 흐름의 2요소 도식). 그런데 (1)에서 보듯 이 AVD의 봉인 뿌리는 `SOFTWARE(0)`이므로, 이 불변식이 실제로 성립하려면 필요한 것은 정확히 이 AVD에 **없는** 하드웨어 봉인·rate-limit라는 사실이 측정으로 드러납니다. 즉 x86_64 에뮬레이터는 이 2요소 중 "온디바이스 하드웨어" 쪽을 소프트웨어로 흉내 낼 뿐입니다.
 
-1. **FBE 상태**: `ro.crypto.type=file`·`/proc/mounts`를 실제 출력으로.
-2. **Direct Boot 실증**: directBootAware 리시버가 `LOCKED_BOOT_COMPLETED`에 뜨는 로그와, DE/CE 컨텍스트의 잠금 전 접근 차이를 캡처.
-3. **범위 서술**: Emulator의 실제 DE/CE 접근 결과로 DE에 비밀을 두면 안 되는 이유와 FBE가 실행 중 게스트를 보호하는 범위를 설명.
-4. **하드웨어 경계**: CE key와 KeyMint 연결은 공개 AOSP 소스 경로로 추적하고, 로컬 Emulator에서 하드웨어 봉인을 검증했다고 주장하지 않기.
+## 가상환경 검증 한계
 
-각 단계는 명령 출력·실제 스크린샷으로만 증적화하고, 미확인 항목은 "못 한 것"으로 남기세요.
+정직하게, 이 문서가 새로 캡처한 실측은 위 (1)의 KeyStore/attestation 한 건입니다. 나머지는 근거를 소스로 확정했으나 이 AVD 세션에서 라이브로 재현하지는 않았습니다.
+
+- **하드웨어 TEE/StrongBox/Weaver 봉인과 Gatekeeper/Weaver throttle은 이 AVD에서 측정되지 않았다.** 이 x86_64 AVD의 KeyMint는 `SOFTWARE(0)`로 폴백하므로(검증 블록의 검증 한계 줄과 동일), CE 키의 하드웨어 봉인이나 오프라인 브루트포스를 막는 온디바이스 rate-limit은 소프트웨어 흉내일 뿐 하드웨어 보증으로 관측되지 않았습니다.
+- **DE/CE 접근 차이와 Direct Boot broadcast는 이 세션에서 새로 캡처하지 않았다.** 에뮬레이터가 FBE를 소프트웨어로 지원해 `directBootAware` 리시버의 `ACTION_LOCKED_BOOT_COMPLETED` 도착이나 `createDeviceProtectedStorageContext()`의 잠금 전 접근 차이는 원리상 관측 가능하지만, 이 문서의 증적은 KeyStore attestation 한 건에 한정됩니다.
+- **dm-default-key 메타데이터 암호화 계층과 부팅 시 키 존재 조건은 라이브로 재현하지 않았다.** userdata 블록 전체를 한 키로 덮는 dm-default-key의 동작과 "전원-꺼짐 경우만 보호"라는 부팅 경로 특성은 fstab/커널 문서 근거로만 서술했고, 이 AVD에서 블록 계층을 실측하지 않았습니다.
+
+관련 근거: [AOSP File-Based Encryption](https://source.android.com/docs/security/features/encryption/file-based) · [AOSP Metadata Encryption](https://source.android.com/docs/security/features/encryption/metadata) · [Kernel fscrypt.rst](https://www.kernel.org/doc/html/latest/filesystems/fscrypt.html) · [Android Direct Boot 가이드](https://developer.android.com/training/articles/direct-boot)
 
 ## 마치며
 
