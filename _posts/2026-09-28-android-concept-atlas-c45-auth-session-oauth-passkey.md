@@ -8,7 +8,7 @@ series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, OAuth, OIDC, PKCE, Passkey, WebAuthn, Session, Token, CredentialManager, ConceptAtlas, 학습기록]
-excerpt: "내 reporch OAuth 버그의 교훈이 이 편의 핵심입니다: 계정을 사용자가 바꿀 수 있는 username/email에 묶으면 계정 탈취가 되고, 불변의 sub+iss에 묶어야 하죠. OAuth 2.0은 '무엇을 해도 되는가'(access token)이고 OIDC의 ID token이 '누구인가'인데, access token을 신원 증명으로 쓰는 게 대표적 혼동입니다. 네이티브 앱은 client_secret을 못 숨기니 authorization code + PKCE가 필수고, 커스텀 스킴 리다이렉트는 아무 앱이나 등록해 가로채니 verified App Link + 시스템 브라우저(WebView 금지)로 막습니다. passkey는 rpId(도메인)에 묶여 피싱 저항이 있고, 토큰은 Keystore에 넣지 평문 prefs에 안 넣죠. Tier 8 앱 인증 모듈입니다."
+excerpt: "내가 점검한 한 OAuth 계정 바인딩 버그의 교훈이 이 편의 핵심입니다: 계정을 사용자가 바꿀 수 있는 username/email에 묶으면 계정 탈취가 되고, 불변의 sub+iss에 묶어야 하죠. OAuth 2.0은 '무엇을 해도 되는가'(access token)이고 OIDC의 ID token이 '누구인가'인데, access token을 신원 증명으로 쓰는 게 대표적 혼동입니다. 네이티브 앱은 client_secret을 못 숨기니 authorization code + PKCE가 필수고, 커스텀 스킴 리다이렉트는 아무 앱이나 등록해 가로채니 verified App Link + 시스템 브라우저(WebView 금지)로 막습니다. passkey는 rpId(도메인)에 묶여 피싱 저항이 있고, 토큰은 Keystore에 넣지 평문 prefs에 안 넣죠. Tier 8 앱 인증 모듈입니다."
 ---
 
 > **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
@@ -38,7 +38,7 @@ excerpt: "내 reporch OAuth 버그의 교훈이 이 편의 핵심입니다: 계�
 > **계층**: Tier 8 (앱 보안 통제) · **난이도**: 중급 · **선수 개념**: C02(인증/인가), C40(Keystore)
 > **성격**: 보완 편.
 
-C02에서 인증과 인가를 구분했습니다. 이 편은 그 인증의 **앱 레벨 구현** — 세션 토큰·OAuth·passkey이고, 내 **reporch OAuth 버그**가 정확히 여기 삽니다.
+C02에서 인증과 인가를 구분했습니다. 이 편은 그 인증의 **앱 레벨 구현** — 세션 토큰·OAuth·passkey이고, 내가 점검한 **한 OAuth 계정 바인딩 버그**가 정확히 여기 삽니다.
 
 한 문장으로: **OAuth는 '무엇을 해도 되는가'(access token), OIDC ID token이 '누구인가'이며, 계정은 사용자가 바꿀 수 없는 불변 식별자(sub+iss)에 묶어야 한다.** 🟡 보완이라 핵심에 집중합니다.
 
@@ -63,7 +63,7 @@ C02(인증 vs 인가)의 **앱 레벨 구현**입니다. 토큰은 Keystore(C40/
 - **bearer = 소유가 곧 권한**: 홀더 바인딩이 없어 토큰 도난 = 남은 수명 동안 완전 사칭. TLS 전송(C46) + 고가치는 DPoP(RFC 9449)/mTLS로 sender-constraint.
 - **신뢰하면 안 되는 것들**:
   - **"access token이 신원 증명"** — access는 "무엇을 해도"입니다. 신원은 **OIDC ID token**(sub). access token을 신원으로 쓰거나 ID token을 API에 보내는 게 대표 혼동.
-  - **"계정을 email/username에 바인딩"** — **불변 `sub`+`iss`**에 묶어야 합니다. 사용자가 바꿀 수 있는 값에 묶으면 계정 탈취(**내 reporch OAuth-complete username 버그**가 정확히 이것).
+  - **"계정을 email/username에 바인딩"** — **불변 `sub`+`iss`**에 묶어야 합니다. 사용자가 바꿀 수 있는 값에 묶으면 계정 탈취(**내가 점검한 한 OAuth username 바인딩 버그**가 정확히 이것).
   - **"네이티브에 client_secret을 박으면 confidential"** — APK에서 추출됩니다. 코드 교환은 **PKCE**가 지킵니다(`code_challenge = base64url(SHA-256(code_verifier))`, 생 해시가 아님).
   - **"커스텀 스킴 리다이렉트는 안전"** — 아무 앱이나 같은 스킴을 등록해 code를 가로챕니다. **verified App Link**(https, autoVerify+assetlinks.json) + PKCE + **시스템 브라우저/Custom Tabs**(WebView 금지 — 호스트 앱이 자격증명·쿠키를 읽음).
   - **"passkey는 정확한 origin에 묶인다"** — **rpId(도메인)**에 묶입니다(caller origin의 등록가능 도메인 접미사; rpId `example.com`은 `login.example.com`에서 유효).
@@ -78,7 +78,7 @@ C02(인증 vs 인가)의 **앱 레벨 구현**입니다. 토큰은 Keystore(C40/
 ## 질문 5 — 실패하면 어떤 취약점으로 이어지는가
 
 - **토큰 도난 = 사칭**(재인증·MFA 없이 헤더만 재생). refresh token 유출 = 고임팩트.
-- **OAuth**: 커스텀 스킴 가로채기 + PKCE 없음 → code 탈취. `state` 없음 = CSRF 로그인 하이재크. **계정을 mutable username에 바인딩 = ATO**(reporch). WebView 사용 = 앱이 자격증명 판독.
+- **OAuth**: 커스텀 스킴 가로채기 + PKCE 없음 → code 탈취. `state` 없음 = CSRF 로그인 하이재크. **계정을 mutable username에 바인딩 = ATO**. WebView 사용 = 앱이 자격증명 판독.
 - **로그아웃이 서버 세션을 안 죽임** → 캡처된 토큰이 계속 유효.
 - **평문 토큰 저장** → 루팅/백업/포렌식 이미지에서 유출.
 
@@ -106,7 +106,7 @@ C02(인증 vs 인가)의 **앱 레벨 구현**입니다. 토큰은 Keystore(C40/
 - **C41(생체)**: passkey 사용자 검증.
 - 다음은 그 전송을 지키는 **C46(TLS·NSC·pinning)** 등으로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ OAuth code+PKCE (네이티브) + passkey ]
@@ -116,29 +116,12 @@ C02(인증 vs 인가)의 **앱 레벨 구현**입니다. 토큰은 Keystore(C40/
   IdP ──redirect(verified App Link, +code, +state)──▶ 앱             │
   앱 ──token endpoint(code + code_verifier)──▶ IdP ──access/refresh/ID token
      (가로챈 code는 verifier 없이 무용 · state로 CSRF 방어)
-     계정 바인딩 = 불변 sub+iss (mutable username ✗ = reporch ATO)
+     계정 바인딩 = 불변 sub+iss (mutable username ✗ = OAuth ATO)
      토큰 저장 = Keystore(C40) (평문 prefs ✗)
 
   passkey: RP ─challenge→ 인증기(생체 UV, C41) ─서명(rpId 바인딩)→ RP(공개키 검증)
            rpId = 도메인(registrable suffix) → 피싱 저항
 ```
-
-## 오개념 판별 문제 5개
-
-1. "OAuth 2.0 access token이 있으면 그 사용자가 누구인지 증명된 것이다."
-2. "OAuth 로그인 후 계정을 IdP가 준 이메일/username으로 매칭하면 된다."
-3. "네이티브 앱은 client_secret을 APK에 넣어 confidential client로 만들 수 있다."
-4. "커스텀 스킴(myapp://cb) 리다이렉트는 그 앱만 받으니 안전하다."
-5. "passkey는 정확한 URL origin에 묶여 서명한다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. access token은 "**무엇을 해도** 되는가"입니다. 신원은 **OIDC ID token**(sub). access를 신원으로 쓰는 게 대표 혼동.
-2. **불변 `sub`+`iss`**에 묶어야 합니다. mutable username에 묶으면 계정 탈취(reporch 버그).
-3. APK에서 secret이 추출됩니다. 코드 교환은 **PKCE**가 지킵니다.
-4. 아무 앱이나 같은 스킴을 등록해 가로챕니다. **verified App Link + PKCE + 시스템 브라우저**.
-5. **rpId(도메인)**에 묶입니다(등록가능 도메인 접미사).
-</details>
 
 ## 실측으로 확인한 것
 
@@ -171,4 +154,4 @@ bearer는 소유가 곧 권한이라 홀더 바인딩이 없다(질문 3). 그�
 
 ## 마치며
 
-내 reporch OAuth 버그의 교훈이 이 편의 핵심입니다: 계정을 사용자가 바꿀 수 있는 username/email에 묶으면 계정 탈취가 되고, 불변의 `sub`+`iss`에 묶어야 합니다. OAuth 2.0은 "무엇을 해도 되는가"(access token)이고 OIDC의 ID token이 "누구인가"인데, access token을 신원 증명으로 쓰는 게 대표적 혼동이죠. 네이티브 앱은 client_secret을 못 숨기니 authorization code + PKCE가 필수고, 커스텀 스킴 리다이렉트는 아무 앱이나 등록해 가로채니 verified App Link + 시스템 브라우저(WebView 금지)로 막습니다. passkey는 rpId(도메인)에 묶여 피싱 저항이 있고, 토큰은 Keystore에 넣지 평문 prefs에 안 넣습니다. 다음은 그 토큰을 전송에서 지키는 **C46(TLS·Network Security Config·pinning)**으로 이어집니다.
+내가 점검한 한 OAuth 계정 바인딩 버그의 교훈이 이 편의 핵심입니다: 계정을 사용자가 바꿀 수 있는 username/email에 묶으면 계정 탈취가 되고, 불변의 `sub`+`iss`에 묶어야 합니다. OAuth 2.0은 "무엇을 해도 되는가"(access token)이고 OIDC의 ID token이 "누구인가"인데, access token을 신원 증명으로 쓰는 게 대표적 혼동이죠. 네이티브 앱은 client_secret을 못 숨기니 authorization code + PKCE가 필수고, 커스텀 스킴 리다이렉트는 아무 앱이나 등록해 가로채니 verified App Link + 시스템 브라우저(WebView 금지)로 막습니다. passkey는 rpId(도메인)에 묶여 피싱 저항이 있고, 토큰은 Keystore에 넣지 평문 prefs에 안 넣습니다. 다음은 그 토큰을 전송에서 지키는 **C46(TLS·Network Security Config·pinning)**으로 이어집니다.

@@ -106,7 +106,7 @@ C45에서 bearer 토큰이 TLS 위에서 흘러야 한다 했습니다. 이 편�
 - **C09(앱)**: 앱 UID가 자기 NSC/트래픽.
 - 다음은 무결성 증명 **C48(Play Integrity)** 등으로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ TLS 검증과 인터셉션 분기 ]
@@ -125,23 +125,6 @@ C45에서 bearer 토큰이 TLS 위에서 흘러야 한다 했습니다. 이 편�
 
   ⚠ all-trusting TrustManager/HostnameVerifier = any cert 수락 = MITM 버그
 ```
-
-## 오개념 판별 문제 5개
-
-1. "Burp CA를 유저 인증서로 설치하면 요즘 앱도 프록시로 트래픽을 볼 수 있다."
-2. "NSC 인증서 피닝은 백업 핀과 만료일(expiration)을 반드시 넣어야 유효하다."
-3. "업데이트 가능한 루트 CA 세트는 Android 10(Conscrypt APEX)부터 제공됐다."
-4. "인증서 피닝을 하면 루팅 기기에서도 트래픽을 가로챌 수 없다."
-5. "커스텀 TrustManager로 모든 인증서를 받아도 TLS라서 안전하다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. targetSdk **24+ 앱은 유저 CA를 불신**합니다. 4가지 우회(옛 타깃/NSC/루팅 시스템 스토어/Frida)가 필요.
-2. 둘 다 **선택적**입니다. 백업 핀은 강력 권장(브릭 방지), expiration은 있으면 만료 후 fail-open.
-3. A10은 **TLS 코드**(Conscrypt) 업데이트입니다. 업데이트 **CA 세트**는 **A14**부터.
-4. 피닝은 **클라이언트 측**이라 루팅 기기선 Frida/objection로 우회됩니다.
-5. all-trusting TrustManager는 **any cert 수락 = MITM 버그**입니다(감사 최우선).
-</details>
 
 ## 실측으로 확인한 것
 

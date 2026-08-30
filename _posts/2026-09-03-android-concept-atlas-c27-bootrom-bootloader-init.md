@@ -120,7 +120,7 @@ C28·C39·C23·C40을 쓰면서 이 모듈(C27)이 그 선수인데 아직 안 �
 - **C33(ELF·linker)**: init이 동적 링크라, 램디스크에 bootstrap `linker64`·bionic이 실립니다.
 - 다음은 **C31(Treble·GSI·Mainline·APEX)** 또는 **C29(롤백 방지)**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 리셋에서 첫 유저스페이스까지 ]
@@ -143,23 +143,6 @@ Boot ROM/PBL(EL3, 시큐어) ─검증→ XBL(EL3): DRAM 초기화 + 시큐어 �
                                         → second_stage: property service + .rc 서비스
                                                           → class_start main → zygote(C12)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "부트로더는 검증된 신뢰 코드라 공격 표면이 아니다."
-2. "Qualcomm의 PBL/XBL은 논시큐어(normal world) 부트 코드다."
-3. "boot.img는 항상 커널과 램디스크(init)를 함께 담는다."
-4. "init은 정적 링크된 자기완결 바이너리다."
-5. "init은 두 단계(first/second)이고 SELinux 정책은 second-stage에서 로드된다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. ABL은 공격자 통제 입력(부트 헤더·램디스크 크기)을 파싱하는 pre-OS 코드라, 그 파서 버그는 OS·SELinux·dm-verity 밑의 코드 실행입니다.
-2. 리셋 시 코어는 EL3(시큐어)로 진입하고, PBL·XBL은 EL3에서 실행됩니다. **ABL만** 논시큐어(EL1)입니다.
-3. Android 13(GKI)은 제네릭 램디스크/init을 **init_boot**로 분리해, boot.img는 **커널만** 담습니다.
-4. 현대 init은 **동적 링크**입니다. /system 마운트 전에 돌기 위해 램디스크가 bootstrap bionic(`linker64`·libc 등)을 함께 싣습니다.
-5. **세 단계**입니다: first_stage → **selinux_setup**(정책 로드·enforcing) → second_stage. 정책은 별도 재실행 단계에서 로드됩니다.
-</details>
 
 ## 실측으로 확인한 것
 

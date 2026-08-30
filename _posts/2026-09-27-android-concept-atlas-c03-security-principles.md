@@ -105,7 +105,7 @@ excerpt: "이 Atlas의 거의 모든 모듈은 사실 몇 개의 오래된 설�
 - **reference monitor**: C23(SELinux) + system_server 권한 검사.
 - 이 원칙 지도가 Atlas의 뼈대이고, 다음 티어들은 그 원칙의 추가 사례입니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 설계 원칙 → Android 실현 지도 ]
@@ -123,23 +123,6 @@ excerpt: "이 Atlas의 거의 모든 모듈은 사실 몇 개의 오래된 설�
 
   Binder = 프레임워크로 가는 주 매개 채널(유일한 문 X: 소켓/파일/syscall도)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "최소권한과 fail-safe defaults는 사실상 같은 원칙이다."
-2. "심층방어는 Saltzer & Schroeder의 고전 보안 원칙 중 하나다."
-3. "reference monitor는 완전중재와 economy of mechanism 두 원칙을 합친 것이다."
-4. "완전중재를 지키면 TOCTOU 경쟁 조건이 방어된다."
-5. "Android에서는 Binder가 유일한 IPC 문이라 완전중재가 자동으로 보장된다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **다른 축**입니다. 최소권한=권한의 크기, fail-safe defaults=기본/오류 시 거부 방향.
-2. 아닙니다. 심층방어는 **현대** 원칙입니다(S&S 8 = 최소권한·완전중재·fail-safe defaults·economy·separation of privilege·least common mechanism·psychological acceptability·open design).
-3. **세 속성**(항상호출+변조불가+검증가능)입니다. **변조 불가**는 어느 S&S 원칙에도 안 매핑됩니다.
-4. 완전중재는 **stale 인가/권한 캐싱**을 막습니다. 고전 TOCTOU는 **원자적 check-and-use**가 별도로 필요합니다.
-5. Binder는 **주** 채널이지 유일한 문이 아닙니다(소켓·공유메모리·파일·직접 시스템콜, 각각 DAC/SELinux/seccomp가 매개).
-</details>
 
 ## 실측으로 확인한 것
 

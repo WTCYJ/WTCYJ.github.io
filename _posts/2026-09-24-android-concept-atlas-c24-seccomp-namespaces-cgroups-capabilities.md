@@ -103,7 +103,7 @@ C09에서 UID DAC를, C23에서 SELinux MAC를 봤습니다. 이 편은 그 **1�
 - **C25(isolatedProcess)**: 같은 프리미티브를 더 조인 것 — 바로 다음.
 - 다음은 이 층들을 극단으로 조인 **C25(isolatedProcess·app zygote)**로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 앱 샌드박스 = 겹쳐진 층 ]
@@ -120,23 +120,6 @@ C09에서 UID DAC를, C23에서 SELinux MAC를 봤습니다. 이 편은 그 **1�
 
   관찰: /proc/pid/status → CapEff=0, Seccomp:2 · ns/mnt 다름, ns/net 같음
 ```
-
-## 오개념 판별 문제 5개
-
-1. "앱 프로세스는 capability가 전부 비어 있으니, 커널 익스플로잇으로도 root를 못 얻는다."
-2. "seccomp 필터는 열리는 파일 경로나 버퍼 내용을 보고 시스템 콜을 막을 수 있다."
-3. "Android는 컨테이너처럼 앱마다 PID·NET 네임스페이스를 따로 준다."
-4. "cgroups는 앱을 서로 격리하는 보안 경계다."
-5. "capability의 5개 세트는 프로세스 단위 속성이다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. caps 비움은 **합법적** 상승(setuid/capset)만 막습니다. 커널 메모리 손상은 cred를 직접 덮어써 root를 얻으니 무관 — SELinux/표면축소가 함께 필요.
-2. seccomp는 **포인터맹**입니다. 시스템 콜 번호와 스칼라 인자로만. "어느 파일"은 SELinux.
-3. Android는 앱에 **mount ns만** 씁니다(저장소). PID/NET은 공유, 격리는 UID+SELinux.
-4. cgroups는 **자원·앱 프리저**용이지 보안 경계가 아닙니다.
-5. **per-thread**입니다(5세트 전부, 커널 2.6.25+).
-</details>
 
 ## 실측으로 확인한 것
 

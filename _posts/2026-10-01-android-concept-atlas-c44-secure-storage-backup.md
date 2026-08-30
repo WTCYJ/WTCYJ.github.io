@@ -8,7 +8,7 @@ series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, SecureStorage, Keystore, FBE, allowBackup, HardcodedKey, DataExtractionRules, ConceptAtlas, 학습기록]
-excerpt: "리버싱에서 제일 자주 나오는 저장소 결함이 하드코딩된 암호화 키입니다 - APK에 박힌 키는 결국 모든 기기에 실려 나가는 공개값이라, 그걸로 한 암호화는 아무 기밀성도 없죠(내 Juice Shop·Toss 상수 케이스). 오해 둘: /data/data가 '사설'인 건 UID/SELinux 격리지 암호화가 아니고(root는 우회), FBE는 첫 잠금해제 전(BFU)의 잃어버린 기기만 지키지 켜져 돌아가는 앱엔 투명합니다 - 그래서 토큰·키 같은 앱 비밀은 비추출 Keystore(getEncoded가 null)에 넣어야죠. 그리고 allowBackup은 기본 true라, 백업 규칙을 안 쓰면 /data/data가 조용히 클라우드로 새 나갑니다. Tier 8 저장소 모듈입니다."
+excerpt: "리버싱에서 제일 자주 나오는 저장소 결함이 하드코딩된 암호화 키입니다 - APK에 박힌 키는 결국 모든 기기에 실려 나가는 공개값이라, 그걸로 한 암호화는 아무 기밀성도 없죠(내 Juice Shop·상용 앱 상수 케이스). 오해 둘: /data/data가 '사설'인 건 UID/SELinux 격리지 암호화가 아니고(root는 우회), FBE는 첫 잠금해제 전(BFU)의 잃어버린 기기만 지키지 켜져 돌아가는 앱엔 투명합니다 - 그래서 토큰·키 같은 앱 비밀은 비추출 Keystore(getEncoded가 null)에 넣어야죠. 그리고 allowBackup은 기본 true라, 백업 규칙을 안 쓰면 /data/data가 조용히 클라우드로 새 나갑니다. Tier 8 저장소 모듈입니다."
 ---
 
 > **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
@@ -64,7 +64,7 @@ C40에서 Keystore를, C43에서 FBE를 봤습니다. 이 편은 앱이 **데이
 - **신뢰하면 안 되는 것들**:
   - **"`/data/data`가 사설이면 암호화된 것"** — 아닙니다. **UID/SELinux 격리**(권한 속성)지 암호화(암호 속성)가 아닙니다. root(UID 0)는 DAC를 우회.
   - **"FBE가 돌아가는 앱을 지킨다"** — FBE는 **BFU(첫 잠금해제 전)** 상태만 지킵니다(켜져 있어도 미해제면 CE 암호화 유지). AFU/라이브/루팅 프로세스엔 **투명하게 복호**됩니다 — 앱 비밀 방어가 아님.
-  - **"하드코딩 키로도 암호화하면 안전"** — APK에 박힌 키는 모든 기기에 실려 나가는 **공개값**입니다. 정적 RE(`strings`/`jadx`/apktool)로 사소하게 복원(내 Juice Shop·Toss 상수). 키가 암호문과 함께 실리면 기밀성 0.
+  - **"하드코딩 키로도 암호화하면 안전"** — APK에 박힌 키는 모든 기기에 실려 나가는 **공개값**입니다. 정적 RE(`strings`/`jadx`/apktool)로 사소하게 복원(내 Juice Shop·상용 앱 상수). 키가 암호문과 함께 실리면 기밀성 0.
   - **"`allowBackup`은 신경 안 써도 된다"** — **기본 true**라, 백업 규칙을 안 쓰면 `/data/data`가 조용히 클라우드로. 민감 파일은 제외하거나 `allowBackup=false`.
   - **"Keystore는 `getEncoded()`로 키를 뽑을 수 있다"** — `getKey()`로 **핸들**은 얻지만 `getEncoded()`는 **null**(원본 바이트 안 나옴). 암호 연산은 시큐어 월드 내부에서.
 
@@ -106,7 +106,7 @@ C40에서 Keystore를, C43에서 FBE를 봤습니다. 이 편은 앱이 **데이
 - **C45(토큰)**: 토큰 저장이 이 편의 응용.
 - 다음은 앱·기기 무결성 증명 **C48(Play Integrity)** 등으로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 저장 계층: 바닥선 vs 비밀 vs 백업 ]
@@ -125,23 +125,6 @@ C40에서 Keystore를, C43에서 FBE를 봤습니다. 이 편은 앱이 **데이
        Keystore 키는 백업에 안 실림(→새 기기서 복호 불가, 재프로비전)
 ```
 
-## 오개념 판별 문제 5개
-
-1. "`/data/data/<pkg>`는 앱 전용이라, 거기 저장하면 이미 암호화된 것이다."
-2. "FBE가 켜져 있으면 실행 중인 앱의 파일도 저장 시 암호화돼 보호된다."
-3. "암호화 키를 코드에 하드코딩해도, 암호화 자체는 안전하다."
-4. "`android:allowBackup`을 명시하지 않으면 백업은 안 된다."
-5. "Android Keystore 키는 `getEncoded()`로 원본 바이트를 꺼낼 수 있다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **UID/SELinux 격리**지 암호화가 아닙니다. root는 우회하고, at-rest 암호화는 FBE가 별도로.
-2. FBE는 **BFU(첫 잠금해제 전)**만 지킵니다. AFU/라이브/루팅엔 투명하게 복호됩니다.
-3. APK에 박힌 키는 **공개값**입니다. 정적 RE로 복원돼 기밀성 0.
-4. **기본 true**입니다. 규칙 없으면 `/data/data`가 클라우드로.
-5. `getKey()`로 핸들만 얻고 `getEncoded()`는 **null**(원본 바이트 안 나옴).
-</details>
-
 ## 실측으로 확인한 것
 
 가상 실습 환경(`codex-atlas-api33` AVD · Android 13/API 33 · x86_64)에서 이 모듈의 핵심 주장을 검증 블록의 관측 결과와 공식 문서에 대조해 확인했다.
@@ -156,7 +139,7 @@ $ curl --tlsv1.3 ...        # 검증 블록 실행 명령 → TLS 1.3 HTTP 200 (
 
 이 결과는 "데이터 보호"가 전송(TLS)과 저장(FBE·Keystore)이라는 별개 계층으로 나뉜다는 것을 실증한다 — 이 편이 다루는 건 후자이고, 전송 계층은 별도로 확인됐다. 호스트 측 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 있다.
 
-**3) 하드코딩 키·`allowBackup` 기본 true·`getEncoded()`=null은 문서/사양으로 닫히는 사실이다 — 질문 3·5·6.** 이 셋은 아키텍처와 무관한 정적·문서 속성이라 AVD 실행 결과와 별개로 성립한다: `allowBackup`은 매니페스트 기본값이 **true**(Auto Backup 문서), Android Keystore 키는 `getKey()`로 핸들만 나오고 `getEncoded()`는 **null**을 반환(Keystore 사양), APK에 박힌 키는 모든 기기에 실려 나가는 공개값이라 정적 RE(`strings`/`jadx`)로 사소하게 복원된다(내 Juice Shop·Toss 상수 경험). 격리·FBE라는 바닥선 위에 앱 비밀은 비추출 Keystore로 올려야 한다는 이 편의 결론이 문서 수준에서 확정된다.
+**3) 하드코딩 키·`allowBackup` 기본 true·`getEncoded()`=null은 문서/사양으로 닫히는 사실이다 — 질문 3·5·6.** 이 셋은 아키텍처와 무관한 정적·문서 속성이라 AVD 실행 결과와 별개로 성립한다: `allowBackup`은 매니페스트 기본값이 **true**(Auto Backup 문서), Android Keystore 키는 `getKey()`로 핸들만 나오고 `getEncoded()`는 **null**을 반환(Keystore 사양), APK에 박힌 키는 모든 기기에 실려 나가는 공개값이라 정적 RE(`strings`/`jadx`)로 사소하게 복원된다(내 Juice Shop·상용 앱 상수 경험). 격리·FBE라는 바닥선 위에 앱 비밀은 비추출 Keystore로 올려야 한다는 이 편의 결론이 문서 수준에서 확정된다.
 
 ## 가상환경 검증 한계
 

@@ -130,7 +130,7 @@ C39는 시큐어 월드가 **어디**인지였고, C40은 그 안의 키가 **�
 - **CVE 시리즈**: authenticator TA의 파서 버그가 같은 결의 메모리 안전 문제입니다.
 - 다음은 **C42(attestation·신뢰의 뿌리)** 또는 **C43(FBE·Direct Boot)**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 두 개를 손으로 그려 보시길 권합니다.
 
@@ -165,25 +165,6 @@ KeyMint 검증 → auth-per-use 면 begin() 챌린지 일치까지 → 연산
    ── 새 지문 등록 → 생체 SID 회전 → 그 키 영구 무효화(기본값) ──
    ── PIN 변경 → Gatekeeper SID 유지 → 그 키 생존 ──
 ```
-
-## 오개념 판별 문제 5개
-
-각 문장이 왜 틀렸는지 한 줄로 반박해 보세요.
-
-1. "Gatekeeper의 throttle이 4자리 PIN을 긴 암호만큼 암호학적으로 강하게 만든다."
-2. "재부팅하거나 시스템 시계를 앞으로 돌리면 throttle이 풀려 계속 추측할 수 있다."
-3. "기기 잠금을 여는 어떤 지문/얼굴이든 Keystore의 auth-bound 키를 열 수 있다."
-4. "루팅/커널 침해로 인증 성공(HAT)을 위조해 auth-bound 키를 열 수 있다."
-5. "Weaver는 모든 Android 기기의 기본 보안이다 / 정상 PIN 변경은 auth-bound 키를 무효화한다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. throttle은 엔트로피를 안 늘리고 추측 **속도**만 제한합니다. PIN은 여전히 저엔트로피이고, TEE가 뚫리면(또는 SE 기반 throttle이 없으면) 속도 제한도 우회됩니다 — 그래서 Weaver가 throttle을 SE로 옮깁니다.
-2. 카운터는 RPMB(재생 방지)에 남아 재부팅으로 안 풀리고, 타임아웃은 **서스펜드 중에도 도는 보안 단조 시계**로 재므로 노멀 월드 시계 조작이 안 먹습니다.
-3. **Class 3(Strong)만** Keystore 키를 열고 CryptoObject를 지원합니다. Class 2(Weak)·Class 1(Convenience)은 UI 잠금해제는 되지만 키는 못 엽니다.
-4. HAT의 HMAC 키는 시큐어 월드에서만 공유됩니다(`ISharedSecret`). 커널은 연산을 요청할 순 있어도 인증을 위조하지 못합니다.
-5. Weaver는 dedicated SE 또는 TEE에 구현될 수 있습니다. Gatekeeper와 Weaver의 역할 분담은 Android version과 구현에 따라 달라집니다. 기존 credential을 확인한 정상 변경은 SID를 유지할 수 있지만 credential 제거·신뢰할 수 없는 재등록은 SID와 auth-bound key 유효성에 영향을 줍니다.
-</details>
 
 ## 실측으로 확인한 것
 

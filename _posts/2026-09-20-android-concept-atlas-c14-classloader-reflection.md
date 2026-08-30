@@ -8,7 +8,7 @@ series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ClassLoader, DexClassLoader, InMemoryDexClassLoader, Reflection, HiddenAPI, Packer, DynamicCodeLoading, ConceptAtlas, 학습기록]
-excerpt: "APK를 정적으로 다 뜯었는데 로직이 안 보인다면, 진짜 코드는 런타임에 로드됩니다. Android의 ClassLoader는 전부 BaseDexClassLoader + DexPathList 위의 얇은 껍질이고, 부모위임(parent-first)이 프레임워크 클래스를 단일 정의로 지키죠. 그런데 DexClassLoader는 임의 경로의 dex를, InMemoryDexClassLoader(API 26)는 디스크에 파일도 안 떨구고 ByteBuffer의 dex를 로드합니다 - 내가 분석한 Toss 패커가 Blowfish+SEED로 복호한 dex를 바로 이걸로 실행했죠. 그래서 동적 코드 로딩은 악성코드/패커의 1순위 회피 기법이고, 정적 APK 분석은 stub만 봅니다. 리플렉션은 setAccessible로 언어 접근은 뚫지만 A9+ hidden-API 강제는 못 뚫고요. 내 패커 RE 작업과 직결되는 Tier 2 모듈입니다."
+excerpt: "APK를 정적으로 다 뜯었는데 로직이 안 보인다면, 진짜 코드는 런타임에 로드됩니다. Android의 ClassLoader는 전부 BaseDexClassLoader + DexPathList 위의 얇은 껍질이고, 부모위임(parent-first)이 프레임워크 클래스를 단일 정의로 지키죠. 그런데 DexClassLoader는 임의 경로의 dex를, InMemoryDexClassLoader(API 26)는 디스크에 파일도 안 떨구고 ByteBuffer의 dex를 로드합니다 - 내가 분석한 한 상용 앱 패커가 Blowfish+SEED로 복호한 dex를 바로 이걸로 실행했죠. 그래서 동적 코드 로딩은 악성코드/패커의 1순위 회피 기법이고, 정적 APK 분석은 stub만 봅니다. 리플렉션은 setAccessible로 언어 접근은 뚫지만 A9+ hidden-API 강제는 못 뚫고요. 내 패커 RE 작업과 직결되는 Tier 2 모듈입니다."
 ---
 
 > **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
@@ -38,7 +38,7 @@ excerpt: "APK를 정적으로 다 뜯었는데 로직이 안 보인다면, 진�
 > **계층**: Tier 2 (Android Runtime) · **난이도**: 중급 · **선수 개념**: C13(ART), C07(DEX)
 > **성격**: 보완 편.
 
-C13에서 ART가 DEX를 실행한다 했습니다. 그 DEX를 **어떻게 로드하는가**, 그리고 그 로딩이 어떻게 **정적 분석을 무력화하는가**가 이 편입니다 — 내가 뜯은 Toss 패커의 핵심.
+C13에서 ART가 DEX를 실행한다 했습니다. 그 DEX를 **어떻게 로드하는가**, 그리고 그 로딩이 어떻게 **정적 분석을 무력화하는가**가 이 편입니다 — 내가 뜯은 한 상용 앱 패커의 핵심.
 
 한 문장으로: **Android의 ClassLoader는 DexPathList 위의 얇은 껍질들이고, 동적 코드 로딩(런타임 복호 dex를 InMemoryDexClassLoader로)이 정적 APK 분석을 stub만 보게 만든다.** 🟡 보완이라 핵심에 집중합니다.
 
@@ -50,7 +50,7 @@ C13에서 ART가 DEX를 실행한다 했습니다. 그 DEX를 **어떻게 로드
 
 ## 질문 1 — 이 개념은 Android 전체 구조에서 어디에 있는가
 
-DEX(C13)를 **로드하는 메커니즘**이자, **동적 코드 로딩이 정적 분석을 무너뜨리는 지점**입니다. 내 Toss 패커 작업(런타임 복호 dex)의 핵심이고, C48(무결성)·C16(정적≠실행)과 직결됩니다.
+DEX(C13)를 **로드하는 메커니즘**이자, **동적 코드 로딩이 정적 분석을 무너뜨리는 지점**입니다. 내 상용 앱 패커 작업(런타임 복호 dex)의 핵심이고, C48(무결성)·C16(정적≠실행)과 직결됩니다.
 
 ## 질문 2 — 어느 프로세스와 권한 수준에서 동작하는가
 
@@ -81,7 +81,7 @@ DEX(C13)를 **로드하는 메커니즘**이자, **동적 코드 로딩이 정�
 
 ## 질문 5 — 실패하면 어떤 취약점으로/분석에 어떤 함의가
 
-- **동적 코드 로딩(DCL) = 악성/패커 1순위 회피**: 코드가 분석 대상 APK에 없고 런타임에 (자산/네트워크/복호로) 로드됩니다. **Toss 패커**: 다단계 Blowfish+SEED로 복호한 dex를 `InMemoryDexClassLoader`(디스크 미접촉)로 실행 → 파일 기반 수집을 무력화.
+- **동적 코드 로딩(DCL) = 악성/패커 1순위 회피**: 코드가 분석 대상 APK에 없고 런타임에 (자산/네트워크/복호로) 로드됩니다. **한 상용 앱 패커**: 다단계 Blowfish+SEED로 복호한 dex를 `InMemoryDexClassLoader`(디스크 미접촉)로 실행 → 파일 기반 수집을 무력화.
 - **정적 분석 불완전**: 정적으론 얇은 로더 stub만 보임 → **동적으로** 관찰해야(로더 후킹·메모리 덤프).
 - **리플렉션/JNI 탈출**: `Class.forName/invoke`의 흐름은 단순 정적 도구에 안 보이고, `.so`(JNI, C15) 로직은 DEX 밖.
 
@@ -107,7 +107,7 @@ DEX(C13)를 **로드하는 메커니즘**이자, **동적 코드 로딩이 정�
 - **C48(무결성)**: DCL/패커가 무결성·Play Integrity와 충돌.
 - 다음은 이 실행 형태(인터프리트/JIT/AOT)가 분석에 주는 차이 **C16**로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ ClassLoader와 동적 코드 로딩(패커) ]
@@ -119,30 +119,13 @@ DEX(C13)를 **로드하는 메커니즘**이자, **동적 코드 로딩이 정�
   DexClassLoader (임의 경로 dex)  /  InMemoryDexClassLoader (ByteBuffer, 파일 없음)
        └── 전부 BaseDexClassLoader + DexPathList(dex element 배열) 위
 
-  패커(Toss): classes.dex=stub ──런타임──▶ Blowfish+SEED 복호 → dex(메모리)
+  패커(상용 앱): classes.dex=stub ──런타임──▶ Blowfish+SEED 복호 → dex(메모리)
        → InMemoryDexClassLoader.load  ← 진짜 코드(디스크 미접촉)
        분석: Frida로 로더 후킹 → dex 캡처/덤프 (정적 APK엔 없음)
 
   리플렉션: Class.forName/invoke/setAccessible(언어 접근만)
        └ A9+ hidden-API 강제(ART 조회층, 리플렉션+JNI)는 별개로 막음
 ```
-
-## 오개념 판별 문제 5개
-
-1. "부모위임 모델에서 로더는 자기가 먼저 클래스를 찾고, 없으면 부모에게 넘긴다."
-2. "`PathClassLoader`는 외부 경로를 못 읽게 하드 제한된 보안 로더다."
-3. "`InMemoryDexClassLoader`는 Android 8.1(API 27)에서 도입됐다."
-4. "리플렉션에서 `setAccessible(true)`를 쓰면 숨김 프레임워크 API(hidden API)도 호출된다."
-5. "APK를 정적으로 다 분석하면 앱의 실행 로직을 완전히 안다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **parent-first**입니다 — 부모에게 먼저 위임하고 없을 때만 자기 정의(프레임워크 클래스 shadowing 방지).
-2. `DexClassLoader`와 거의 같은 서브클래스입니다. 차이는 **의도지 하드 제한이 아님**.
-3. **A8.0/API26**입니다(ByteBuffer[] 오버로드만 A29).
-4. `setAccessible`은 **언어 접근**만 우회합니다. A9+ **hidden-API 강제는 별개**로 막습니다.
-5. 패커/DCL이면 `classes.dex`는 **stub**이고 진짜 코드는 런타임 로드 — 동적 관찰이 필요합니다.
-</details>
 
 ## 실측으로 확인한 것
 
@@ -172,17 +155,17 @@ x86_64          # dex2oat가 만든 네이티브 산출물 디렉터리
 
 `PathClassLoader`가 여는 `base.apk` 속 `classes.dex`는 실재하는 파일이고, 그 옆 `oat/x86_64/`는 이 dex를 AOT 컴파일한 결과다(실행 모드는 **C16**으로 이어진다). **정적 분석이 이 앱을 완전히 읽을 수 있는 건, dex가 디스크에 통째로 있기 때문이다.**
 
-**3) 패커·`InMemoryDexClassLoader`는 (2)의 그림을 깬다.** 내가 실제로 뜯은 [Toss `ExternalWebActivity` 패커 분석](/posts/toss-externalwebactivity/)에서 `classes.dex`는 stub이었고, 진짜 코드는 런타임에 Blowfish+SEED로 복호돼 `InMemoryDexClassLoader.load`로 실행됐다 — 디스크 파일 없이 `ByteBuffer`의 dex를 바로 로드하는 A8.0(API 26)의 그 경로다. 이 경우 (2)처럼 `pm path`로 얻은 `base.apk`를 정적으로 뜯어도 stub만 나온다. 이것이 동적 코드 로딩이 정적 분석을 무력화하는 실제 기제이며, 대응은 로더 생성자 후킹 같은 **동적 관찰**이다.
+**3) 패커·`InMemoryDexClassLoader`는 (2)의 그림을 깬다.** 내가 실제로 뜯은 한 상용 앱의 `ExternalWebActivity` 패커 분석에서 `classes.dex`는 stub이었고, 진짜 코드는 런타임에 Blowfish+SEED로 복호돼 `InMemoryDexClassLoader.load`로 실행됐다 — 디스크 파일 없이 `ByteBuffer`의 dex를 바로 로드하는 A8.0(API 26)의 그 경로다. 이 경우 (2)처럼 `pm path`로 얻은 `base.apk`를 정적으로 뜯어도 stub만 나온다. 이것이 동적 코드 로딩이 정적 분석을 무력화하는 실제 기제이며, 대응은 로더 생성자 후킹 같은 **동적 관찰**이다.
 
 ## 가상환경 검증 한계
 
 정직하게, 이 문서의 실측 캡처는 (1)·(2)까지다. 나머지 두 항목은 근거는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
 
-- **패커 언패킹의 라이브 후킹은 이 세션에서 재현하지 않았다.** `DexClassLoader`/`InMemoryDexClassLoader` 생성자를 Frida로 후킹해 로드되는 dex를 캡처하는 작업은 위 Toss 분석에서 실제로 수행했고, 이 AVD에는 대상 패커 앱을 올리지 않았다. (3)의 경로·기제는 확정이지만, 캡처 증적은 그 별도 글에 있다.
+- **패커 언패킹의 라이브 후킹은 이 세션에서 재현하지 않았다.** `DexClassLoader`/`InMemoryDexClassLoader` 생성자를 Frida로 후킹해 로드되는 dex를 캡처하는 작업은 위 패커 분석에서 실제로 수행했고, 이 AVD에는 대상 패커 앱을 올리지 않았다. (3)의 경로·기제는 확정이지만, 캡처 증적은 그 별도 글에 있다.
 - **hidden-API 강제(A9+)의 정량 스캔은 미수행.** `setAccessible`(언어 접근 우회)과 hidden-API 블록리스트(A9+ ART 조회층)가 별개 층이라는 판정은 AOSP 소스·문서 근거이며, 특정 앱의 non-SDK 사용량을 `veridex`로 수치화한 표는 이 글에 포함하지 않았다.
 
 관련 근거: [AOSP `BaseDexClassLoader`](https://cs.android.com/android/platform/superproject/+/master:libcore/dalvik/src/main/java/dalvik/system/BaseDexClassLoader.java) · [`InMemoryDexClassLoader`(API 26 도입)](https://developer.android.com/reference/dalvik/system/InMemoryDexClassLoader) · [hidden-API 제한 정책](https://developer.android.com/guide/app-compatibility/restrictions-non-sdk-interfaces)
 
 ## 마치며
 
-Android의 ClassLoader는 전부 `BaseDexClassLoader`+`DexPathList` 위의 얇은 껍질이고, parent-first 위임이 프레임워크 클래스를 단일 정의로 지킵니다. 그런데 `DexClassLoader`는 임의 경로의, `InMemoryDexClassLoader`(A8.0/26)는 디스크 파일도 없이 `ByteBuffer`의 dex를 로드합니다 — 내가 뜯은 Toss 패커가 Blowfish+SEED로 복호한 dex를 바로 이걸로 실행했죠. 그래서 동적 코드 로딩은 악성코드/패커의 1순위 회피이고, 정적 APK 분석은 stub만 봅니다. 리플렉션은 `setAccessible`로 언어 접근은 뚫지만 A9+ hidden-API 강제는 못 뚫습니다. 다음은 그 로드된 코드가 인터프리트/JIT/AOT 중 무엇으로 도느냐가 분석에 주는 차이, **C16**으로 이어집니다.
+Android의 ClassLoader는 전부 `BaseDexClassLoader`+`DexPathList` 위의 얇은 껍질이고, parent-first 위임이 프레임워크 클래스를 단일 정의로 지킵니다. 그런데 `DexClassLoader`는 임의 경로의, `InMemoryDexClassLoader`(A8.0/26)는 디스크 파일도 없이 `ByteBuffer`의 dex를 로드합니다 — 내가 뜯은 한 상용 앱 패커가 Blowfish+SEED로 복호한 dex를 바로 이걸로 실행했죠. 그래서 동적 코드 로딩은 악성코드/패커의 1순위 회피이고, 정적 APK 분석은 stub만 봅니다. 리플렉션은 `setAccessible`로 언어 접근은 뚫지만 A9+ hidden-API 강제는 못 뚫습니다. 다음은 그 로드된 코드가 인터프리트/JIT/AOT 중 무엇으로 도느냐가 분석에 주는 차이, **C16**으로 이어집니다.

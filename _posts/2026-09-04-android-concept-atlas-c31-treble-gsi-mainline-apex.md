@@ -108,7 +108,7 @@ ART 관련 APEX는 10에서 `com.android.runtime`, 12부터 `com.android.art`. �
 - **CVE 시리즈**: Mainline이 그 패치 갭을 줄였습니다.
 - 다음은 이 파티션들의 **신뢰 관계**를 정리하는 **C32**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ Treble 의 프레임워크/벤더 분리와 그 층별 강제 ]
@@ -132,23 +132,6 @@ Google Play 시스템 업데이트 → 모듈(APK 또는 APEX)
    ▼
 미디어·ART·conscrypt·rkpd 등이 OEM 없이 플릿 전체 패치 → 패치 갭 축소
 ```
-
-## 오개념 판별 문제 5개
-
-1. "Android 8.0을 실행하는 모든 기기는 Treble 벤더 인터페이스를 가진다."
-2. "Treble의 HAL은 폴더만 바뀐 공유 라이브러리다."
-3. "HIDL이 현재 Android HAL의 표준 IDL이다."
-4. "GSI는 OEM 폰에 스톡 AOSP를 올리는 데일리 드라이버 ROM이다."
-5. "VTS를 돌리려면 기기에 GSI를 플래시해야 한다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **런치** 기기(8.0+로 출시)만 Treble 의무입니다. 8.0으로 업그레이드된 기기는 레거시 모놀리식을 유지할 수 있었습니다.
-2. Treble HAL은 별도 프로세스의 버전된 IDL 인터페이스(HIDL→AIDL)로 binder/hwbinder로 접근합니다. in-process dlopen은 pre-Treble입니다.
-3. AIDL로 이전했습니다 — 안정 AIDL(11), HIDL 폐기(13). 신규 HAL은 AIDL입니다.
-4. GSI는 순수 AOSP `/system` **컴플라이언스/테스트 도구**입니다. OEM 코드가 없어 기기별 기능(일부 카메라·지문·라디오)이 빠질 수 있습니다.
-5. VTS는 **기기 자체 빌드**로 벤더 인터페이스/HAL 적합성을 검사합니다. GSI가 필요한 건 **CTS-on-GSI**입니다.
-</details>
 
 ## 실측으로 확인한 것
 

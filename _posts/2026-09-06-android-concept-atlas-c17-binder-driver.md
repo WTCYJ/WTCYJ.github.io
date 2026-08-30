@@ -105,7 +105,7 @@ excerpt: "15~16주차에서 저는 'Binder 경계는 두 겹'이라고 관측했
 - **C20/C31(HAL·Treble)**: hwbinder/vndbinder가 HIDL/벤더 AIDL을 나릅니다.
 - 다음은 **C19(servicemanager)** 또는 **C20(AIDL·HIDL·HAL)**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 하나의 트랜잭션 — node 와 handle, 단일 복사 ]
@@ -122,23 +122,6 @@ excerpt: "15~16주차에서 저는 'Binder 경계는 두 겹'이라고 관측했
   BR_REPLY ◀──────────────────  서버 binder 스레드: onTransact → BC_REPLY
   (동기면 발신 스레드 블록; oneway 면 즉시 반환·per-node 큐)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "Binder 메시지를 보내는 것은 소켓에 write하는 것과 같다."
-2. "handle은 서비스 객체의 포인터이거나 프로세스 간 공유되는 전역 ID다."
-3. "발신자가 트랜잭션에 자기 UID를 넣으므로 악성 앱은 UID를 위조할 수 있다."
-4. "Binder는 데이터를 커널을 거쳐 두 번 복사한다(파이프처럼)."
-5. "`/dev/binder`·`/dev/hwbinder`·`/dev/vndbinder`는 서로 다른 드라이버다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. 아닙니다. 모든 것(송신·수신·응답·refcount·death 등록)이 **하나의 `ioctl(BINDER_WRITE_READ)`** 안 BC_*/BR_* 옵코드로 다중화됩니다.
-2. handle은 포인터도 전역 ID도 아닙니다. **발신 프로세스의 `binder_ref` 테이블을 인덱싱하는 작은 정수**이고, 같은 node가 프로세스마다 다른 handle입니다.
-3. 커널 드라이버가 발신자 task의 **effective uid/pid를 직접 박습니다**(`sender_euid=task_euid`). 유저스페이스가 넣는 값이 아니라 위조할 수 없습니다.
-4. **단일 복사**입니다: 드라이버가 발신자에서 대상의 mmap 버퍼로 `copy_from_user`를 한 번만 합니다. 파이프/소켓의 2회 복사와 대비되는 성능 성질입니다.
-5. **같은 드라이버 코드(binder.c)**의 별도 장치 인스턴스입니다. Treble이 컨텍스트를 셋으로 나눠 각자 컨텍스트 매니저·SELinux 도메인을 갖게 한 것입니다.
-</details>
 
 ## 실측으로 확인한 것
 

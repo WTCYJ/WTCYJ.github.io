@@ -99,7 +99,7 @@ Binder 네임스페이스의 **부트스트랩**(servicemanager) + 프레임워�
 - **C10/C22**: 서비스 자체가 호출자 UID를 검사.
 - 다음은 이 AMS를 통해 앱 컴포넌트가 연결되는 **C21(4대 컴포넌트↔Binder)**로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ servicemanager(handle 0)와 system_server ]
@@ -117,23 +117,6 @@ Binder 네임스페이스의 **부트스트랩**(servicemanager) + 프레임워�
 
   ⚠ 컨텍스트별 handle 0: /dev/binder · /dev/vndbinder · /dev/hwbinder 각각
 ```
-
-## 오개념 판별 문제 5개
-
-1. "system_server가 뚫리면 곧 root(커널)까지 장악한 것이다."
-2. "handle 0은 시스템 전체에 하나뿐인 전역 컨텍스트 매니저다."
-3. "`getService`와 `checkService`는 동작이 같다."
-4. "아무 앱이나 원하는 서비스를 servicemanager에 등록하거나 조회할 수 있다."
-5. "servicemanager는 프레임워크(자바) 서비스 중 하나라, system_server 안에서 돈다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **UID 1000**이고 SELinux `system_server` 도메인에 갇힙니다 — 프레임워크 장악급이지 root/커널이 아닙니다.
-2. **컨텍스트별**입니다. `/dev/binder`·`/dev/vndbinder`·`/dev/hwbinder`가 각자 handle 0을 가집니다.
-3. `checkService`는 논블록(즉시 null), `getService`는 블록/재시도.
-4. `service_contexts`가 이름→라벨을 고정하고 **SELinux가 add/find를 게이트**합니다.
-5. servicemanager는 init이 zygote·system_server보다 **먼저** 띄우는 별도 네이티브 데몬입니다(그래야 서비스들이 등록할 대상이 존재).
-</details>
 
 ## 실측으로 확인한 것
 

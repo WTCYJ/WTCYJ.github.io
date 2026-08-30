@@ -107,7 +107,7 @@ C17에서 Binder 드라이버를, C31에서 Treble이 HAL을 프로세스 밖으
 - **C36(벤더 드라이버·HAL 공격 표면, 예정)**: HAL이 왜 큰 공격 표면인지 상세.
 - 다음은 **C36(벤더 드라이버·HAL 공격 표면)** 또는 **C19(servicemanager)**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 레거시 vs Treble HAL — 격리의 차이 ]
@@ -122,23 +122,6 @@ Treble(binderized):
 
 passthrough(HIDL 마이그레이션): 프레임워크 ─Bs*래퍼→ 레거시 HAL (같은 프로세스, 격리 X)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "레거시 conventional HAL도 별도 프로세스에서 격리되어 돈다."
-2. "passthrough HAL은 binderized HAL과 같은 수준의 격리를 준다."
-3. "Android의 HAL은 앱 IPC와 다른 hwbinder를 쓴다."
-4. "벤더 HAL 코드는 system의 libbinder(CPP)를 링크한다."
-5. "HIDL은 Android 13에서 폐기됐다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. 레거시 HAL은 `hw_get_module()`이 프레임워크 프로세스에 **dlopen**합니다 — 같은 주소 공간·권한, 격리 없음. Treble binderized만 별도 프로세스입니다.
-2. passthrough는 레거시 C++ HAL을 클라이언트 프로세스에 dlopen하는 **마이그레이션 브리지**로 격리가 **전혀** 없습니다.
-3. HIDL만 `/dev/hwbinder`입니다. **stable AIDL HAL은 앱과 같은 `/dev/binder`**(system libbinder)를 씁니다. `/dev/vndbinder`는 벤더↔벤더용입니다.
-4. 벤더 코드는 **`libbinder_ndk`(NDK)나 `libbinder_rs`(Rust)**를 링크합니다. CPP `libbinder`는 system/system_ext만.
-5. 공식 폐기 **공지는 Android 10**입니다. 13은 "신규 HIDL 중단"의 별개 마일스톤이고, 신규 칩셋 하드 금지는 **A15 VSR**입니다.
-</details>
 
 ## 실측으로 확인한 것
 

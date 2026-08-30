@@ -102,7 +102,7 @@ C08(서명)·C07(DEX)·C09(UID)가 전부 "APK"라는 단위를 전제합니다.
 - **C49(공급망)**: Play App Signing·번들 배포가 공급망 신뢰의 축.
 - 다음은 이 앱들이 서로를 보고 데이터를 넘기는 **C11(package visibility·URI permission)**로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ APK(설치) vs AAB(발행), 그리고 split ]
@@ -121,23 +121,6 @@ C08(서명)·C07(DEX)·C09(UID)가 전부 "APK"라는 단위를 전제합니다.
   APK 내부(ZIP): AndroidManifest.xml(AXML) · classes.dex · resources.arsc
                  · res/ · assets/(원형) · lib/<abi>/ · META-INF/(v1)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "AAB(.aab)는 기기에 직접 설치할 수 있는 새로운 형태의 APK다."
-2. "APK 안의 `AndroidManifest.xml`은 텍스트라 바로 grep해 읽을 수 있다."
-3. "멀티덱스 64K 한도는 앱이 정의한 메서드(또는 클래스) 개수다."
-4. "config split이나 동적 기능은 다른 키로 서명될 수 있어, base APK만 분석하면 된다."
-5. "App Bundle로 배포해도 기기에 실리는 서명은 개발자 키다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **발행 포맷**입니다. Play/bundletool이 유도한 split이 설치됩니다.
-2. **AXML로 컴파일**돼 있습니다(aapt2/apktool 필요). `assets/`·래스터 리소스만 원형.
-3. **단일 DEX의 메서드 참조** 상한입니다(참조된 프레임워크/라이브러리 포함).
-4. 모든 split은 **같은 키·한 UID**이고 코드/리소스를 나눠 가집니다 — **전부 당겨** 재구성해야.
-5. **Play App Signing**이면 배포 서명 키는 **Google**이 쥡니다(개발자는 업로드 키만).
-</details>
 
 ## 실측으로 확인한 것
 

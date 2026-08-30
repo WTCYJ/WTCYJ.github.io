@@ -8,7 +8,7 @@ series: Android Security Concept Atlas
 document_type: learning-roadmap
 verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, ConceptAtlas, Tier2, ART, Runtime, 학습기록]
-excerpt: "앱이 실제로 어떻게 태어나고(Zygote) 실행되는가(ART) — 그리고 리버서에게 왜 DEX가 진실의 원천이며, '정적으로 보이는 것 ≠ 실제 실행'의 진짜 원인이 JIT/AOT가 아니라 동적 코드 로딩(패커)인가를 다룹니다. 내 Toss 패커 작업과 직결되는 계층입니다."
+excerpt: "앱이 실제로 어떻게 태어나고(Zygote) 실행되는가(ART) — 그리고 리버서에게 왜 DEX가 진실의 원천이며, '정적으로 보이는 것 ≠ 실제 실행'의 진짜 원인이 JIT/AOT가 아니라 동적 코드 로딩(패커)인가를 다룹니다. 내 상용 앱 패커 작업과 직결되는 계층입니다."
 ---
 
 > **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
@@ -46,7 +46,7 @@ Tier 1의 앱(APK+UID)이 어떻게 살아 움직이는지의 계층입니다. Z
 
 ## 이 계층의 서사
 
-C12(Zygote)가 모든 앱 프로세스를 미리 로드된 템플릿에서 fork하고(그 specialization 순서가 보안의 핵심), C13(ART)이 그 안에서 DEX를 실행합니다. 리버서에게 중요한 세 사실이 여기 모입니다: **DEX가 원천**(C13)이고, **동적 코드 로딩이 정적 분석을 무력화**하며(C14), **JIT/AOT는 의미를 안 바꾸니 "정적≠실행"의 원인은 DCL/JNI**(C16)입니다. 내 Toss 패커 분석이 정확히 이 세 축 위에 섭니다.
+C12(Zygote)가 모든 앱 프로세스를 미리 로드된 템플릿에서 fork하고(그 specialization 순서가 보안의 핵심), C13(ART)이 그 안에서 DEX를 실행합니다. 리버서에게 중요한 세 사실이 여기 모입니다: **DEX가 원천**(C13)이고, **동적 코드 로딩이 정적 분석을 무력화**하며(C14), **JIT/AOT는 의미를 안 바꾸니 "정적≠실행"의 원인은 DCL/JNI**(C16)입니다. 내 상용 앱 패커 분석이 정확히 이 세 축 위에 섭니다.
 
 > **완성 보고서**: C15는 Java→JNI→x86_64 네이티브 라이브러리 왕복 호출을 실제 앱으로 검증했습니다.
 

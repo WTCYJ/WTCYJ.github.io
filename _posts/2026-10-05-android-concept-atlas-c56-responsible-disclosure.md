@@ -95,7 +95,7 @@ Atlas의 **마지막 고리**입니다. C51(가진 게 크래시냐 익스플로
 
 - 채널: `/.well-known/security.txt`, `SECURITY.md`, 프로그램 정책(범위·safe harbor·타임라인), 벤더 PSIRT.
 - 테스트 전 **범위+safe harbor 확인**, 재현 최소 PoC 작성.
-- **내 실제 제보**: wabt(GitHub 이슈/PR, 회귀테스트가 내 PoC 그대로 머지), GNOME libsoup(GitLab), VR tinyobjloader/IrfanView 리포트, HSPACE(버그바운티). 표준: ISO/IEC 29147/30111, CERT/CC CVD 가이드.
+- **내 실제 제보**: wabt(GitHub 이슈/PR, 회귀테스트가 내 PoC 그대로 머지), GNOME libsoup(GitLab), VR tinyobjloader/IrfanView 리포트, 한 버그바운티 프로그램. 표준: ISO/IEC 29147/30111, CERT/CC CVD 가이드.
 
 **주의**: 제보는 도구가 아니라 절차 — **어떤 대상이든 "채널·범위·safe harbor 확인 → 재현 최소 리포트 → 조율"** 로 실천 가능.
 
@@ -108,7 +108,7 @@ Atlas의 **마지막 고리**입니다. C51(가진 게 크래시냐 익스플로
 - **C02(인가)**: safe harbor가 그 인가.
 - 이로써 Atlas 56모듈 전체가 여기 — **발견을 안전하게 돌려주기** — 로 수렴합니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ CVD: 발견 → 안전한 공개 ]
@@ -129,23 +129,6 @@ Atlas의 **마지막 고리**입니다. C51(가진 게 크래시냐 익스플로
 
   ✗ 무단 테스트 · 데이터 유출 · 과대주장 · 공개트래커에 0-day
 ```
-
-## 오개념 판별 문제 5개
-
-1. "full disclosure(즉시 전면 공개)는 곧 블랙햇 행위다."
-2. "Project Zero 정책은 90일에 더해 30일의 유예를 준다."
-3. "취약점을 블로그에 자세히 쓰면 그걸로 CVE가 생긴다."
-4. "Android 플랫폼 보안 버그는 공개 issuetracker에 올리면 된다."
-5. "버그바운티 safe harbor가 있으면 어떤 시스템이든 테스트해도 합법이다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. 아닙니다. 벤더가 무한정 뭉개던 역사 때문에 생긴 **정당한 입장**입니다(트레이드오프).
-2. 유예는 **14일**(임박 패치 시). **30일**은 90일 내 패치된 버그의 **패치 후 채택 창**으로 별개. 미패치면 90일에 공개.
-3. **CNA가 배정**해야 CVE입니다. 블로그 공개로 생기지 않습니다.
-4. **Google Bug Hunters**(비공개)로. 공개 issuetracker는 기능 버그용 — 올리면 CVD 위반.
-5. **범위 내 good-faith** 테스트만 인가됩니다. 범위 밖·제3자 시스템은 아닙니다.
-</details>
 
 ## 실측으로 확인한 것
 

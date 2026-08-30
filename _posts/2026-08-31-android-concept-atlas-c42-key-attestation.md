@@ -127,7 +127,7 @@ KeyDescription ::= SEQUENCE {
 - **ID attestation**: 기기 식별자(IMEI/serial 등)를 증명하는 **별도 opt-in**입니다(`ATTESTATION_ID_*` 태그, 불일치 시 `CANNOT_ATTEST_IDS(-66)`로 실패, `destroyAttestationIds()`는 영구). 기본 attestation엔 식별자가 없고, 프라이버시 대안으로 `getEnrollmentSpecificId()`(ESID)가 있습니다.
 - 다음은 **C48(Play Integrity·앱 무결성)** 또는 앱 통제(C44~C50)로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 검증기가 attestation 을 소비하는 길 — 전부 오프디바이스 ]
@@ -146,23 +146,6 @@ KeyDescription ::= SEQUENCE {
    ▼
   전부 통과 → "이 키는 잠긴·검증부팅된 기기의 시큐어 하드웨어에 있다"
 ```
-
-## 오개념 판별 문제 5개
-
-1. "인증서 체인이 암호학적으로 Google 루트까지 유효하면 기기는 안전하고 잠겨 있다."
-2. "attestation 확장은 리프 인증서에 있으니 리프를 읽으면 된다."
-3. "폐기는 표준 X.509 CRL/OCSP로 확인하니 일반 PKI 라이브러리면 된다."
-4. "key attestation은 그 앱이 변조되지 않고 무결하게 실행 중임을 증명한다."
-5. "Google attestation 루트를 한 번 핀하면 끝이다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. 체인 유효는 "키가 하드웨어 백업이고 보고가 진짜"만 증명합니다. `deviceLocked=true`·`verifiedBootState=Verified`·보안 레벨·챌린지·폐기를 **따로** 확인해야 합니다. 언락 기기도 유효한 체인으로 `deviceLocked=false`를 정직하게 보고합니다.
-2. 리프에 있다고 가정하면 안 됩니다. **첫 등장**만 신뢰하고(공격자가 체인을 연장해 가짜를 덧붙일 수 있음), RKP면 리프는 OID `.26`, KeyDescription은 다음 인증서일 수 있습니다.
-3. Android는 `android.googleapis.com/attestation/status`의 **JSON 상태 목록**(hex serial 키, 없으면 유효)을 씁니다. CRL/OCSP가 아니라, 표준 라이브러리는 자동으로 안 가져옵니다.
-4. attestation은 **키의 속성**과 **부팅 상태(키 생성 시점)**를 증명하지 런타임 앱/OS 무결성이 아닙니다. 그건 Play Integrity(C48)입니다.
-5. 2026-02-01부터 새 **P-384 루트**가 서명을 시작해, 레거시 RSA와 **둘 다 핀**해야 합니다. 하나만 핀하면 전환 후 정상 기기를 거부합니다.
-</details>
 
 ## 실측으로 확인한 것
 

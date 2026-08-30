@@ -124,7 +124,7 @@ C28은 "부팅된 게 진짜인가"라는 **무결성**이었습니다. C43은 �
 - **C28(Verified Boot)**: 메타데이터 암호화 키가 KeyMint에, KeyMint가 Verified Boot에 걸립니다 — 그런데 **FBE=기밀성, AVB=무결성**으로 직교합니다.
 - 다음은 앱 통제 티어 **C44(안전한 저장소·백업)**나 **C48(Play Integrity)**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 부팅에서 첫 잠금해제까지 — 두 저장소가 열리는 순서 ]
@@ -150,23 +150,6 @@ CE 마운트 → ACTION_BOOT_COMPLETED → 일반 앱 데이터 사용 가능
 자격증명만       ──▶ 그 기기의 KeyMint 키 없음 + throttle → 오프라인 병렬추측 불가
 둘 다 + 그 기기  ──▶ 매 추측이 온디바이스 rate-limit → 약한 PIN 도 실용상 안전
 ```
-
-## 오개념 판별 문제 5개
-
-1. "FBE는 FDE처럼 userdata 전체를 한 키로 암호화한다."
-2. "DE 저장소는 암호화되지 않아서 잠금해제 전에 읽을 수 있다."
-3. "CE 키는 PIN을 KDF에 통과시킨 것뿐이라, 뽑아낸 플래시 이미지를 오프라인 브루트포스할 수 있다."
-4. "FBE가 켜지면 디스크에 평문으로 남는 것은 없다."
-5. "화면을 잠그면 CE 키가 메모리에서 제거된다 / FBE는 Android 10에 도입됐다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. FBE는 서로 다른 encryption policy와 key hierarchy를 사용합니다. fscrypt policy version과 filesystem·Android version에 따라 derivation details가 달라질 수 있으므로 한 방식으로 고정하지 않습니다.
-2. DE는 credential 입력 전 사용할 수 있는 storage class입니다. `/data`에는 FBE 적용 예외와 metadata encryption 차이가 있으므로 전체가 동일하게 보호된다고 단정하지 않습니다.
-3. CE 언랩은 온디바이스 KeyMint(봉인)와 Gatekeeper/Weaver(throttle)를 거칩니다. 매 추측이 기기에서 rate-limit돼 오프라인 병렬 대입이 불가능합니다.
-4. FBE는 파일 메타데이터(구조·크기·권한·타임스탬프)를 평문으로 남깁니다. 그걸 덮는 건 별도의 dm-default-key(Android 9 도입, 11 의무)로, 블록 전체를 한 키로 암호화합니다.
-5. 일반 단일 사용자 폰에서 화면 잠금은 CE 키를 제거하지 **않습니다**(재부팅해야 RAM이 지워짐). 잠금 시 키 제거는 work profile/멀티유저(Android 12+ 옵션)의 별개 기능입니다. 그리고 FBE는 7.0부터 있었고 10에서 의무가 됐습니다.
-</details>
 
 ## 실측으로 확인한 것
 

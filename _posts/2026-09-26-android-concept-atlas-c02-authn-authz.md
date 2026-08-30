@@ -8,7 +8,7 @@ series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, Authentication, Authorization, IDOR, BOLA, BFLA, BrokenAccessControl, ConceptAtlas, 학습기록]
-excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린 버그입니다. 인증(AuthN)은 '너 누구야?'를 확인하고, 인가(AuthZ)는 '그래서 이걸 해도 돼?'를 결정하죠 - 완전히 별개 질문인데, '로그인했으니 다 허용'이라 착각하거나 정체성만 확인하고 특정 객체/행위 권한은 안 보면 그게 바로 IDOR(객체수준)·BFLA(함수수준), 곧 Broken Access Control(OWASP 1위)입니다. 내 HSPACE PII 케이스가 정확히 그거였어요 - 세션은 인증했는데 그 레코드가 이 사용자 것인지는 인가 안 함. Android도 똑같습니다: 커널이 각인한 호출자 UID로 '누구'는 위조 불가로 알지만, 그걸로 권한을 검사하는 건 별개고, checkCallingOrSelfPermission의 OrSelf 폴백이면 자기 정체성으로 조용히 통과하죠. Atlas 전체가 이 구분의 실현인, Tier 0 토대 모듈입니다."
+excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린 버그입니다. 인증(AuthN)은 '너 누구야?'를 확인하고, 인가(AuthZ)는 '그래서 이걸 해도 돼?'를 결정하죠 - 완전히 별개 질문인데, '로그인했으니 다 허용'이라 착각하거나 정체성만 확인하고 특정 객체/행위 권한은 안 보면 그게 바로 IDOR(객체수준)·BFLA(함수수준), 곧 Broken Access Control(OWASP 1위)입니다. 내가 다룬 한 IDOR 사례가 정확히 그거였어요 - 세션은 인증했는데 그 레코드가 이 사용자 것인지는 인가 안 함. Android도 똑같습니다: 커널이 각인한 호출자 UID로 '누구'는 위조 불가로 알지만, 그걸로 권한을 검사하는 건 별개고, checkCallingOrSelfPermission의 OrSelf 폴백이면 자기 정체성으로 조용히 통과하죠. Atlas 전체가 이 구분의 실현인, Tier 0 토대 모듈입니다."
 ---
 
 > **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
@@ -38,7 +38,7 @@ excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린
 > **계층**: Tier 0 (보안·시스템 기초) · **난이도**: 기초 · **선수 개념**: C01
 > **성격**: 원칙 편 — Atlas 전체가 실현하는 구분에 이름 붙이기.
 
-버그바운티에서 가장 흔한 결함이 이 둘을 헷갈린 것입니다. 내 HSPACE PII 케이스가 정확히 그랬죠 — 세션은 **인증**했는데 그 레코드가 이 사용자 것인지는 **인가**하지 않았습니다.
+버그바운티에서 가장 흔한 결함이 이 둘을 헷갈린 것입니다. 내가 다룬 한 IDOR 사례가 정확히 그랬죠 — 세션은 **인증**했는데 그 레코드가 이 사용자 것인지는 **인가**하지 않았습니다.
 
 한 문장으로: **인증(누구인가)과 인가(무엇을 해도 되는가)는 별개 질문이고, 이 둘을 혼동하면 곧 IDOR·BFLA, 즉 Broken Access Control이다.** 🟡 기초·원칙 편이라 구분에 집중합니다.
 
@@ -78,9 +78,9 @@ excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린
 
 ## 질문 5 — 실패하면 어떤 취약점으로 이어지는가
 
-- **IDOR/BOLA**(객체수준): 서버/앱이 사용자를 인증하지만 요청한 객체 id가 **이 사용자 것인지** 안 봄 — 내 **HSPACE PII 케이스**(세션 인증, 레코드 인가 누락).
+- **IDOR/BOLA**(객체수준): 서버/앱이 사용자를 인증하지만 요청한 객체 id가 **이 사용자 것인지** 안 봄 — 내가 다룬 **한 IDOR 사례**(세션 인증, 레코드 인가 누락).
 - **BFLA**(함수수준): 인증된 일반 사용자가 관리 행위에 도달.
-- **OAuth "인증됐으니 신뢰"**: 내 **reporch OAuth-complete 케이스**(콜백이 계정은 인증했으나 username 바인딩/인가가 조작 가능).
+- **OAuth "인증됐으니 신뢰"**: 내가 점검한 **한 OAuth 계정 바인딩 사례**(콜백이 계정은 인증했으나 username 바인딩/인가가 조작 가능).
 - **Android IPC**: exported 컴포넌트/서비스가 호출자 UID를 알지만 권한 미검사, 또는 `checkCallingOrSelfPermission`으로 자기 정체성 통과 → 아무 앱이나 특권 행위.
 
 ## 질문 6 — Android 버전/맥락에 따라 무엇이 달라지나
@@ -103,7 +103,7 @@ excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린
 - **구분의 실현**: Atlas의 접근 통제 편들이 전부 이 두 축의 사례.
 - 다음은 이 구분을 떠받치는 **설계 원칙** C03(최소권한·완전중재·심층방어)으로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 인증 vs 인가: 두 별개 질문 ]
@@ -119,23 +119,6 @@ excerpt: "버그바운티에서 제일 많이 나오는 게 이 둘을 헷갈린
   파손:    AuthN "됨" ──▶ (AuthZ 생략/자기정체성 통과) ──▶ IDOR/BFLA
            checkCallingPermission(호출자) ✔  vs  *OrSelf*(자기로 폴백) ✗
 ```
-
-## 오개념 판별 문제 5개
-
-1. "사용자가 로그인(인증)했으면, 그 세션의 요청은 인가된 것으로 봐도 된다."
-2. "접근 통제 취약점은 결국 다 IDOR다."
-3. "인증이 필요 없는 공개 리소스는 접근 통제도 필요 없다."
-4. "Binder 서비스가 호출자 UID를 확인했다면 권한 검사를 한 것이다."
-5. "`checkPermission`은 자기 정체성으로 항상 통과하는 위험한 API다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. 각 민감 행위마다 **인가를 재검사**해야 합니다. "인증=인가"가 Broken Access Control의 뿌리.
-2. **객체수준**은 IDOR/BOLA, **함수수준**은 BFLA입니다 — 둘 다 Broken Access Control(A01) 산하지만 다른 granularity.
-3. 익명 허용도 **인가 결정**입니다(의도적 allow). 공개라도 통제는 존재.
-4. 그건 **AuthN**입니다. 그 UID에 권한을 적용하는 **AuthZ가 별도**로 있어야.
-5. 아닙니다. `checkPermission(perm,pid,uid)`은 넘긴 uid를 검사하는 중립 API. 함정은 **`*OrSelf*` 변형**(IPC 밖에서 자기 정체성 폴백).
-</details>
 
 ## 실측으로 확인한 것
 
@@ -166,4 +149,4 @@ $ adb shell uname -a                    # → Linux 5.15     (커널)
 
 ## 마치며
 
-버그바운티에서 가장 흔한 결함이 인증과 인가를 헷갈린 것입니다: 인증(AuthN)은 "너 누구야?"를 확인하고 인가(AuthZ)는 "그래서 이걸 해도 돼?"를 결정하는데 — "로그인했으니 다 허용"이라 착각하거나 정체성만 확인하고 특정 객체/행위 권한을 안 보면 그게 IDOR(객체수준)·BFLA(함수수준), 곧 Broken Access Control(OWASP 1위)입니다. 내 HSPACE PII 케이스가 정확히 그거였고요. Android도 똑같아서, 커널이 각인한 호출자 UID로 "누구"는 위조 불가로 알지만 그걸로 권한을 검사하는 건 별개이며, `checkCallingOrSelfPermission`의 `OrSelf` 폴백이면 자기 정체성으로 조용히 통과합니다. 다음은 이 구분을 떠받치는 설계 원칙 **C03(최소권한·완전중재·심층방어)**으로 이어집니다.
+버그바운티에서 가장 흔한 결함이 인증과 인가를 헷갈린 것입니다: 인증(AuthN)은 "너 누구야?"를 확인하고 인가(AuthZ)는 "그래서 이걸 해도 돼?"를 결정하는데 — "로그인했으니 다 허용"이라 착각하거나 정체성만 확인하고 특정 객체/행위 권한을 안 보면 그게 IDOR(객체수준)·BFLA(함수수준), 곧 Broken Access Control(OWASP 1위)입니다. 내가 다룬 한 IDOR 사례가 정확히 그거였고요. Android도 똑같아서, 커널이 각인한 호출자 UID로 "누구"는 위조 불가로 알지만 그걸로 권한을 검사하는 건 별개이며, `checkCallingOrSelfPermission`의 `OrSelf` 폴백이면 자기 정체성으로 조용히 통과합니다. 다음은 이 구분을 떠받치는 설계 원칙 **C03(최소권한·완전중재·심층방어)**으로 이어집니다.

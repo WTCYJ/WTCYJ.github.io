@@ -103,7 +103,7 @@ C10에서 권한은 UID에 부여된다 했습니다. 그런데 앱이 서로를
 - **C47(WebView·딥링크)**: confused-deputy·URI 취급 버그가 정확히 이 통로.
 - 다음은 런타임 계층 **Tier 2**(C12 zygote 등)로 넘어갑니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 가시성(보기) + URI 권한(넘기기), 둘 다 UID 경계 건너기 ]
@@ -119,23 +119,6 @@ C10에서 권한은 UID에 부여된다 했습니다. 그런데 앱이 서로를
   ⚠ confused-deputy: 악성발신자가 URI를 [피해자 자신의 프로바이더]로 겨냥
      → 피해자가 제 사적 파일을 읽어 공격자에게 (C47)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "패키지 가시성 제한은 기기의 Android 버전(11+)이면 무조건 적용된다."
-2. "다른 앱을 열거하려다 막히면 `SecurityException`이 던져진다."
-3. "Intent에 `FLAG_GRANT_READ_URI_PERMISSION`만 붙이면 어떤 프로바이더든 읽힌다."
-4. "Intent로 준 URI 권한은 앱을 재시작해도 유지된다."
-5. "표준 androidx `FileProvider`는 `../` 경로 트래버설에 취약하다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **앱의 targetSdk 30+**가 게이트입니다. targetSdk≤29 앱은 A12/13에서도 전체를 봅니다.
-2. **조용히 필터링**됩니다(예외 없음). `getPackageInfo`만 `NameNotFoundException`.
-3. **프로바이더가 opt-in**(`grantUriPermissions`/`<grant-uri-permission>`)해야 합니다. 아니면 무효.
-4. 기본 **임시**입니다. 영속은 `FLAG_GRANT_PERSISTABLE` + `takePersistableUriPermission`(SAF).
-5. 표준 FileProvider는 `getCanonicalPath()` 정규화로 막습니다. 위험은 **과도한 `<paths>`·커스텀 `openFile()`**.
-</details>
 
 ## 실측으로 확인한 것
 

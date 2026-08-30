@@ -103,7 +103,7 @@ C04에서 fork(COW)/exec의 차이를, C09에서 UID를 봤습니다. Android는
 - **C13(ART)**: 부트 이미지(boot.art)를 zygote가 맵해 앱이 상속.
 - 다음은 이 실행 위에서 클래스를 로드하는 **C14** 또는 JIT/AOT 분석차 **C16**로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ zygote: 태어나고 권한을 버리는 순서 ]
@@ -125,23 +125,6 @@ C04에서 fork(COW)/exec의 차이를, C09에서 UID를 봤습니다. Android는
 
   ⚠ 모든 앱이 한 zygote에서 → 같은 부팅·ABI 내 ASLR 레이아웃 공유
 ```
-
-## 오개념 판별 문제 5개
-
-1. "zygote는 일반 Unix처럼 fork+exec로 앱 프로세스를 띄운다."
-2. "specialization에서 seccomp 필터는 UID를 앱 UID로 낮춘 뒤에 설치된다."
-3. "fork가 이뤄지는 순간이 프로세스가 특권을 잃는 경계다."
-4. "모든 앱이 zygote 레이아웃을 공유하니, 한 기기에서 누출된 주소는 전 세계 같은 앱에서 유효하다."
-5. "USAP 풀과 app-zygote는 같은 기능의 다른 이름이다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **exec 없이** fork합니다. exec하면 preload 페이지가 버려집니다.
-2. 반대입니다. **UID 드롭 전, 아직 uid 0**일 때 설치하고 `no_new_privs`는 일부러 안 겁니다(SELinux 도메인 전이).
-3. fork가 아니라 `SpecializeCommon` 내부의 **`setresuid`+caps+SELinux 시퀀스**가 특권의 마지막 순간입니다.
-4. **같은 기기·같은 부팅·같은 ABI zygote 내**에서만 동일합니다. 기기·부팅마다 독립 랜덤화.
-5. 별개입니다 — USAP는 미특화 프로세스 풀, app-zygote는 isolated 서비스용 앱별 zygote.
-</details>
 
 ## 실측으로 확인한 것
 

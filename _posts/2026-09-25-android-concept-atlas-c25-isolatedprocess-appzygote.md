@@ -105,7 +105,7 @@ C24에서 seccomp·caps·SELinux가 앱 샌드박스를 겹겹이 두른다 했�
 - **C34(드라이버)**: 격리는 GPU 미접근.
 - 다음은 다른 티어(토대 Tier 0 잔여·앱통제 Tier 8 등)로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ isolatedProcess: 뚫려도 쓸모없는 워커 ]
@@ -125,23 +125,6 @@ C24에서 seccomp·caps·SELinux가 앱 샌드박스를 겹겹이 두른다 했�
 
   실사용: Chrome/WebView 렌더러 = isolatedProcess (GPU 프로세스는 제외)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "isolatedProcess는 `android:process=":x"`처럼 앱을 다른 프로세스로 쪼개는 것과 같다."
-2. "격리 프로세스는 일반 앱과 같은 untrusted_app SELinux 도메인에서 돈다."
-3. "격리 프로세스는 권한만 적을 뿐, 여전히 시스템 서비스에 두루 접근할 수 있다."
-4. "app zygote로 코드를 공유하면 격리 프로세스의 샌드박스가 약해진다."
-5. "isolatedProcess 프로세스는 파일시스템에 전혀 접근할 수 없다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. `:x`는 **같은 앱 UID·데이터 공유**, isolatedProcess는 **별도 격리 UID·데이터 없음**입니다.
-2. **isolated_app** 도메인입니다(훨씬 빡빡: 앱 파일·GPU·임의 서비스·네트워크 없음).
-3. 대부분 시스템/Binder 서비스에 **아예 못 닿습니다**. 유일 통로는 호스트 앱 Binder.
-4. 공유 부모(app zygote)가 **비특권·격리**라 약해지지 않습니다.
-5. 앱 **사적 데이터**는 못 열지만 자기 APK·world-readable은 읽습니다.
-</details>
 
 ## 실측으로 확인한 것
 

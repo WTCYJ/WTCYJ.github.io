@@ -109,7 +109,7 @@ C09의 UID에 **권능**을 붙이는 층입니다. C08(signature 권한은 같�
 - **C17(Binder)**: 시행이 결국 호출자 UID 검사 — `*Calling*` 함정이 핵심.
 - 다음은 이 권한·가시성을 IPC로 넘기는 **C11(package visibility·URI permission)** 또는 다른 티어로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ permission: UID에 무엇을 허가하고, 어디서 시행하나 ]
@@ -126,23 +126,6 @@ C09의 UID에 **권능**을 붙이는 층입니다. C08(signature 권한은 같�
     enforceCallingPermission(perm)  → Binder.getCallingUid() 검사  ✔
     checkPermission(perm, pid, uid) → 명시 uid 검사(호출자 아님!)   ⚠ 혼동=우회
 ```
-
-## 오개념 판별 문제 5개
-
-1. "`checkPermission(perm, pid, uid)`는 Binder 호출자의 UID를 검사한다."
-2. "normal 권한도 런타임에 프롬프트되고 설정에서 개별 취소된다."
-3. "signature 권한은 시스템 파티션에 설치된 앱이면 받는다."
-4. "SYSTEM_ALERT_WINDOW(다른 앱 위에 그리기)는 dangerous 런타임 권한 그룹이다."
-5. "일회성 권한('이번만 허용')은 Android 10(Q)에서 도입됐다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **명시된 uid**를 검사합니다. 호출자를 Binder로 푸는 건 `checkCallingPermission` 등 `*Calling*` 변형뿐 — 혼동이 우회 취약점(C17).
-2. normal은 **설치 시 자동·개별 취소 불가**입니다. 런타임 프롬프트/취소는 dangerous.
-3. **같은 서명 키**(선언자 인증서 일치)여야 합니다. 파티션+허용목록은 별개 플래그 `|privileged`.
-4. **special access**(설정 관리, AppOp 백킹)입니다. 런타임 그룹이 아닙니다.
-5. **A11/R**입니다. Q는 지속형 "사용 중일 때만"을 추가했습니다.
-</details>
 
 ## 실측으로 확인한 것
 

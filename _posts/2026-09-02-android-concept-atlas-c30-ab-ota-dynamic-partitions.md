@@ -110,7 +110,7 @@ OTA 하나가 어떻게 실행 중인 폰을 건드리지 않고 배경에서 �
 - **C43(FBE)**: Virtual A/B의 COW 데이터가 userdata(`/data`)에 얹힙니다.
 - 다음은 **C31(Treble·GSI·Mainline·APEX)**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ A/B 무중단 업데이트의 한 주기 ]
@@ -136,23 +136,6 @@ Virtual A/B: super 안에 한 벌 + COW 스냅샷(/data)
              성공 부팅 후 병합(merge): 11=커널 dm-snapshot, 12+ VABC=snapuserd/dm-user
              롤백은 병합 전에만 가능
 ```
-
-## 오개념 판별 문제 5개
-
-1. "A/B 슬롯 롤백과 AVB 롤백 인덱스 안티다운그레이드는 같은 보호다."
-2. "A/B 업데이트도 recovery로 재부팅해 /cache에 스테이징한다."
-3. "슬롯 A/B는 userdata를 포함한 모든 파티션을 두 벌 복제한다."
-4. "Virtual A/B는 Android 11부터 모든 기기의 기본/필수 OTA 방식이다."
-5. "새 슬롯은 부팅하자마자 markBootSuccessful로 성공 표시된다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. 다른 층입니다. 슬롯 롤백(부트로더)은 나쁜 부팅을 복구하고, AVB 롤백 인덱스는 저장값보다 낮은 버전을 아예 거부합니다(다운그레이드 차단).
-2. A/B는 recovery/cache 흐름을 제거했습니다. 실행 중 비활성 슬롯에 in-place로 씁니다.
-3. boot-critical 파티션(boot·system·vendor·vbmeta 등)만 슬롯화됩니다. userdata는 **공유**입니다.
-4. Virtual A/B는 11 도입이지만 **13부터 필수**입니다. 11/12는 선택(진짜 A/B나 non-A/B도 가능).
-5. 즉시가 아닙니다. 네이티브 `update_verifier`가 첫 부팅에 care_map 블록으로 dm-verity를 강제해 통과한 **후에만** 성공 표시됩니다.
-</details>
 
 ## 실측으로 확인한 것
 

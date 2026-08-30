@@ -111,7 +111,7 @@ C17에서 Binder가 `ioctl(BINDER_WRITE_READ)` 하나로 다중화된다고 했�
 - **CVE 시리즈**: EL0 버그의 EL1 상승 자리.
 - 다음은 **C36(벤더 드라이버·HAL 공격 표면)** 또는 **C35(GKI·KMI)**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 앱이 ioctl 로 드라이버에 닿는 길 ]
@@ -128,23 +128,6 @@ VFS: (major,minor) → cdev → file_operations 설치
    ▼
    → EL0→EL1 커널 LPE (C05) — CVE 시리즈 EL0 버그의 상승 단계
 ```
-
-## 오개념 판별 문제 5개
-
-1. "`ioctl`의 request가 `_IOR`이면 커널이 그 크기만큼 유저→커널로 데이터를 복사해준다."
-2. "커널은 ioctl argp 구조체의 형식을 알고 검증한다."
-3. "device node는 major 번호 하나로 드라이버가 정해진다."
-4. "PAN이 켜져 있으면 드라이버의 ioctl은 메모리 안전하다."
-5. "`isolated_app`(WebView 렌더러)도 GPU 노드를 열 수 있다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. request의 방향·크기는 **자문 메타데이터**입니다. 커널은 대신 복사해주지 않고, 드라이버가 `copy_from_user`하고 크기를 **직접 검증**해야 합니다.
-2. 모릅니다. ioctl은 **드라이버별 불투명 RPC**로, 커널은 request와 argp를 넘길 뿐입니다.
-3. **(major,minor)** 쌍입니다. 특히 `/dev/binder`는 공유 major 10(misc)에서 **minor**로 드라이버가 정해집니다.
-4. PAN은 EL1이 EL0 포인터를 **직접 역참조**하는 것만 막습니다. 검증 안 된 size·정수 오버플로·박힌 포인터·TOCTOU·UAF 같은 **로직 버그**는 그대로 드라이버 책임입니다.
-5. `isolated_app`은 가장 잠긴 도메인이라 GPU 노드를 **못 엽니다**. GPU 노드를 여는 건 `untrusted_app`입니다(렌더링).
-</details>
 
 ## 실측으로 확인한 것
 

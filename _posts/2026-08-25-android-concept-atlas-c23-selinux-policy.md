@@ -149,7 +149,7 @@ u:r:untrusted_app:s0:c145,c256,c512,c768
 - **C37(완화)**: `neverallow ... execmem`은 W^X 강제를 정책 층에서 못 박은 것입니다.
 - 다음은 [**C26(샌드박스 vs SELinux 역할 구분)**](/posts/android-concept-atlas-c26-uid-sandbox-vs-selinux/)이나 부팅 체인으로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 두 개를 손으로 그려 보시길 권합니다.
 
@@ -192,25 +192,6 @@ domain=untrusted_app · type=app_data_file · levelFrom=all
    ▼
 u:r:untrusted_app:s0:c145,c256,c512,c768   ← ps -Z 로 보이는 그 문자열
 ```
-
-## 오개념 판별 문제 5개
-
-각 문장이 왜 틀렸는지 한 줄로 반박해 보세요.
-
-1. "`neverallow` 규칙이 런타임에 그 접근을 막는다."
-2. "두 앱이 같은 `untrusted_app` 도메인이면 서로의 파일을 못 읽는 것은 TE(타입 강제)가 막는 것이다."
-3. "`getenforce`가 `Enforcing`이면 모든 프로세스가 MAC로 갇혀 있다."
-4. "루트를 얻으면 `setenforce 0`으로 SELinux를 끌 수 있다."
-5. "`sesearch`를 기기의 `.te` 소스에 돌린다 / `dmesg`에 avc 거부가 없으면 그 접근은 허용된 것이다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. `neverallow`는 컴파일(`checkpolicy`/`secilc`)과 CTS 시점 단언입니다. 일치하는 allow가 있으면 **빌드가 실패**합니다. 런타임 차단은 오직 allow 부재(default-deny)에서 옵니다 — 커널은 neverallow 개념 자체가 없습니다.
-2. TE는 오히려 `untrusted_app → app_data_file`을 **허용**합니다. 두 앱 파일은 같은 타입이라 TE로는 구분 불가입니다. 막는 것은 **per-app MLS 카테고리**(`mlsconstrain`)입니다. 격리는 네 번째 필드가 합니다.
-3. 정책에 `permissive <도메인>;`이 남아 있을 수 있습니다(특히 벤더). 전역 enforcing과 도메인별 permissive는 공존합니다. `sepolicy-analyze <policy> permissive`로 확인하세요.
-4. user 빌드에선 불가입니다. 셸 도메인에 `security:setenforce` 권한이 없고, `androidboot.selinux=permissive` cmdline 우회는 userdebug/eng에서만 유효합니다. 게이트는 Verified Boot가 아니라 **빌드 변종**입니다.
-5. 도구는 **바이너리 정책**(`/sys/fs/selinux/policy`, `precompiled_sepolicy`)에 돌립니다 — `.te` 소스는 AOSP 트리에만 있습니다. 그리고 `dontaudit`·permissive가 거부를 숨기거나 바꾸므로, avc 부재는 허용의 증거가 아닙니다.
-</details>
 
 ## 실측으로 확인한 것
 

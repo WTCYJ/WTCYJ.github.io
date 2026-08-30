@@ -88,7 +88,7 @@ excerpt: "제 CVE 시리즈의 미디어·블루투스 버그는 EL0에서 멈�
 **실제 in-the-wild** 체인(브라우저/렌더러 → GPU 커널 → root):
 
 - **CVE-2023-4211**(Arm Mali UAF, 표적 악용, Google TAG),
-- **CVE-2023-26083**(Mali, 삼성 기기 대상 상용 스파이웨어 체인),
+- **CVE-2023-26083**(Mali, 특정 벤더 기기 대상 상용 스파이웨어 체인),
 - **CVE-2022-22706**(Mali 접근 단위, CISA KEV),
 - **CVE-2022-38181**(Mali kbase UAF, GitHub Security Lab의 Man Yue Mo 보고(GHSL-2022-054), 악용 확인·CISA KEV),
 - **CVE-2023-33106 / CVE-2023-33107**(Qualcomm **KGSL**의 2023-10 in-the-wild — 각각 `IOCTL_KGSL_GPU_AUX_COMMAND` OOB write, KGSL 정수 오버플로).
@@ -124,7 +124,7 @@ excerpt: "제 CVE 시리즈의 미디어·블루투스 버그는 EL0에서 멈�
 - **CVE 시리즈**: EL0 버그의 EL1 상승 자리.
 - 다음은 **C35(GKI·KMI)** 또는 **C38(새니타이저)**로 이어집니다.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 앱에서 커널까지 — 두 층, 그리고 EL0→EL1 ]
@@ -143,23 +143,6 @@ GPU 커널 드라이버(EL1): 공유메모리/JIT 페이지·권한 혼동 / 객
 Arm/Qualcomm 수정 ──(몇 달)──▶ SoC 벤더 ──▶ OEM ──▶ 기기
   (Google Mainline/Play 는 플랫폼만 빠르게; 벤더 드라이버는 이 느린 트랙)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "Linux mainline 커널을 하드닝하면 Android 커널 LPE의 대다수가 막힌다."
-2. "벤더 HAL에서 코드 실행을 얻으면 곧 커널(EL1)을 장악한 것이다."
-3. "브라우저의 격리된 렌더러(`isolated_app`)가 GPU 드라이버를 직접 공격한다."
-4. "모뎀/baseband가 앱이 도달하는 주 커널 LPE 표면이다."
-5. "벤더 드라이버 LPE를 없애려면 드라이버를 유저스페이스 HAL로 옮기면 된다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. 버그는 코어 커널이 아니라 **벤더 out-of-tree 드라이버**(특히 GPU)에 삽니다. mainline 하드닝은 그곳을 거의 안 건드립니다.
-2. HAL 침해는 그 HAL의 SELinux 도메인 권한입니다. EL1은 그 뒤 **커널 드라이버 LPE**라는 별개 단계입니다.
-3. `isolated_app`은 최대로 잠겨 GPU 노드를 **못 엽니다**. GPU를 여는 건 `untrusted_app`(과 별도 GPU 프로세스)입니다 — Chrome은 렌더러의 GPU 작업을 GPU 프로세스로 브로커합니다.
-4. baseband는 **별도 프로세서의 원격(OTA/RIL) 표면**입니다. 앱 도달 EL1 경로의 아웃라이어는 **GPU**입니다.
-5. HAL은 원래 유저스페이스이고 여전히 ioctl로 커널 드라이버를 몹니다 — 커널 드라이버를 HAL로 바꿀 순 없습니다. EL1을 벗어나는 진짜 방향은 **하드웨어 격리(pKVM)**입니다.
-</details>
 
 ## 실측으로 확인한 것
 

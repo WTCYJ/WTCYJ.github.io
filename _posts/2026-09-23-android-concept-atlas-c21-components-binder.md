@@ -104,7 +104,7 @@ C17에서 Binder를, C19에서 AMS/system_server를 봤습니다. 앱의 4대 �
 - **C47(딥링크)**: exported Activity의 URI 취급.
 - 다음은 플랫폼 격리 **Tier 4**(C24 seccomp/namespaces 등)로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ 4대 컴포넌트 ↔ Binder/AMS, 그리고 exported 게이트 ]
@@ -122,23 +122,6 @@ C17에서 Binder를, C19에서 AMS/system_server를 봤습니다. 앱의 4대 �
     exported=true + permission → 호출자 권한 필요
     exported=true + 무가드 → 공격면 (redirection/PendingIntent 하이재크)
 ```
-
-## 오개념 판별 문제 5개
-
-1. "`android:exported="false"`인 컴포넌트도, 적절한 (서명) 권한을 가진 다른 앱은 호출할 수 있다."
-2. "컴포넌트가 exported이기만 하면 다른 앱이 무조건 접근할 수 있다."
-3. "Android 14가 처음으로 다른 앱의 암시적 Intent가 비exported 컴포넌트에 닿는 것을 막았다."
-4. "딥링크 Activity에 다른 앱이 Intent를 보낼 수 있는지는 App Link 검증(autoVerify) 상태로 결정된다."
-5. "startActivity는 대상 앱을 직접 호출한다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. `exported=false`는 **같은 UID만**(자기 앱·sharedUserId+같은 키). 권한을 가져도 타 앱은 못 갑니다 — exported는 절대 게이트.
-2. exported는 **필요조건**입니다. `android:permission` 가드가 있으면 호출자가 그 권한을 가져야 합니다.
-3. 타 앱 암시적 Intent는 **원래** 비exported에 못 갑니다. A14는 **같은 앱 내부** 경로를 막았습니다.
-4. **exported 상태**에 달렸습니다. 검증은 OS의 http(s) 자동 열기만 통제합니다.
-5. 앱→system_server(ATMS/AMS) Binder → 대상 앱의 `IApplicationThread`로 이어지는 **왕복**입니다.
-</details>
 
 ## 실측으로 확인한 것
 

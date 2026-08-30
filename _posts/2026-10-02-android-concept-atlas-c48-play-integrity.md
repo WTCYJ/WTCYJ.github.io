@@ -105,7 +105,7 @@ C42에서 하드웨어 키 증명을 봤습니다. 이 편은 그 위에 선 앱
 - **C14(동적로딩·패치)**: 클라 검사 우회가 그 RE.
 - 다음은 공급망 **C49(서드파티 SDK)**·개인정보 **C50** 등으로.
 
-## 직접 그릴 수 있는 호출 흐름
+## 호출 흐름
 
 ```
 [ Play Integrity: 왜 서버 검증이어야 하나 ]
@@ -122,23 +122,6 @@ C42에서 하드웨어 키 증명을 봤습니다. 이 편은 그 위에 선 앱
   ✓ 서버 검증 + nonce/requestHash(재생방지) = 진짜 신호
   BASIC/DEVICE: Magisk/Zygisk/PIF로 우회 가능 · STRONG(하드웨어): 훨씬 어려움
 ```
-
-## 오개념 판별 문제 5개
-
-1. "Play Integrity 판정을 앱에서 확인해 통과하면, 그 기기·앱은 무결하다고 신뢰할 수 있다."
-2. "`UNRECOGNIZED_VERSION`은 앱을 Play가 아닌 곳에서 설치(sideload)했다는 뜻이다."
-3. "deviceRecognitionVerdict는 하나의 무결성 등급 값이다."
-4. "MEETS_STRONG_INTEGRITY도 Magisk 같은 루팅 은닉으로 어렵지 않게 뚫린다."
-5. "아직 SafetyNet Attestation을 쓰면 된다."
-
-<details><summary>판정 기준(펼치기)</summary>
-
-1. **무의미**합니다. 앱은 자기 무결성을 위조 보고할 수 있어 판정 분기를 패치하면 됩니다. **서버 검증** 필수.
-2. 아닙니다. 정식·미변조 APK를 sideload해도 `PLAY_RECOGNIZED`일 수 있습니다. 불일치는 **서명/바이너리** 문제(설치 채널은 라이선스 축).
-3. **SET**입니다(여러 라벨). 빈 SET이 실패.
-4. BASIC/DEVICE(소프트웨어)는 우회되지만 STRONG은 **하드웨어 키 증명(C42)** 기반이라 훨씬 어렵습니다.
-5. SafetyNet Attestation은 **2025 초 완전 종료**. Play Integrity로 이전해야.
-</details>
 
 ## 실측으로 확인한 것
 
