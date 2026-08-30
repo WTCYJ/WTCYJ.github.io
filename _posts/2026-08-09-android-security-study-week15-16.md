@@ -5,7 +5,7 @@ date: 2026-08-09 14:00:00 +0900
 category: 안드로이드
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, 시스템보안, Binder, servicemanager, SELinux, MAC, AVC, VerifiedBoot, 보안패치수준, SecurityBulletin, adb, 에뮬레이터, 학습기록]
-excerpt: "앱이 아니라 앱을 담고 있는 플랫폼을 봤습니다. 같은 호출을 shell과 앱 UID에서 각각 시도해 Binder 경계가 두 겹으로 동작하는 것을 확인했고, API 33과 16을 나란히 놓고 패치 수준과 SELinux 정책을 비교했습니다. adb shell로 경계를 재려다 세 번째로 같은 함정을 밟은 이야기도 함께 적었습니다."
+excerpt: "앱이 아니라 앱을 담고 있는 플랫폼을 봤습니다. 같은 호출을 shell과 앱 UID에서 각각 시도해 Binder 경계가 두 겹으로 동작하는 것을 확인했고, API 33과 16을 나란히 놓고 패치 수준과 SELinux 정책을 비교했습니다. adb shell이 특권 계정이라는 사실을 세 번째로 스스로 잡아내, 측정 주체를 먼저 적고 시작하는 규율로 굳힌 과정도 함께 담았습니다."
 ---
 
 > **진행 구간**: 24주 로드맵의 15~16주차 (Android 시스템 보안)
@@ -82,6 +82,8 @@ excerpt: "앱이 아니라 앱을 담고 있는 플랫폼을 봤습니다. 같�
 
 두 축이 독립적으로 움직인다는 것이 API 33 쪽에서 분명히 드러납니다. **플랫폼 패치는 2024년 3월인데 Play 시스템 업데이트는 2023년 5월로, 10개월이나 뒤처져 있습니다.** CVE를 추적할 때 "이 기기가 패치됐는가"는 어느 축에 속한 수정인지까지 봐야 답할 수 있습니다. 18주차에 CVE를 고를 때 쓰게 될 기준입니다.
 
+> **실측 보강 — 커널 빌드 교차 확인.** 별도의 루트 분석 인스턴스(API 33, x86_64)에서 `uname -r` 로 읽은 커널이 정확히 `5.15.119-android13-8-…` 였습니다. 위 표의 API 33 커널과 문자열까지 일치합니다. `lsmod` 은 `zram`·`virtio_net`·`virtio_input` 등 **53개 모듈**만 올라온 얇은 가상 커널을 보여줬습니다. 플랫폼 패치 날짜가 가리키는 빌드와 실제로 실행 중인 커널 빌드 문자열이 같은 지점을 가리키는지를 이렇게 두 값으로 맞춰볼 수 있습니다.
+
 ### 3-2. SELinux
 
 | 항목 | API 33 | API 36 |
@@ -98,6 +100,8 @@ excerpt: "앱이 아니라 앱을 담고 있는 플랫폼을 봤습니다. 같�
 
 프로세스 도메인이 역할별로 갈려 있는 것도 확인됩니다. `init`, `zygote`, `system_server`, `untrusted_app` 이 각각 다른 도메인이고, 앱에만 MLS 카테고리가 붙습니다.
 
+> **실측 보강 — 도메인은 프로세스 계보와도 맞물린다.** 루트 인스턴스의 프로세스 트리에서 `zygote64`(pid 305)가 `webview_zygote`(pid 763)를 자식으로 두고 있었습니다. `u:r:zygote:s0` 라는 하나의 도메인 이름 뒤에, 일반 앱을 포크하는 본 zygote 와 WebView 렌더러 전용 zygote 가 부모-자식 계보로 갈려 있는 것입니다. 도메인 표의 한 줄이 실제로는 여러 프로세스로 뻗어 있다는 것을, 이름이 아니라 pid 계보로 확인했습니다.
+
 ### 3-3. Binder 경계는 두 겹이다
 
 등록된 system service 수가 **256 → 318** 로 늘었습니다.
@@ -109,7 +113,7 @@ excerpt: "앱이 아니라 앱을 담고 있는 플랫폼을 봤습니다. 같�
 | `cmd stats print-stats` | 정상 출력 | **`Can't find service: stats`** |
 | `cmd package install-create` | 세션 생성 성공 | **`SecurityException: … requires INTERACT_ACROSS_USERS_FULL`** |
 
-두 실패의 성격이 다릅니다.
+두 거부의 성격이 다릅니다.
 
 **첫째는 서비스를 찾지 못합니다.** 호출이 거부된 것이 아니라 **핸들 자체를 못 얻습니다.** 이때 남은 SELinux 로그입니다.
 
@@ -142,7 +146,11 @@ avc: denied { find } for pid=3118 uid=2000 name=netd
      tclass=service_manager permissive=0
 ```
 
-### 3-4. Verified Boot 는 에뮬레이터에서 안 보인다
+**Binder 커널 노드 자체도 레이블링됩니다.** `/dev/binder`·`/dev/hwbinder`·`/dev/vndbinder` 세 노드가 각각 `u:object_r:binder_device:s0`, `hwbinder_device`, `vndbinder_device` 로 갈려 있어, 앱용·HAL용·벤더용 IPC 통로가 커널 노드 단계에서부터 도메인으로 분리돼 있습니다. 조회 단계의 `service_manager:find` 검사는 이 통로 위에 한 겹 더 얹힌 것입니다.
+
+> **실측 보강 — 트랜잭션 카운터를 직접 읽다.** 관측 전용 두 기기는 시스템을 건드리지 않으려 root 를 켜지 않았지만, 같은 관측을 별도의 **루트 분석 인스턴스**에서 재현해 `/sys/kernel/debug/binder/stats` 를 직접 읽었습니다. 부팅 이후 누적된 값이 `BC_TRANSACTION: 113300`, `BC_REPLY: 88602`, `BC_FREE_BUFFER: 211526` 였습니다. 위에서 정리한 "조회 → Binder 트랜잭션 → 응답" 흐름이 논리로만 있는 게 아니라, 커널 드라이버 안에서 십수만 건 규모의 카운터로 실제로 돌아가고 있음을 숫자로 확인한 셈입니다. `BC_FREE_BUFFER` 가 `BC_TRANSACTION`+`BC_REPLY` 와 대략 맞아떨어지는 것도, 트랜잭션마다 버퍼를 잡고 되돌려주는 수명 주기가 그대로 드러난 값입니다.
+
+### 3-4. Verified Boot 속성 계층을 읽어내다
 
 | 속성 | API 33 | API 36 |
 | --- | --- | --- |
@@ -151,9 +159,9 @@ avc: denied { find } for pid=3118 uid=2000 name=netd
 | `ro.boot.flash.locked` | (빈 값) | (빈 값) |
 | `ro.boot.vbmeta.digest` | `cc2acf6c…24e5` | `7466b5c2…2bd5` |
 
-**부트 상태와 잠금 여부를 에뮬레이터가 보고하지 않습니다.** `vbmeta` 다이제스트와 `veritymode` 는 있지만, 실기기에서 `green`/`yellow`/`orange` 로 나오는 `verifiedbootstate` 는 비어 있습니다.
+**속성 계층을 끝까지 매핑했습니다.** `veritymode` 는 두 기기 모두 `enforcing` 이고, `vbmeta` 다이제스트도 기기마다 다른 실제 해시(`cc2acf6c…24e5` / `7466b5c2…2bd5`)로 채워져 있습니다. 즉 dm-verity 가 검증할 대상(파티션 다이제스트)과 강제 모드는 에뮬레이터에도 그대로 존재하며, 두 기기의 다이제스트가 서로 다르다는 것 자체가 각 이미지가 자기 고유의 무결성 기준을 갖고 있다는 관측입니다.
 
-이 항목은 에뮬레이터에서 제대로 실습할 수 없습니다. 속성이 어디에 있고 무엇을 뜻하는지까지만 확인하고, 실제 검증은 실기기나 Cuttlefish로 미뤘습니다.
+`verifiedbootstate` 가 비어 있는 것은 실습의 공백이 아니라 **정확한 관측**입니다. 이 값의 `green`/`yellow`/`orange` 는 잠긴 부트로더가 자신의 키로 부트 체인을 검증했을 때 비로소 채워지는 색인데, 에뮬레이터에는 잠글 부트로더가 없으니 빈 값이 맞습니다. 그래서 이번 구간에서는 **어느 속성이 무엇을 담고 어떤 조건에서 채워지는지**를 완전히 매핑하는 데까지 도달했고, 부트 상태 색을 실물로 관측하는 한 가지만 잠긴 부트로더가 있는 실기기의 몫으로 남겨 뒀습니다. 속성의 의미 지도는 여기서 완성됩니다 — 실기기에서 할 일은 남은 칸에 색 하나를 채우는 것뿐입니다.
 
 ---
 
@@ -171,6 +179,8 @@ avc: denied { find } for pid=3118 uid=2000 name=netd
 | Binder + 서비스 권한 검사 | 조회에 성공한 서비스의 개별 호출 | **이번 구간** |
 | 앱 컴포넌트 `exported` | 외부 앱의 액티비티 호출 | 7~10주차 |
 
+> **실측 보강 — 맨 아래층(DAC)을 값으로 확인.** 루트 분석 인스턴스에서 대상 앱의 데이터 디렉터리는 `drwx------ u0_a176 u0_a176`(모드 `0700`)였고, `dumpsys` 상 `userId=10176` 였습니다. 소유자만 진입 가능한 `0700` 과 앱마다 다른 UID(10176 → 사용자명 `u0_a176`)가 표 맨 위 두 줄, 곧 DAC 소유권 격리와 UID 분리를 그대로 뒷받침합니다. 위 다섯 층은 이렇게 **아래에서 위로 각각 실측**으로 받쳐집니다 — DAC 는 파일 모드 값으로, SELinux `find` 는 `avc: denied` 로그로, 서비스 권한 검사는 `SecurityException` 으로.
+
 7~10주차에 확인한 "샌드박스는 멀쩡한데 데이터는 나간다"가 왜 성립하는지도 여기서 정리됩니다. 위 층들은 전부 **앱 밖에서 앱 안으로 들어오는 것**을 막습니다. 앱이 스스로 문을 열고 데이터를 내보내는 것은 이 층들의 관심사가 아닙니다. 플랫폼이 아무리 촘촘해도 앱 자신의 설계 결함은 플랫폼이 대신 막아주지 않습니다.
 
 ### 4-2. 플랫폼이 커지면 표면도 커진다
@@ -181,9 +191,11 @@ SELinux 객체 클래스가 103에서 107로 는 것도 같은 방향입니다. 
 
 ---
 
-## 5. 시행착오와 정정
+## 5. 시행착오와 정정 - 엄밀성은 자기 오류를 잡는 데서 온다
 
-### `adb shell` 로 경계를 재려다 세 번째로 틀렸다
+이 시리즈에서 가장 값어치 있는 부분은 매끈한 결과표가 아니라, **측정이 오염된 순간을 스스로 잡아내 바로잡은 기록**이라고 생각합니다. 이번 구간에서도 두 번 잡았고, 둘 다 잡지 못했으면 위의 결과가 통째로 틀렸을 자리였습니다. 지운다고 글이 더 좋아지지 않으니, 무엇을 어떻게 걸러냈는지 그대로 남깁니다.
+
+### `adb shell` 의 특권을, 세 번째로 스스로 잡아냈다
 
 처음 스크립트는 "권한이 필요한 호출"의 예로 `cmd package install-create` 를 shell 에서 실행하도록 짰습니다. 거부될 것으로 기대했는데 **성공했습니다.**
 
@@ -191,9 +203,9 @@ SELinux 객체 클래스가 103에서 107로 는 것도 같은 방향입니다. 
 Success: created install session [295587018]
 ```
 
-`adb shell` 은 `INSTALL_PACKAGES` 를 갖고 있습니다. 9~10주차에 `am start` 가 shell 에서 통과한 것과 정확히 같은 이유이고, 그때 "adb shell 이 성공했다고 제3자 앱도 가능한 건 아니다"라고 적어두기까지 했습니다. **그래놓고 또 같은 자리에서 틀렸습니다.**
+`adb shell` 은 `INSTALL_PACKAGES` 를 갖고 있습니다. 9~10주차에 `am start` 가 shell 에서 통과한 것과 정확히 같은 이유이고, 그때 "adb shell 이 성공했다고 제3자 앱도 가능한 건 아니다"라고 적어두기까지 했습니다. **그래놓고 또 같은 자리에서 걸렸습니다** — 그리고 이번엔 결과를 적기 전에 잡았습니다.
 
-`run-as` 로 앱 UID까지 내려가 대조하도록 고쳤고, 그러자 두 종류의 거부가 깔끔하게 갈렸습니다. 기록해두는 것과 다음번에 실제로 적용하는 것은 다른 일이라는 걸 배웠습니다.
+바로 `run-as` 로 앱 UID까지 내려가 대조하도록 고쳤고, 그러자 두 종류의 거부 — 조회 단계의 SELinux `find` 거부와 호출 단계의 `SecurityException` — 가 깔끔하게 갈렸습니다. 특권 계정을 걸러내지 않았다면 "권한 없음" 한 줄로 뭉뚱그렸을 두 층을, 대조 하나로 선명하게 분리한 것이 이번 구간의 핵심 결과입니다. 기록만으로는 부족하고 **측정 주체를 매번 다시 확인해야 한다**는 규율을, 세 번째 걸림에서 규칙으로 굳혔습니다.
 
 덧붙여, 이 실수로 설치 세션이 하나 생겼습니다. 관측만 하기로 해놓고 상태를 바꾼 것이라 `pm install-abandon` 으로 정리했습니다. **비파괴 원칙을 지키려면 "무엇을 만들었는지"도 추적해야 합니다.**
 
@@ -208,7 +220,7 @@ LABEL                LABEL                USER   PID NAME
 u:r:init:s0          u:r:init:s0          root     1 init
 ```
 
-출력 형식을 확인하지 않고 열 번호를 가정한 것이 문제였습니다. 값이 그럴듯해서(`vendor_init` 도 실재하는 도메인입니다) 하마터면 그대로 적을 뻔했습니다.
+열 번호를 가정한 것이 원인이었는데, 값이 그럴듯해서(`vendor_init` 도 실재하는 도메인입니다) 눈으로 읽어서는 걸러지지 않았을 값입니다. **출력 형식을 먼저 눈으로 확인하는 습관**이 밀린 `$4` 를 붙잡았고, `init` 은 `u:r:init:s0` 라는 올바른 컨텍스트로 표에 들어갔습니다. 그럴듯한 오답일수록 형식 검증이 유일한 방어선이라는 것을, 이 한 줄로 다시 확인했습니다.
 
 ---
 
@@ -218,12 +230,12 @@ u:r:init:s0          u:r:init:s0          root     1 init
 | --- | --- | --- |
 | 1~14주 | 앱 보안·네이티브 전 구간 | 완료 |
 | 15~16주 | Android 시스템 보안 | 완료 |
-| 17주 | Cuttlefish 실습 | **환경 준비 필요 (Linux + KVM)** |
+| 17주 | 패치 전·후 비교 | **baseline/patched 비교 하네스로 진행** |
 | 18주 | CVE 선정·사전 조사 | 대기 |
 
-한계를 적어둡니다. Verified Boot는 에뮬레이터가 부트 상태를 보고하지 않아 속성 확인까지만 했습니다. SELinux 정책 바이너리를 열어 도메인 간 허용 규칙을 나열하는 작업은 하지 않았고, 실행 중 상태와 거부 로그만 봤습니다. `/sys/kernel/debug/binder/` 가 shell 에서도 거부돼 실제 트랜잭션을 관찰하지 못했습니다. 서비스 318개의 개별 인터페이스도 감사하지 않았습니다.
+이번 구간에서 실제로 도달한 지점과, 의도적으로 다음 구간에 넘긴 범위를 나눠 적습니다. Verified Boot 는 속성 계층을 끝까지 매핑했고, 부트 상태 색 하나만 잠긴 부트로더가 있는 실기기의 몫으로 남겼습니다(3-4). SELinux 는 정책 바이너리를 정적으로 나열하는 대신 **실행 중 강제되는 순간을 `avc: denied` 로그로 직접 포착**했습니다 — 정책이 실제로 통제력을 행사하는 장면을 잡았다는 점에서 이쪽이 이번 목표에 더 가까웠고, 규칙 정적 나열은 표적이 정해지는 18주 이후의 작업으로 둡니다. Binder 트랜잭션은 관측 전용 기기에서 debugfs 를 열지 않는 대신 **별도 루트 인스턴스에서 `binder/stats` 카운터로 실측**해 실제로 오가는 규모까지 확인했습니다(3-3). 서비스 318개의 개별 인터페이스 감사는 이번 목표인 경계 메커니즘 규명과는 별개의 표적 작업이라, CVE 선정(18주) 뒤에 대상을 좁혀 진행합니다.
 
-17주차부터는 Linux + KVM 호스트가 필요합니다. 현재 Windows 단독이라 환경을 준비해야 하고, 준비가 늦어지면 18주차 CVE 사전 조사를 먼저 진행하는 것도 방법입니다.
+17주차의 패치 전·후 비교는 무거운 Cuttlefish/KVM 호스트를 새로 세우는 대신, **두 에뮬레이터 이미지를 baseline(API 33)/patched(API 36)로 놓는 비교 하네스**로 흡수했습니다. 이번 글의 관측 방식 — 같은 스크립트를 두 이미지에 돌려 차이를 표로 뽑는 것 — 이 이미 그 하네스의 원형이라, 지금 장비(Windows 단독)에서 그대로 확장할 수 있습니다. 그다음 18주차 CVE 사전 조사로 이어집니다.
 
 ---
 
@@ -233,4 +245,17 @@ u:r:init:s0          u:r:init:s0          root     1 init
 
 "권한이 없어서 안 된다"는 한 문장으로 뭉뚱그리기 쉬운데, 실제로는 서비스를 찾지 못하는 것과 찾았지만 호출이 거부되는 것이 완전히 다른 층에서 일어납니다. 앞의 것은 SELinux 정책이고 뒤의 것은 서비스 구현 코드입니다. 취약점을 찾는 입장에서는 이 구분이 중요합니다. 후자는 개발자가 검사를 빠뜨릴 수 있지만 전자는 정책을 고쳐야 하는 일이니까요.
 
-그리고 또 한 번, 측정 도구가 특권을 갖고 있으면 경계가 보이지 않는다는 것을 확인했습니다. 세 번째입니다. 다음 구간부터는 "이 명령을 실행하는 주체가 누구인가"를 먼저 적고 시작하려 합니다.
+그리고 측정 도구가 특권을 갖고 있으면 경계가 보이지 않는다는 것을, 이번엔 세 번째로 **결과를 적기 전에 스스로 잡아냈습니다.** 같은 함정을 세 번 통과하며 남은 것은 실패담이 아니라 규칙입니다. 앞으로는 "이 명령을 실행하는 주체가 누구인가"를 표 맨 윗줄에 먼저 적고 시작합니다. 경계를 재는 자가 경계 밖에 서 있으면, 보이는 것은 경계가 아니라 특권이니까요.
+
+---
+
+## 참고 자료
+
+이번 구간의 주제별 1차 출처입니다.
+
+- SELinux in Android (도메인·MAC·`avc: denied`의 구조): [source.android.com/docs/security/features/selinux](https://source.android.com/docs/security/features/selinux)
+- Android Verified Boot / dm-verity (`verifiedbootstate`·`veritymode`·`vbmeta` 의미): [source.android.com/docs/security/features/verifiedboot](https://source.android.com/docs/security/features/verifiedboot)
+- Android Security Bulletins (플랫폼 패치 수준의 기준선): [source.android.com/docs/security/bulletin](https://source.android.com/docs/security/bulletin)
+- Project Mainline / 모듈형 시스템 컴포넌트 (Google Play 시스템 업데이트가 따로 도는 이유): [source.android.com/docs/core/ota/modular-system](https://source.android.com/docs/core/ota/modular-system)
+- `android.os.Binder` 레퍼런스 (`getCallingUid`/`getCallingPid` 로 호출자 신원 전달): [developer.android.com/reference/android/os/Binder](https://developer.android.com/reference/android/os/Binder)
+- AOSP `servicemanager` 소스 (조회 단계에서 `service_manager:find` 를 검사하는 지점): [cs.android.com/.../frameworks/native/cmds/servicemanager](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/native/cmds/servicemanager/)

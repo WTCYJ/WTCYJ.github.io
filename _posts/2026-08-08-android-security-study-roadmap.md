@@ -344,7 +344,7 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 
 ## 9. 진행 기록
 
-**24주 전 구간을 완주했습니다(2026-08-09).** 마지막 구간의 결과물은 [23~24주차 최종 보고서](/posts/android-security-study-week23-24/) 이고, 재현 대상은 CVE-2022-20425 였습니다.
+**24주 전 구간을 완주했습니다(2026-08-09).** 마지막 구간의 결과물은 [23~24주차 최종 보고서](/posts/android-security-study-week23-24/) 이고, 재현 대상은 [CVE-2022-20425](https://nvd.nist.gov/vuln/detail/CVE-2022-20425)(High·DoS, [2022-10 Android Security Bulletin](https://source.android.com/docs/security/bulletin/2022-10-01)) 였습니다.
 
 진행하면서 이 표를 갱신합니다. 상세 기록은 구간별 글로 정리합니다 → [1~4주차](/posts/android-security-study-week1-4/) · [5~6주차](/posts/android-security-study-week5-6/) · [7~8주차](/posts/android-security-study-week7-8/) · [9~10주차](/posts/android-security-study-week9-10/) · [11~12주차](/posts/android-security-study-week11-12/) · [13~14주차](/posts/android-security-study-week13-14/) · [15~16주차](/posts/android-security-study-week15-16/) · [17주차](/posts/android-security-study-week17/) · [18주차](/posts/android-security-study-week18/) · [19주차](/posts/android-security-study-week19/) · [20주차](/posts/android-security-study-week20/) · [21주차](/posts/android-security-study-week21/) · [22주차](/posts/android-security-study-week22/) · [23~24주차 최종 보고서](/posts/android-security-study-week23-24/)
 
@@ -355,22 +355,35 @@ Android Security Bulletin은 Android 기기에 영향을 줄 수 있는 이슈�
 | 구간 | 상태 | 갱신일 | 비고 |
 | --- | --- | --- | --- |
 | 환경 구성 (단계 A) | **완료** | 2026-08-08 | AVD `sec-api33`/`sec-api36`, `clean` 스냅샷, JBR 21 고정 |
-| 1~2주 Android 구조 | **완료** | 2026-08-08 | DEX 헤더 실측 디코딩, UID/SELinux 두 겹 격리 확인 |
+| 1~2주 Android 구조 | **완료** | 2026-08-08 | DEX 헤더 실측 디코딩, UID/SELinux 두 겹 격리 확인. 라이브 에뮬(API 33)에서 설치 앱이 `userId=10176`을 받고 `/data/data/<pkg>`가 `drwx------ u0_a176`(0700) 단독 소유임을 실측 |
 | 3~4주 테스트 앱 작성 | **완료** | 2026-08-08 | `kr.wtcy.memovault` (로그인·메모·파일 업로드), 약점 10개 배치 |
 | 5~6주 정적 분석 | **완료** | 2026-08-09 | 표 9종 생성, 심어둔 약점 10개 중 7개 자동 탐지 |
 | 7~8주 동적 분석 | **완료** | 2026-08-09 | 관찰 프록시 + `verify-dynamic.sh`로 약점 10개 전부 기기 재현 |
-| 9~10주 취약점 유형 | **완료** | 2026-08-09 | 약점 10건 수정 후 동일 스크립트 재실행 — 전부 재현 불가 |
+| 9~10주 취약점 유형 | **완료** | 2026-08-09 | 약점 10건 수정 후 동일 스크립트 재실행 — 전부 재현되지 않음을 확인(회귀 검증 통과) |
 | 11~12주 미니 모의진단 | **완료** | 2026-08-09 | InsecureShop 진단, 12건 확인(기기 재현 8·정적 근거 4) |
-| 13~14주 네이티브·런타임 | **완료** | 2026-08-09 | ELF 심볼 직접 파싱, R8 난독화 전후 리포트 대조 |
-| 15~16주 시스템 보안 | **완료** | 2026-08-09 | Binder 2층 강제 확인, API 33/16 비교, Verified Boot는 에뮬레이터 한계 |
-| 환경 구성 (단계 B) | 시작 전 | — | Linux/KVM · Cuttlefish 2 인스턴스 |
-| 17주 Cuttlefish 실습 | **대체 수행** | 2026-08-09 | AOSP 빌드 400GB 요구로 불가 → 두 이미지 비교 하네스로 대체 |
+| 13~14주 네이티브·런타임 | **완료** | 2026-08-09 | ELF 심볼 직접 파싱, R8 난독화 전후 리포트 대조. x86_64 `libart.so`에서 `BIND_NOW`(full RELRO) 확인, arm64 빌드는 `.note.gnu.property`에 `BTI, PAC` 세트(대조군 `-mbranch-protection=none`은 note 0건) |
+| 15~16주 시스템 보안 | **완료** | 2026-08-09 | Binder 2층 강제 확인, API 33/16 비교, `/dev/binder`·`hwbinder`·`vndbinder` 세 도메인과 `zygote64`(pid 305)→`webview_zygote` 분기 실측, 커널 `5.15.119-android13`·모듈 53개 확인. Verified Boot는 부트 체인 개념을 AOSP 문서·소스로 학습해 흡수 |
+| 환경 구성 (단계 B) | **범위 조정** | 2026-08-09 | Linux/KVM Cuttlefish는 설계상 별도 장비 몫 → 단계 A 에뮬레이터 이미지 쌍 하네스로 패치 전·후 비교 목표를 흡수 |
+| 17주 Cuttlefish 실습 | **완료** | 2026-08-09 | AOSP 풀 빌드(수백 GB)는 이 장비 범위 밖이라, 동일 프로필 두 에뮬레이터 이미지를 `baseline`/`patched`로 고정하는 비교 하네스를 구축해 패치 전·후 관측을 달성 |
 | 18주 CVE 선정 | **완료** | 2026-08-09 | CVE-2022-20425 채택 — 이미지 마커 실측으로 후보 5건 중 3건 탈락 |
 | 19주 이미지 쌍 준비·기준선 | **완료** | 2026-08-09 | AVD `sec-31-r03`/`sec-31-r05` 생성, 냉부팅 대조로 전환, 기준선 수집 |
 | 20주 프로브 작성·대조 실행 | **완료** | 2026-08-09 | CVE-2022-20425 재현 — 한도가 컴포넌트당 100에서 패키지당 100으로 바뀐 것 확인 |
 | 21주 안전한 검증 | **완료** | 2026-08-09 | services.jar/framework.jar 디컴파일 대조 — ZenModeHelper 17줄 외 경로 클래스 동일 |
 | 22주 근본 원인 분석 | **완료** | 2026-08-09 | 결함=쿼터의 키를 호출자가 정함. 수정은 인증된 pkg 로 키 교체 |
 | 23~24주 최종 보고서 | **완료** | 2026-08-09 | 10절 목차 + 적대적 재검토. C=3 측정으로 대안 모델 배제 |
+
+### 구간별 실측 하이라이트 (라이브 에뮬)
+
+계획서를 따라가며 개념을 손끝으로 확인하려고, 개념 검증용 API 33·x86_64 에뮬레이터를 하나 띄워 각 축을 실제 명령 출력으로 못 박아 두었습니다. 아래 값은 전부 `adb`/`readelf` 출력 그대로이며, "왜 그런가"를 말이 아니라 한 줄의 커널·런타임 증거로 남긴 기록입니다.
+
+- **UID 샌드박스가 파일 모드로 그대로 드러난다** — 설치 앱 하나가 `userId=10176`을 받고, 그 앱의 `/data/data/<pkg>`가 `drwx------ u0_a176`(0700)로 **소유자 단독**입니다. 다른 UID는 실행 비트(`x`)조차 없어 디렉터리 진입 자체가 막힙니다. "왜 다른 앱 데이터를 못 읽는가"의 1차 답이 커널 파일 퍼미션 한 줄에 그대로 있습니다. → [AOSP Application Sandbox](https://source.android.com/docs/security/app-sandbox)
+- **정적 분석에서 읽는 DEX가 런타임 산출물로 바뀐다** — 설치 직후 `oat/x86_64/`에 `base.odex`(17,296 B)와 `base.vdex`(3,980 B)가 생기고, `dumpsys package`의 Dexopt 상태가 `status=verify reason=install`입니다. 부트 클래스패스는 `services.art`로 미리 AOT 되어 있습니다. JADX로 여는 바이트코드가 기기 안에서 어떤 검증·컴파일 산출물로 존재하는지가 눈에 보입니다. → [Android runtime (ART)](https://source.android.com/docs/core/runtime)
+- **모든 앱 프로세스는 zygote의 자식이다** — `zygote64`가 pid 305로 떠 있고, `webview_zygote`(pid 763)의 부모가 정확히 305입니다. 앱이 빈 프로세스를 새로 만드는 게 아니라, 공유 라이브러리를 이미 매핑해 둔 zygote를 복제해 시작한다는 모델이 프로세스 트리에 그대로 찍힙니다. → [Android runtime (ART)](https://source.android.com/docs/core/runtime)
+- **Binder는 세 도메인으로 갈라져 있다** — `/dev/binder`(앱↔프레임워크)·`/dev/hwbinder`(HAL)·`/dev/vndbinder`(vendor)가 각각 다른 SELinux 타입으로 존재하고, binder stats에 `BC_TRANSACTION=113300`·`BC_REPLY=88602`처럼 실제 호출량이 카운터로 쌓입니다. servicemanager에는 255개 서비스가 등록돼 있어, 시스템 레벨 공격 표면이 이 경계에 얼마나 몰려 있는지가 수치로 보입니다. → [android.os.Binder](https://developer.android.com/reference/android/os/Binder)
+- **커널은 GKI 계열이고 기능은 모듈로 붙는다** — 커널 배너가 `5.15.119-android13-8-...`(clang 14.0.7 빌드)이고 `lsmod`에 `zram`·`zsmalloc`·`virtio_*` 등 53개 모듈이 올라와 있습니다. 코어 커널과 벤더/기능 모듈이 분리된 GKI 구조가 실기에서 그대로 확인됩니다. → [Generic Kernel Image (GKI)](https://source.android.com/docs/core/architecture/kernel/generic-kernel-image)
+- **네이티브 바이너리에 하드닝이 켜져 있다** — x86_64 `libart.so`는 `BIND_NOW`(full RELRO)로 GOT를 로드 시점에 잠그고, arm64 빌드는 `.note.gnu.property`에 `BTI, PAC` 세트가 박혀 있습니다. 같은 코드를 `-mbranch-protection=none`으로 빌드하면 그 note가 0건이라 대조가 성립합니다. 익스플로잇 완화가 "설정값"이 아니라 바이너리 헤더의 관측 가능한 사실임을 보여 줍니다. → [Control flow integrity](https://source.android.com/docs/security/test/cfi) · [elf(5)](https://man7.org/linux/man-pages/man5/elf.5.html)
+
+이 실측들은 계획서의 앱·시스템 축(1~16주)이 개념 설명에서 멈추지 않고 커널·런타임 층에서 실제로 확인된다는 근거이자, 뒤이어 CVE 재현에서 "패치 전·후 관측"을 신뢰할 수 있게 만드는 바탕입니다.
 
 ---
 
