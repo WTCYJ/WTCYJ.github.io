@@ -64,7 +64,25 @@ system_server  NotificationManagerService.addAutomaticZenRule(rule, pkg)
 
 Binder 를 건너오는 순간, 시스템이 다루는 값은 두 종류로 갈립니다.
 
-![Binder 경계를 기준으로 인증된 신원(pkg)과 호출자가 정하는 값(ComponentName)이 갈리고, 패치 전에는 후자를 한도 계산의 키로 썼음을 보여주는 도식](/assets/img/android-security-study/25-trust-boundary.svg)
+Binder 경계를 기준으로 값이 어떻게 갈리는지, 그리고 패치 전 한도 계산이 어느 쪽을 키로 썼는지를 그리면 이렇습니다.
+
+```text
+            앱 프로세스
+   addAutomaticZenRule(rule)
+      rule.owner / rule.configurationActivity / rule.name  ← 앱이 값을 채움
+                    │
+════════ Binder 경계 (커널이 발신 UID 를 보증) ════════
+                    │
+              system_server
+  ┌──────────────────────────┐   ┌───────────────────────────────┐
+  │ 인증된 신원              │   │ 호출자가 정하는 값            │
+  │  pkg                     │   │  owner / configurationActivity │
+  │  (checkCallerIsSameApp   │   │  (ComponentName, 앱이 채움)    │
+  │   가 UID 와 대조해 확정) │   │                               │
+  └──────────────────────────┘   └───────────────┬───────────────┘
+                                                  │
+                     패치 전: 한도 계산 키 = ComponentName  ← ★ 결함 지점
+```
 
 | 값 | 시스템이 믿을 수 있는가 |
 | --- | --- |

@@ -122,7 +122,15 @@ addAutomaticZenRule                    5           5
 seems malicious                        1           0  <== 판별
 ```
 
-![r03과 r05 시스템 이미지에서 패치 마커 문자열의 출현 횟수를 실측한 결과 표입니다. getPackageRuleCount만 0에서 1로 갈립니다](/assets/img/android-security-study/19-marker-scan-r03-r05.svg)
+같은 스캔을 역할별로 정리하면 이렇습니다. 판별 마커 셋 중 실제로 갈린 것은 두 개이고, 대조군 둘은 예상대로 양쪽이 같습니다.
+
+| 마커 문자열 | r03 | r05 | 역할 |
+| --- | --- | --- | --- |
+| `getPackageRuleCount` | 0 | 1 | 판별 마커 (CVE-2022-20425) |
+| `seems malicious` | 1 | 0 | 판별 마커 (CVE-2022-20392) |
+| `204906124` | 1 | 1 | 판별 마커 (CVE-2022-20394) |
+| `Rule instance limit exceeded` | 1 | 1 | 대조군 |
+| `addAutomaticZenRule` | 5 | 5 | 대조군 |
 
 대조군을 같이 넣은 이유가 있습니다. `Rule instance limit exceeded` 와 `addAutomaticZenRule` 은 취약 코드에도 있는 문자열이라 양쪽에서 같은 수로 나와야 정상입니다. 실제로 그렇게 나왔으므로, `getPackageRuleCount` 의 0 → 1 은 스캔 기법의 착시가 아닙니다. 17주차에서 대조군 없는 관측으로 한 번 데인 뒤로는 이걸 빼지 않습니다.
 
@@ -183,7 +191,23 @@ CVE-2022-20392 의 참조 링크를 열어보니 diff 가 이게 전부였습니
 
 ### 4-4. 취약점의 구조
 
-![패치 전후의 한도 검사 로직 비교도. 패치 전에는 앱이 선언한 한도만 있고 기본값이 -1이라 조건이 항상 거짓이며, 패치 후에는 패키지 단위로 세는 검사가 추가됩니다](/assets/img/android-security-study/20-zen-rule-limit-before-after.svg)
+한도 검사 로직을 전·후로 놓고 보면 이렇습니다(아래 코드는 소스 태그 기준).
+
+```text
+addAutomaticZenRule() 한도 검사 — 소스 태그 android-12.0.0_r34 기준
+
+패치 전 ─ 앱이 선언한 한도 하나뿐 (ruleInstanceLimit, 기본값 -1)
+        └ 앱이 선언 안 하면 ruleInstanceLimit > 0 이 거짓
+          → 조건 전체가 항상 거짓 → 통과
+          → 스스로 제한을 요청한 앱만 제한됨
+
+   │  패치: 시스템이 강제하는 패키지 단위 한도를 OR 로 추가
+   ▼
+
+패치 후 ─ RULE_LIMIT_PER_PACKAGE(패키지 단위)  OR  앱 선언 한도
+        └ getPackageRuleCount(pkg) 로 패키지 단위로 셈
+          → 앱 선언과 무관하게 시스템이 막음
+```
 
 `addAutomaticZenRule` 은 앱이 자기 패키지의 자동 "방해 금지" 규칙을 등록하는 경로입니다. 취약 버전(`android-12.0.0_r34`)의 한도 검사는 이렇습니다.
 

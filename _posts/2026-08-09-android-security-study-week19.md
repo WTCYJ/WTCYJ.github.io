@@ -52,7 +52,22 @@ API 레벨·태그·ABI 로 경로가 정해지므로 **같은 조합의 리비�
 
 해결은 단순합니다. 최상위 디렉터리만 슬롯별로 나누고, 뒤 세 칸은 표준과 똑같이 유지합니다.
 
-![표준 경로에는 리비전 한 개만 들어가므로 최상위 디렉터리를 슬롯별로 나누고, AVD의 image.sysdir.1로 각각을 가리키는 구조도](/assets/img/android-security-study/21-sysimg-slot-layout.svg)
+최상위 디렉터리만 `system-images-r03` / `system-images-r05` 로 나누고, 각 AVD 의 `image.sysdir.1` 이 자기 슬롯을 가리키는 구조입니다.
+
+```text
+표준 경로 — 리비전 한 칸만 허용 (r03·r05가 이 한 칸을 두고 충돌)
+  $ANDROID_HOME/
+    └─ system-images/android-31/default/x86_64/
+
+슬롯 분리 — 최상위만 나누고 뒤 세 칸(android-31/default/x86_64)은 표준 유지
+  $ANDROID_HOME/
+    ├─ system-images-r03/android-31/default/x86_64/
+    └─ system-images-r05/android-31/default/x86_64/
+
+각 AVD 는 config.ini 한 줄로 자기 슬롯을 가리킴
+  sec-31-r03  →  image.sysdir.1 = system-images-r03\android-31\default\x86_64\
+  sec-31-r05  →  image.sysdir.1 = system-images-r05\android-31\default\x86_64\
+```
 
 뒤 세 칸을 유지한 이유는 에뮬레이터가 경로 조각에서 태그나 ABI 를 읽는 경우에 대비한 것입니다. 그리고 최상위가 `system-images` 가 아니므로 `sdkmanager` 가 이 트리를 관리 대상으로 보지 않습니다. 나중에 SDK 업데이트가 우리 실험용 이미지를 건드릴 일이 없습니다.
 
@@ -163,7 +178,18 @@ API 33 대 API 36 보다 조건이 크게 좁혀졌고, 남은 차이는 추측�
 
 바꾸기 전후로 같은 프로브를 같은 두 이미지에 돌렸습니다. 프로브도 이미지도 그대로고, 시작 상태를 맞추는 방법만 다릅니다.
 
-![clean 스냅샷 복원으로 대조했을 때 나타난 mDefaultPhoneApp 차이가, wipe-data 냉부팅으로 바꾸자 사라지고 빌드 지문 차이만 남는 것을 보여주는 비교도](/assets/img/android-security-study/22-snapshot-artifact.svg)
+시작 상태를 맞추는 방법만 바꿨을 때 `mDefaultPhoneApp` 차이가 어떻게 되는지 나란히 두면 이렇습니다.
+
+```text
+같은 프로브 · 같은 두 이미지 · 시작 상태를 맞추는 방법만 다름
+
+  clean 스냅샷 복원으로 대조          wipe-data 냉부팅으로 대조
+  ─────────────────────────          ─────────────────────────
+  mDefaultPhoneApp                   (그 줄 자체가 안 나타남)
+    한쪽 이미지 : com.android.dialer
+    다른 쪽     : null          ══►   빌드 지문 두 줄만 남음
+  → 이미지 차이처럼 보임              → 진짜 차이(빌드 지문)만 남음
+```
 
 스냅샷 복원으로 대조했을 때는 기본 전화 앱 설정이 한쪽은 `com.android.dialer`, 다른 쪽은 `null` 로 나왔습니다. 이미지 차이처럼 보입니다. 냉부팅으로 바꾸니 이 줄은 아예 나타나지 않고 빌드 지문 두 줄만 남았습니다.
 
