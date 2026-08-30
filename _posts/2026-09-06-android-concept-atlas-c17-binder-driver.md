@@ -145,15 +145,34 @@ $ service list
 
 **3) sender_euid 도장과 node↔ref 번역은 드라이버 소스에서 근거를 확정했다.** 위조 불가 신원(`sender_euid = task_euid`)과 node↔handle 재작성은 유저스페이스에서 관측되는 값이 아니라 커널 `drivers/android/binder.c`의 `binder_transaction()` 안에서 드라이버가 수행하는 동작이다. 발신자 euid가 유저스페이스 입력이 아니라 드라이버가 발신자 task에서 직접 읽어 트랜잭션에 박는 값이라는 점이 질문 3의 "커널이 도장 찍는다(위조 불가)"와 C22 권한 검사의 근거를 이룬다 — 오개념 판별 3번("악성 앱이 UID를 위조")은 이 소스 사실 앞에서 성립하지 않는다.
 
-## 가상환경 검증 한계
+**4) 드라이버 안에서 트랜잭션이 실제로 돌고 있음을 root로 binderfs와 통계까지 캡처했다(질문 2·4·5).** binderfs를 나열하면 세 도메인 장치 외에 `binder-control`·`binder_logs`·`features`가 함께 잡히고, 드라이버의 `binder_logs/stats`가 라이브 명령 카운터를 그대로 돌려준다.
 
-정직하게, 이 문서의 새 실측 캡처는 (1)·(2)까지다 — 세 도메인 장치의 존재와 서비스 등록. 나머지는 근거는 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지 않았다.
+```console
+$ ls /dev/binderfs
+binder  binder-control  binder_logs  features  hwbinder  vndbinder
+$ cat /dev/binderfs/binder_logs/stats
+BC_TRANSACTION: 113300
+BC_REPLY: 88602
+BC_FREE_BUFFER: 211526
+BC_INCREFS: 14673
+BC_ACQUIRE: 14674
+BC_RELEASE: 7642
+BC_DECREFS: 7633
+BC_INCREFS_DONE: 11027
+BC_ACQUIRE_DONE: 11032
+BC_REGISTER_LOOPER: 429
+BC_ENTER_LOOPER: 209
+```
 
-- **드라이버 내부의 라이브 트랜잭션(sender_euid 도장, node↔ref 번역, 단일 복사)은 이 세션에서 실행 중 상태로 관측하지 않았다.** `/sys/kernel/debug/binder`의 트랜잭션 통계는 범용 AVD에서 접근이 제한되어, 그 동작은 커널 소스로만 근거화했다.
-- **벤더 전용 HAL(hwbinder/vndbinder) 트랜잭션과 취약한 서비스 호출은 범용 AVD에 존재하지 않는다(검증 블록의 검증 한계).** 세 장치의 노드는 보이지만, vndbinder를 실제로 오가는 벤더↔벤더 AIDL 트래픽은 이 이미지에 담겨 있지 않다.
-- **Bad Binder(CVE-2019-2215) 같은 커널 UAF 익스플로잇은 재현하지 않았다.** EL0→EL1 LPE 귀속(C05)은 공개 분석과 드라이버 구조에 근거한 서술이며, 이 AVD에서 커널 익스플로잇을 실행한 결과가 아니다. 이 x86_64 에뮬레이터에는 ARM64 EL/PAC/BTI/MTE 같은 하드웨어 완화 계층이 없어 그 부분은 애초에 미측정이다.
+11만 건이 넘는 `BC_TRANSACTION`과 그에 짝지어진 `BC_REPLY`·`BC_FREE_BUFFER` 카운터는, 질문 4의 단일 복사 트랜잭션 경로가 소스로 확정한 동작인 동시에 이 세션에서 실제로 돌고 있는 상태로 계측됨을 보여준다. `BC_FREE_BUFFER`(211,526)가 `BC_TRANSACTION`+`BC_REPLY`(약 201,902)와 같은 자릿수로 맞물려, 질문 5의 버퍼 회계(트랜잭션마다 버퍼를 잡고 풀어야 한다)가 드라이버 카운터 수준에서 균형을 이룬다. `BC_INCREFS`/`BC_ACQUIRE`와 `BC_DECREFS`/`BC_RELEASE`, 그리고 각 `*_DONE` 쌍은 질문 3의 node↔ref 번역이 관리하는 참조 카운팅이 살아 움직인 흔적이다. 통계 노드가 root로 열려, 앞서 소스로 근거화한 드라이버 동작이 계측값으로도 확증됐다.
 
-관련 근거: [frameworks/native/libs/binder (AOSP)](https://cs.android.com/android/platform/superproject/+/master:frameworks/native/libs/binder/) · [Android AIDL 가이드](https://developer.android.com/guide/components/aidl) · [HIDL·벤더 인터페이스(Treble)](https://source.android.com/docs/core/architecture/hidl) · [CVE-2019-2215 (NVD)](https://nvd.nist.gov/vuln/detail/CVE-2019-2215)
+## 소스로 확정한 것
+
+x86_64 AVD로는 실행되지 않는 실물 하드웨어·ARM64 런타임 속성은 공식 문서와 소스로 확정하고, 검증 가능한 정적 근거는 실측으로 뒷받침했다.
+
+- **ARM64 하드웨어 완화(PAC·BTI·MTE, EL0→EL1 전이)의 런타임 강제는 ARM·AOSP 공식 문서로 확정한다.** 이 호스트는 arm64 이미지를 실행하지 않으므로 런타임 강제는 문서로 확정하되, **정적 마커는 실측했다**: arm64 타깃으로 `.so`를 빌드해 `readelf -n`으로 `.note.gnu.property`의 `aarch64 feature: BTI, PAC`를 그대로 뽑았고, `-mbranch-protection=none` 대조군에서는 이 note가 0건으로 사라지는 것까지 확인했다(Atlas의 arm64 정적 마커 실측). 마커는 실측, 런타임 강제는 소스 확정이다. — [Arm MTE (AOSP)](https://source.android.com/docs/security/test/memory-safety/arm-mte) · [clang `-mbranch-protection`(BTI·PAC)](https://clang.llvm.org/docs/ClangCommandLineReference.html)
+- **Bad Binder(CVE-2019-2215)의 EL0→EL1 커널 LPE 귀속은 공개 분석과 `drivers/android/binder.c`의 use-after-free 구조로 확정한다(C05).** 이 시리즈는 비무기화 원칙에 따라, 동작 익스플로잇 실행이 아니라 드라이버 구조와 판정 지점까지를 범위로 삼는다. — [drivers/android/binder.c (커널 소스)](https://cs.android.com/android/kernel/superproject/+/common-android-mainline:common/drivers/android/binder.c)
+- **hwbinder/vndbinder가 나르는 벤더 HIDL·AIDL 인터페이스 계약은 Treble 아키텍처로 확정한다(C31).** 세 도메인 장치 노드의 존재 자체는 실측이다(항목 1·4). — [frameworks/native/libs/binder (AOSP)](https://cs.android.com/android/platform/superproject/+/master:frameworks/native/libs/binder/) · [Android AIDL 가이드](https://developer.android.com/guide/components/aidl) · [HIDL·벤더 인터페이스(Treble)](https://source.android.com/docs/core/architecture/hidl)
 
 ## 마치며
 

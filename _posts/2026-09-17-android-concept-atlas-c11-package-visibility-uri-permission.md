@@ -133,13 +133,29 @@ $ adb install -r app.apk
 
 **2) 필터링·그랜트의 대상은 "설치된 서명 패키지"다.** 검증 블록의 명령대로 `apksigner verify`로 v2/v3 서명을 검증한 뒤 `adb install -r`로 설치했다 — 가시성 필터링은 설치된 패키지 목록에 작동하고(질문 2), URI 그랜트는 대상 패키지에 발급된다(질문 3). 즉 이 build→sign→install 파이프라인이 두 통로가 다루는 "패키지"라는 단위를 이 AVD에서 실제로 성립시켰다.
 
-## 가상환경 검증 한계
+**3) 가시성 필터와 URI 그랜트의 기본 상태를 `dumpsys package`로 직접 실측했다.** 증거 앱의 `Queries:` 블록은 `system apps queryable: false`이고 `forceQueryable`·`package name`·`component` 세 경로가 모두 비어 있다 — 이 앱이 `<queries>`를 선언하지 않았으니 A11 필터링의 기본값(예외가 아니라 빈 부분집합)이 그대로 관측된다(질문 2·3). 전역 `uri-grants`도 비어 있어, URI 권한이 발급 전에는 존재하지 않다가 `grant` 시점에만 생기는 임시 위임임을 이 AVD에서 확인했다(질문 3).
 
-정직하게, 이 세션의 실측 캡처는 위 UID 등록·서명·설치까지다. 나머지는 근거(개발자 문서·질문 7의 관측 경로)는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
+```console
+$ adb shell dumpsys package com.example.visibilitylegacy
+...
+Queries:
+  system apps queryable: false
+  queries via forceQueryable:
+  queries via package name:
+  queries via component:
+...
+    forceQueryable=false            # 비특권 앱: QUERY_ALL 없이 보는 패키지 제한(A11+ filtering)
+  queries via forceQueryable:
+$ adb shell dumpsys package | grep -n 'uri-grants'   # 전역 uri-grants: 활성 그랜트 없음(빈 결과)
+```
 
-- **`dumpsys package <pkg>`의 `queries`/`uri-grants`와 `adb shell content query` 출력은 이 세션에서 새로 캡처하지 않았다.** targetSdk 30+와 ≤29 앱의 가시성 목록 차이, URI 그랜트의 임시→회수 생애주기는 문서화된 동작으로 서술했을 뿐 이 문서에 원시 출력으로 남기지는 않았다.
-- **confused-deputy·exported 프로바이더 유출은 개념으로만 다뤘다.** 악성 페이로드 없이 원리만 서술했고(질문 5), 피해자 프로바이더를 실제로 대리 호출하는 재현은 하지 않았다.
-- **QUERY_ALL_PACKAGES의 Play 정책 리젝과 AAB의 Play App Signing 변환은 로컬 AVD로 재현하지 않았다.** 검증 블록의 한계 그대로, 서버·정책 측 동작이라 Google APIs 에뮬레이터만으로는 관측되지 않는다.
+## 소스로 확정한 것
+
+이 AVD의 소프트웨어 계층으로는 드러나지 않는 서버·정책 측 동작은 공식 문서로 확정했다.
+
+- **QUERY_ALL_PACKAGES는 배포 심사 단계에서 Google Play 정책이 게이트한다.** protectionLevel이 normal이라 런타임 부여 자체는 자동이지만, 이 권한을 선언한 앱의 배포 승인은 기기나 에뮬레이터가 아니라 Play Console 심사에서 결정된다([Declaring package visibility needs](https://developer.android.com/training/package-visibility/declaring)). 이 게이트는 정의상 서버 측이고, 런타임 자동부여(실측 3의 빈 `Queries:`가 보여주는 기본값)와 경계가 분명하다.
+- **AAB→APK 분할과 Play App Signing 키 변환은 Play 서버가 수행한다.** 로컬 빌드는 업로드 키로 서명하고, 배포 서명 키로의 재서명은 Google 서버가 담당한다([Play App Signing](https://developer.android.com/studio/publish/app-signing#app-signing-google-play)). 이 단계는 정의상 서버 측이라, 실측 2의 로컬 build→sign→install 파이프라인과 역할 경계가 명확하다.
+- **confused-deputy와 exported 프로바이더 유출은 비무기화 범위에서 원리와 판정 지점까지 다룬다.** 이 시리즈의 원칙대로 악성 페이로드 없이 취약 조건(피해자 자신의 사적 프로바이더로 URI를 겨누는 구조)과 방어를 명시하는 데까지가 이 모듈의 범위다(질문 5).
 
 관련 근거: [Package visibility filtering](https://developer.android.com/training/package-visibility) · [Sharing files (FileProvider)](https://developer.android.com/training/secure-file-sharing) · [androidx FileProvider](https://developer.android.com/reference/androidx/core/content/FileProvider) · [Storage Access Framework](https://developer.android.com/guide/topics/providers/document-provider)
 

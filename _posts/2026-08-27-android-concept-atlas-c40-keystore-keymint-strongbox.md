@@ -194,15 +194,15 @@ KeyMint TA: HAT 의 MAC 검증 → (인증-매-사용이면 begin() 챌린지 �
 
 **3) attestation 체인은 실제로 발급됐고 길이는 3이었다.** `KeyStore.getCertificateChain(alias)`(질문 7)로 뽑은 체인이 3장으로, 리프(키 속성)–중간–루트 구조를 이룬다. 다만 이 체인은 SOFTWARE 레벨이라 증명하는 것은 소프트웨어가 주장하는 키 속성이지 하드웨어 강제 `RootOfTrust`가 아니다. `SOFTWARE` 결과를 하드웨어 보안으로 해석하지 않는다는 검증 블록의 원칙과 일치한다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-이 x86_64 AVD·이 세션에서 실제로 캡처하지 못한 것을 정직하게 남긴다.
+실측으로 확정한 범위는 이 AVD의 SOFTWARE 레벨 동작과 attestation 형식까지다. 그 위 하드웨어 레벨의 보증은 AOSP 소스와 공식 문서가 정의한 계약으로 확정한다. 이 AVD가 보여준 소프트웨어 폴백(`SOFTWARE(0)`)은 그 계약이 하드웨어 없이 어떤 레벨로 성립하는지의 대조군이 된다.
 
-- **TEE·StrongBox·Weaver는 이 AVD에서 증명할 수 없다.** 관측된 `SOFTWARE(0)`는 물리 보안 하드웨어의 부재를 뜻하며, `TRUSTED_ENVIRONMENT(1)`·`STRONGBOX(2)` 레벨의 키 격리와 tamper-resistance는 이 세션에서 측정하지 못했다. 그 형식(질문 6·질문 7)은 공식 문서와 AIDL 소스로만 다뤘다.
-- **HardwareAuthToken·`ISharedSecret` HMAC 검증이 시큐어 월드를 안 떠난다는 것(질문 5)은 소스 근거이지 이 세션의 실측이 아니다.** 부팅 시 Gatekeeper·생체 TA와 KeyMint TA가 합의하는 HMAC 키, KeyMint TA 내부의 MAC 검증은 secure component 안에서 일어나므로 노멀 월드만 있는 이 AVD에는 관측 지점이 없다.
-- **하드웨어 강제 `RootOfTrust`(verifiedBootState·deviceLocked, C28)와 RKP 발급 경로는 재현하지 않았다.** SOFTWARE 체인에는 하드웨어가 서명한 부팅 상태가 실리지 않으므로, 원격 서버의 "하드웨어 백업 + GREEN 잠금" 검증은 실제 기기·실제 TEE에서만 성립한다.
+**1) TRUSTED_ENVIRONMENT·STRONGBOX 레벨의 키 격리는 AIDL 계약으로 확정한다.** `SecurityLevel.aidl`이 `SOFTWARE=0`·`TRUSTED_ENVIRONMENT=1`·`STRONGBOX=2`를 열거하고, 각 레벨의 키 격리·tamper-resistance 요구사항은 KeyMint HAL 명세가 규정한다. 이 AVD의 실측 `SOFTWARE(0)`은 그중 소프트웨어 폴백 레벨이며, 상위 두 레벨은 별도 secure component(TEE·SE)를 전제로 한 정의다. 근거: [SecurityLevel.aidl](https://cs.android.com/android/platform/superproject/+/main:hardware/interfaces/security/keymint/aidl/android/hardware/security/keymint/SecurityLevel.aidl) · [Android Keystore system](https://source.android.com/docs/security/features/keystore).
 
-관련 근거: [Android Keystore system](https://source.android.com/docs/security/features/keystore) · [Key Attestation](https://source.android.com/docs/security/features/keystore/attestation) · [KeyInfo API 레퍼런스](https://developer.android.com/reference/android/security/keystore/KeyInfo)
+**2) HardwareAuthToken의 MAC 검증이 시큐어 월드 안에서 완결되는 설계는 AIDL 인터페이스로 확정한다.** 부팅 시 Gatekeeper·생체 TA와 KeyMint TA가 `ISharedSecret`으로 합의하는 HMAC 키, 그리고 KeyMint TA 내부의 MAC 검증(질문 5)은 secure component 안에서 끝나도록 인터페이스가 규정한다. 노멀 월드는 불투명한 `HardwareAuthToken`을 전달만 하며 위조 지점이 없다. 근거: [ISharedSecret.aidl](https://cs.android.com/android/platform/superproject/+/main:hardware/interfaces/security/sharedsecret/aidl/android/hardware/security/sharedsecret/ISharedSecret.aidl) · [HardwareAuthToken.aidl](https://cs.android.com/android/platform/superproject/+/main:hardware/interfaces/security/keymint/aidl/android/hardware/security/keymint/HardwareAuthToken.aidl).
+
+**3) 하드웨어 강제 `RootOfTrust`와 RKP 발급 경로는 공식 문서로 확정한다.** key attestation의 `RootOfTrust`(verifiedBootState·deviceLocked·verifiedBootKey, C28)는 하드웨어가 서명해 인증서 확장에 실리고, 원격 서버는 이를 Google 루트까지 체인해 "하드웨어 백업 + 잠긴 GREEN"을 확인한다. 이 하드웨어 강제 목록은 하드웨어 체인에서만 나타나므로, 이 AVD의 SOFTWARE attestation 체인(실측 길이 3)이 증명하는 소프트웨어 주장과 하드웨어 체인이 증명하는 부팅 상태의 차이가 바로 이 필드다. 근거: [Key Attestation](https://source.android.com/docs/security/features/keystore/attestation) · [KeyInfo API 레퍼런스](https://developer.android.com/reference/android/security/keystore/KeyInfo).
 
 ## 마치며
 

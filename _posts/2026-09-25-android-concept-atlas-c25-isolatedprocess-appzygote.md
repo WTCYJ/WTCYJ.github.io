@@ -142,15 +142,45 @@ $ cat /proc/self/status
 
 **2) 격리 UID 두 범위와 도메인은 AOSP 소스로 고정된다.** 질문 7의 소스 경로 — `android_filesystem_config.h`의 `AID_ISOLATED_START..END`(시스템 zygote 자식 **99000–99999**), ActivityManagerService/ProcessList의 격리 UID 할당(`mNextIsolatedProcessUid`, app zygote 자식 **90000–98999**), sepolicy `isolated_app.te` — 이 세 곳이 격리 UID 범위와 isolated_app 도메인을 정의한다. 이건 이 세션에서 실측한 값이 아니라 소스로 확정한 사실이며, isolatedProcess가 API 16부터, app zygote가 A10/API 29부터라는 버전 경계(질문 6)도 같은 소스 계보에서 나온다.
 
-## 가상환경 검증 한계
+**3) WebView 격리 렌더러를 찍어내는 부모(webview_zygote)가 시스템 zygote의 자식으로 상주함을 실측했다.**
 
-정직하게, 이 문서의 실측 캡처는 일반 앱(untrusted_app) 기준선까지다. 나머지는 근거는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
+```console
+$ ps -e -o PID,PPID,NAME | grep zygote
+  305     1 zygote64
+  763   305 webview_zygote
+```
 
-- **WebView/Chrome 격리 렌더러를 이 세션에서 실제로 띄워 캡처하지 않았다.** 검증 블록의 관측은 untrusted_app 앱 프로세스이며, `ps -AZ`의 `u0_iXX`·`u:r:isolated_app:s0`와 90000–98999 대역의 app zygote 격리 UID는 AOSP 소스로만 확정했다.
-- **격리 봉쇄를 공격적으로 검증(정책 우회·샌드박스 탈출)하지 않았다.** 검증 블록대로 접근 거부는 통제가 작동한 대조군으로만 관측했고, "뚫려도 쓸모없는 워커"라는 설계 주장을 익스플로잇으로 반증하거나 확증하지는 않았다.
-- **ARM64 전용 하드웨어 프리미티브(PAC·BTI·MTE)는 x86_64 AVD라 격리 워커 위에서 측정 대상이 아니었다.** isolatedProcess 자체는 아키텍처 무관이지만, 격리 UID·isolated_app·seccomp는 소프트웨어로 확인되는 반면 하드웨어 완화는 이 에뮬레이터에서 관측되지 않는다.
+시스템 `zygote64`(pid 305)가 init(pid 1)의 자식이고, 그 아래 `webview_zygote`(pid 763)가 자식으로 떠 있다. 질문 5의 "Chrome/Android System WebView 렌더러가 isolatedProcess"라는 실사용 주장의 살아있는 프로세스 쪽 근거다 — WebView의 미신뢰 웹 콘텐츠를 격리 렌더러로 fork하는 전용 zygote가 이 AVD에 실제로 상주한다. (격리 렌더러 자식 자신의 `u0_iXX` 표기와 isolated_app 도메인은 아래 소스 계보로 확정한다.)
 
-관련 근거: [`<service>` android:isolatedProcess](https://developer.android.com/guide/topics/manifest/service-element) · [`<application>` android:zygotePreloadName](https://developer.android.com/guide/topics/manifest/application-element) · [ZygotePreload](https://developer.android.com/reference/android/app/ZygotePreload) · [Android 앱 샌드박스](https://source.android.com/docs/security/app-sandbox)
+**4) 격리가 조여 들어가는 기준선인 "앱 사적 데이터 잠금"을 구체 값으로 실측했다.**
+
+```console
+$ dumpsys package com.example.visibilitylegacy | grep userId
+    userId=10176
+$ ls -la /data/data/com.example.visibilitylegacy
+drwx------ 4 u0_a176 u0_a176 4096 2026-08-29 09:48 /data/data/com.example.visibilitylegacy
+```
+
+앱의 `/data/data` 디렉터리가 **0700**으로 그 앱 UID(`u0_a176`, userId 10176)에만 열려 있다. 질문 2가 "격리 워커는 앱의 **사적 데이터(app_data_file)는 못 열지만** 자기 APK·world-readable은 읽는다"고 말할 때, 격리 워커가 닿지 못하는 바로 그 사적 데이터가 이 0700 소유 경계다 — 앱 UID와 다른 ephemeral 격리 UID로는 이 경계를 넘지 못한다.
+
+## 소스로 확정한 것
+
+**격리 UID 표기·isolated_app 도메인은 AOSP 소스로 고정된다.** 위 실측 2)에서 짚은 `android_filesystem_config.h`·ActivityManagerService/ProcessList·`isolated_app.te`가 격리 자식의 `u0_iXX`(=`u:r:isolated_app:s0` 도메인, 90000–99999 격리 UID) 표기와 봉쇄 규칙을 정의한다. 실측 3)의 `webview_zygote`가 fork하는 렌더러가 바로 이 도메인·UID로 착지한다.
+
+**ARM64 하드웨어 완화(PAC·BTI·MTE)의 정적 마커는 실측했고, 런타임 강제는 소스로 확정한다.** isolatedProcess는 아키텍처 무관 계약이라 격리 워커 안에서 도는 코드의 하드웨어 완화는 arm64 툴체인으로 확인한다. 실제 arm64 타깃 `.so`를 빌드해 `.note.gnu.property`에서 BTI·PAC 마커를 readelf로 뽑았고, 대조군(`-mbranch-protection=none`)에는 그 note가 0개임을 확인했다:
+
+```console
+$ readelf -n libatlas-arm64.so
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010	NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+```
+
+이 마커가 런타임에 강제되는 방식 — PAC의 함수 진입·복귀 포인터 서명, BTI의 간접 분기 랜딩패드, MTE의 메모리 태그 검사 — 은 ARM AArch64 아키텍처와 AOSP 문서로 확정한다.
+
+**무기화는 범위 밖이다.** 격리 워커를 실제 익스플로잇으로 탈출시키는 검증은 이 시리즈의 비무기화 원칙상 다루지 않고, 격리 UID·isolated_app 도메인·유일 Binder egress라는 설계 판정 지점까지만 서술한다.
+
+공식 문서 근거: [`<service>` android:isolatedProcess](https://developer.android.com/guide/topics/manifest/service-element) · [`<application>` android:zygotePreloadName](https://developer.android.com/guide/topics/manifest/application-element) · [ZygotePreload](https://developer.android.com/reference/android/app/ZygotePreload) · [Android 앱 샌드박스](https://source.android.com/docs/security/app-sandbox) · [ARM: PAC/BTI 보호](https://developer.arm.com/documentation/102433/latest) · [Android: ARM MTE](https://source.android.com/docs/security/test/memory-safety/arm-mte) · [readelf(1) — .note.gnu.property](https://man7.org/linux/man-pages/man1/readelf.1.html)
 
 ## 마치며
 

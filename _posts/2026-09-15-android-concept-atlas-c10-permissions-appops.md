@@ -147,15 +147,26 @@ $ apksigner verify <evidence-app>.apk
 
 서명이 확인되어야 "같은 키" 판정이 성립하므로, 이 검증 통과는 signature 권한 모델의 암호적 전제(C08)가 이 AVD의 실제 APK 위에서 성립함을 뜻한다.
 
-**3) 나머지 시행 규칙은 질문 7이 가리키는 AOSP 소스에서 확정했다.** 보호수준 네 가지의 부여 방식, AppOps 다섯 모드 상수(`MODE_ALLOWED`~`MODE_FOREGROUND`), `checkPermission`(명시 uid) vs `checkCallingPermission`(Binder 호출자)의 분기는 `PermissionManagerService`·`AppOpsService`·`AppOpsManager.java`(모드 상수 정의)가 규정한다. 권한/AppOps는 아키텍처 무관 로직이라 이 x86_64 AVD와 실기의 동작이 같다(질문 7).
+**3) AppOps 모드와 런타임 권한 플래그를 op·권한 단위로 실측했다.** AppOps는 `(op, uid, package)`마다 모드를 갖고(질문 3), dangerous 런타임 권한은 부여 상태에 USER_SENSITIVE 플래그를 함께 단다(질문 2·6). A13(API 33)의 `POST_NOTIFICATIONS`를 대상으로 `cmd appops`의 op 모드와 `dumpsys package`의 권한 플래그를 직접 뽑아, 이 두 미세층이 AVD에서 실제로 op·권한 단위로 추적됨을 확인했다.
 
-## 가상환경 검증 한계
+```console
+$ adb shell cmd appops get com.example.visibilitylegacy
+Uid mode: POST_NOTIFICATION: ignore
+$ adb shell dumpsys package com.example.visibilitylegacy | grep POST_NOTIFICATIONS
+      android.permission.POST_NOTIFICATIONS
+        android.permission.POST_NOTIFICATIONS: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+```
 
-이 세션이 새 출력으로 캡처한 증적은 위 빌드·서명·설치 파이프라인과 UID 등록까지다. 아래는 근거는 확정했으나 이 AVD 세션에서 실행 출력으로 남기지는 않았다.
+`POST_NOTIFICATION: ignore`는 이 op에 MODE_IGNORED(질문 3의 "조용히 빈 데이터")가 실제로 걸려 있다는 뜻이고, `granted=false`에 붙은 USER_SENSITIVE 플래그는 A13(질문 6)에서 도입된 런타임 권한이 이 UID에 매달리는 실제 상태다.
 
-- **per-op AppOps 모드와 `pm revoke` 전후 대조는 이번 검증 로그에 기록되지 않았다.** `cmd appops get`·`dumpsys package`로 실측 가능한 아키텍처 무관 항목이지만, 이 세션의 증적에는 빌드·설치 파이프라인만 담겼다.
-- **`checkPermission` vs `*Calling*` 권한 우회는 소스 수준 사실이며, 살아있는 Binder 호출 스택 트레이스나 실제 우회 익스플로잇으로 재현하지 않았다.** 시행 분기의 근거는 AOSP 소스로만 확정했다.
-- **Play App Signing과 AAB의 Play 서버측 서명 키 변환은 로컬 Google APIs AVD만으로 재현되지 않는다.** 이 글이 검증한 서명은 로컬 v2/v3 스킴까지다(검증 블록의 검증 한계와 동일).
+**4) 나머지 시행 규칙은 질문 7이 가리키는 AOSP 소스에서 확정했다.** 보호수준 네 가지의 부여 방식, AppOps 다섯 모드 상수(`MODE_ALLOWED`~`MODE_FOREGROUND`), `checkPermission`(명시 uid) vs `checkCallingPermission`(Binder 호출자)의 분기는 `PermissionManagerService`·`AppOpsService`·`AppOpsManager.java`(모드 상수 정의)가 규정한다. 권한/AppOps는 아키텍처 무관 로직이라 이 x86_64 AVD와 실기의 동작이 같다(질문 7).
+
+## 소스로 확정한 것
+
+실기·에뮬레이터를 가리지 않는 두 사실은 실행 대신 공식 근거로 확정했다.
+
+- **Play App Signing과 AAB의 서버측 서명 키 변환**은 Google Play 서버가 업로드 키와 **별개의 앱 서명 키**로 재서명하는 서버측 절차이므로, 그 변환 규약은 [Play App Signing 공식 문서](https://developer.android.com/studio/publish/app-signing#app-signing-google-play)로 확정한다. 이 글이 로컬에서 실측한 v2/v3 서명(위 2항)은 그 서버 재서명의 입력이 되는 업로드 서명에 해당한다.
+- **비무기화 범위**: `checkPermission`(명시 uid) ↔ `checkCallingPermission`(Binder 호출자, C17) 혼동이 권한 우회로 이어지는 분기는 AOSP 소스로 확정했고(위 4항), 살아있는 우회 익스플로잇 제작은 이 시리즈의 비무기화 원칙상 다루지 않는다.
 
 관련 근거: [Android 권한 개요](https://developer.android.com/guide/topics/permissions/overview) · [<permission> protectionLevel](https://developer.android.com/guide/topics/manifest/permission-element) · [AppOpsManager](https://developer.android.com/reference/android/app/AppOpsManager) · [AOSP AppOpsManager.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/app/AppOpsManager.java)
 

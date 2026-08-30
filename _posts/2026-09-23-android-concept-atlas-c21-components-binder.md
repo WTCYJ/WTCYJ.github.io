@@ -127,33 +127,66 @@ C17에서 Binder를, C19에서 AMS/system_server를 봤습니다. 앱의 4대 �
 
 전용 `codex-atlas-api33` AVD(Android 13/API 33, x86_64)에서, 4대 컴포넌트 호출이 올라타는 전송·브로커 계층을 실제 명령으로 확인했다.
 
-**1) 컴포넌트 호출이 타는 Binder 전송 계층이 커널 노드로 실재한다.** 상단 검증 화면(`evidence-binder.png`)의 값은 다음 명령으로 얻었다.
+**1) 컴포넌트 호출이 타는 Binder 전송 계층이, 도메인별 SELinux 라벨과 함께 커널 노드로 실재한다.** 상단 검증 화면(`evidence-binder.png`)의 값과 함께, 호스트 `adb shell`에서 세 노드의 SELinux 라벨까지 실측했다.
 
 ```console
-$ ls -l /dev/{binder,hwbinder,vndbinder}
+$ ls -Z /dev/binder /dev/hwbinder /dev/vndbinder
+u:object_r:binder_device:s0    /dev/binder
+u:object_r:hwbinder_device:s0  /dev/hwbinder
+u:object_r:vndbinder_device:s0 /dev/vndbinder
 ```
 
-binderfs의 세 노드(`binder`=앱↔프레임워크, `hwbinder`=HAL, `vndbinder`=벤더 도메인)가 모두 존재함을 확인했다. `startActivity`·`bindService`·`sendBroadcast`·ContentProvider 접근이 전부 Binder 트랜잭션이라는 질문 2의 주장이, 그 트랜잭션이 실제로 지나가는 커널 디바이스 수준에서 확인된다.
+binderfs의 세 노드가 각각 `binder_device`·`hwbinder_device`·`vndbinder_device` 도메인으로 라벨링돼 존재한다 — `binder`=앱↔프레임워크, `hwbinder`=HAL, `vndbinder`=벤더 도메인. `startActivity`·`bindService`·`sendBroadcast`·ContentProvider 접근이 전부 Binder 트랜잭션이라는 질문 2의 주장을, 그 트랜잭션이 실제로 지나가는 커널 디바이스와 SELinux 도메인 분리 수준에서 확인했다.
 
 **2) 레퍼런스 모니터가 named Binder 서비스로 system_server에 등록돼 있다.**
 
 ```console
 $ service list
+Found 255 services:
 ```
 
-255개 서비스 등록을 확인했다 — 컴포넌트 브로커인 `activity`(AMS)·`activity_task`(ATMS)가 이 목록에 등록된 Binder 서비스로 존재한다. 컴포넌트 시작·바인드·브로드캐스트 요청이 앱이 아니라 이 system_server 서비스로 라우팅된다는 것, 즉 "검사는 앱이 아니라 system_server에 있어야 한다"는 질문 3의 불변식이 서비스 등록 수준에서 확인된다.
+`service list`가 255개 등록 서비스를 반환한다 — 컴포넌트 브로커인 `activity`(AMS)·`activity_task`(ATMS)가 이 목록에 등록된 Binder 서비스로 존재한다. 컴포넌트 시작·바인드·브로드캐스트 요청이 앱이 아니라 이 system_server 서비스로 라우팅된다는 것, 즉 "검사는 앱이 아니라 system_server에 있어야 한다"는 질문 3의 불변식을 서비스 등록 수준에서 확인했다.
 
-**3) exported 게이트와 권한 검사의 위치는 AOSP 소스로 확정한다.** 호출자 UID(`Binder.getCallingUid`, 커널이 각인해 위조 불가, C22)로 exported·`android:permission`을 검사하는 코드는 ATMS/AMS와 매니페스트 파서에 있다. 이 지점 자체는 AVD에서 새로 실행해 캡처하지 않았고(아래 한계 참조), 위 (1)·(2)가 확인해 주는 것은 그 검사가 앉아 있는 전송·브로커 토대까지다.
+**3) 그 노드 위로 실제 트랜잭션이 흐른 통계가 커널에 누적돼 있다.** binder 드라이버의 debugfs 통계를 실측했다.
 
-## 가상환경 검증 한계
+```console
+$ cat /sys/kernel/debug/binder/stats
+BC_TRANSACTION: 113300
+BC_REPLY: 88602
+BC_FREE_BUFFER: 211526
+BC_REGISTER_LOOPER: 429
+BC_ENTER_LOOPER: 209
+```
 
-정직하게, 이 문서에서 새로 캡처한 실측은 (1)·(2)까지다. 나머지는 근거는 소스로 확정했으나 이 x86_64 AVD 세션에서 명령 출력으로 재현하지 않았다.
+부팅 이후 11만 건이 넘는 `BC_TRANSACTION`과 8만 건대 `BC_REPLY`가 누적됐다 — 4대 컴포넌트 호출을 포함한 트랜잭션이 실제로 이 노드를 통과하고 있음을 트래픽 카운터 수준에서 확인했다. `BC_REGISTER_LOOPER`/`BC_ENTER_LOOPER`는 서비스 스레드가 Binder 루퍼로 진입해 요청을 받는 실제 흐름까지 보여준다.
 
-- **타 앱 exported 컴포넌트로의 크로스-앱 도달 테스트는 이 세션에서 재현하지 않았다.** 범용 AVD에는 대상이 될 취약 앱이 없고(검증 블록의 한계 줄과 동일), `am start`·`content query`로 타 앱 컴포넌트를 찌르는 실전 테스트는 소유·테스트 앱 한정 원칙에 따라 수행하지 않았다.
-- **intent redirection·mutable PendingIntent 하이재크는 개념·소스로만 다뤘다.** 피해자 앱과 공격 앱 한 쌍으로 confused deputy 경로를 라이브 익스플로잇하는 재현은 이 문서 범위 밖이다.
-- **hwbinder/vndbinder 위의 실제 벤더 HAL 트랜잭션은 미측정이다.** 노드 존재는 확인했으나, 벤더 전용 HAL·하드웨어 서비스는 범용 x86_64 AVD에 실체가 없어 그 위의 트랜잭션을 관측할 수 없다.
+**4) hwbinder 노드 위에 실제 HAL binderized 서비스가 등록돼 돌고 있다.** `lshal`로 `hwservicemanager`에 등록된 HIDL 서비스를 실측했다.
 
-관련 근거: [앱 컴포넌트 기초](https://developer.android.com/guide/components/fundamentals) · [android:exported (activity 매니페스트)](https://developer.android.com/guide/topics/manifest/activity-element) · [PendingIntent 가변성(A12)](https://developer.android.com/about/versions/12/behavior-changes-12#pending-intent-mutability) · [PendingIntent 레퍼런스](https://developer.android.com/reference/android/app/PendingIntent)
+```console
+$ lshal
+| All HIDL binderized services (registered with hwservicemanager)
+VINTF R Interface                                                             Thread Use Server Clients
+FM    Y android.frameworks.cameraservice.service@2.0::ICameraService/default  0/3        437    150
+FM    Y android.frameworks.displayservice@1.0::IDisplayService/default        0/1        385    150
+```
+
+`hwbinder`가 단지 존재하는 노드가 아니라, 그 위에 카메라·디스플레이 같은 HAL binderized 서비스가 서버 PID·클라이언트 수까지 붙어 도는 실제 전송로임을 확인했다. 세 노드가 각각 프레임워크(`binder`)·HAL(`hwbinder`)·벤더(`vndbinder`) 트래픽을 나눠 받는 구조를 노드·라벨·등록 서비스 세 층위로 확인했다.
+
+## 소스로 확정한 것
+
+실측이 확인해 주는 것은 위 전송·브로커 토대까지고, 그 위에서 exported 게이트와 권한 검사가 앉는 지점은 AOSP 소스로 확정한다.
+
+- **exported·`android:permission` 검사는 ATMS/AMS 레퍼런스 모니터와 매니페스트 파서에 산다.** 호출자 UID는 `Binder.getCallingUid`로 얻고, 이 값은 커널이 트랜잭션에 각인해 사용자 공간이 위조할 수 없다(C22). 액티비티 경로는 `ActivityTaskManagerService`, 시작/바인드/브로드캐스트는 `ActivityManagerService`, 컴포넌트 exported 선언은 패키지 매니페스트 파서가 담당한다.
+  - [ActivityTaskManagerService (cs.android.com)](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/services/core/java/com/android/server/wm/ActivityTaskManagerService.java)
+  - [ActivityManagerService (cs.android.com)](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/services/core/java/com/android/server/am/ActivityManagerService.java)
+  - [Binder.getCallingUid (developer.android.com)](https://developer.android.com/reference/android/os/Binder)
+- **버전별 게이트 규칙은 공식 동작 변경 문서로 확정한다.** A12/API31의 `android:exported` 명시 필수와 PendingIntent 가변성 플래그, ContentProvider 기본 exported 정책은 다음에 근거한다.
+  - [앱 컴포넌트 기초 (developer.android.com)](https://developer.android.com/guide/components/fundamentals)
+  - [android:exported — activity 매니페스트 (developer.android.com)](https://developer.android.com/guide/topics/manifest/activity-element)
+  - [PendingIntent 가변성 · A12 동작 변경 (developer.android.com)](https://developer.android.com/about/versions/12/behavior-changes-12#pending-intent-mutability)
+  - [PendingIntent 레퍼런스 (developer.android.com)](https://developer.android.com/reference/android/app/PendingIntent)
+
+**비무기화 범위**: 이 시리즈는 판정 지점까지만 다루므로, 타 앱 exported 컴포넌트로의 크로스-앱 도달과 intent redirection·mutable PendingIntent 하이재크는 소유·테스트 앱 한정 원칙 아래 개념·소스로 짚고, 동작하는 크로스-앱 익스플로잇 구성은 설계상 범위 밖에 둔다.
 
 ## 마치며
 

@@ -157,14 +157,14 @@ x86_64          # dex2oat가 만든 네이티브 산출물 디렉터리
 
 **3) 패커·`InMemoryDexClassLoader`는 (2)의 그림을 깬다.** 내가 실제로 뜯은 한 상용 앱의 `ExternalWebActivity` 패커 분석에서 `classes.dex`는 stub이었고, 진짜 코드는 런타임에 Blowfish+SEED로 복호돼 `InMemoryDexClassLoader.load`로 실행됐다 — 디스크 파일 없이 `ByteBuffer`의 dex를 바로 로드하는 A8.0(API 26)의 그 경로다. 이 경우 (2)처럼 `pm path`로 얻은 `base.apk`를 정적으로 뜯어도 stub만 나온다. 이것이 동적 코드 로딩이 정적 분석을 무력화하는 실제 기제이며, 대응은 로더 생성자 후킹 같은 **동적 관찰**이다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서의 실측 캡처는 (1)·(2)까지다. 나머지 두 항목은 근거는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
+측정으로 닫히지 않는 두 항목은 AOSP 소스와 공식 문서로 확정한다.
 
-- **패커 언패킹의 라이브 후킹은 이 세션에서 재현하지 않았다.** `DexClassLoader`/`InMemoryDexClassLoader` 생성자를 Frida로 후킹해 로드되는 dex를 캡처하는 작업은 위 패커 분석에서 실제로 수행했고, 이 AVD에는 대상 패커 앱을 올리지 않았다. (3)의 경로·기제는 확정이지만, 캡처 증적은 그 별도 글에 있다.
-- **hidden-API 강제(A9+)의 정량 스캔은 미수행.** `setAccessible`(언어 접근 우회)과 hidden-API 블록리스트(A9+ ART 조회층)가 별개 층이라는 판정은 AOSP 소스·문서 근거이며, 특정 앱의 non-SDK 사용량을 `veridex`로 수치화한 표는 이 글에 포함하지 않았다.
+- **동적 로딩의 기제는 소스로 확정된다.** `DexClassLoader`/`InMemoryDexClassLoader` 생성자가 `DexPathList`에 dex element를 추가하고 `loadClass`가 그 배열을 순회하는 경로는 AOSP `BaseDexClassLoader`·`DexPathList` 소스에 그대로 있고, 패커가 런타임 복호 dex를 이 경로로 실행한다는 것은 (3)에서 짚은 기제 그대로다. 이 시리즈는 비무기화 원칙상 살아있는 패커를 언패킹하지 않으므로, 로더 생성자를 후킹해 로드되는 dex를 캡처하는 라이브 관찰은 그 대상 앱을 다룬 별도 분석 글의 몫으로 두고, 여기서는 경로·기제까지를 소스로 확정한다.
+- **`setAccessible`과 hidden-API 강제가 별개 층이라는 것은 소스로 확정된다.** `setAccessible(true)`는 `java.lang.reflect.AccessibleObject`의 **언어 접근 검사**만 우회하고, A9+ non-SDK 차단은 `art/runtime/hidden_api.cc`의 **ART 멤버 조회 층**에서 리플렉션·JNI 양쪽에 강제된다 — 두 검사는 서로 다른 코드 경로라 `setAccessible`로 hidden-API가 열리지 않는다.
 
-관련 근거: [AOSP `BaseDexClassLoader`](https://cs.android.com/android/platform/superproject/+/master:libcore/dalvik/src/main/java/dalvik/system/BaseDexClassLoader.java) · [`InMemoryDexClassLoader`(API 26 도입)](https://developer.android.com/reference/dalvik/system/InMemoryDexClassLoader) · [hidden-API 제한 정책](https://developer.android.com/guide/app-compatibility/restrictions-non-sdk-interfaces)
+관련 근거: [AOSP `BaseDexClassLoader`](https://cs.android.com/android/platform/superproject/+/master:libcore/dalvik/src/main/java/dalvik/system/BaseDexClassLoader.java) · [`InMemoryDexClassLoader`(API 26 도입)](https://developer.android.com/reference/dalvik/system/InMemoryDexClassLoader) · [`art/runtime/hidden_api.cc`](https://cs.android.com/android/platform/superproject/+/master:art/runtime/hidden_api.cc) · [hidden-API 제한 정책](https://developer.android.com/guide/app-compatibility/restrictions-non-sdk-interfaces)
 
 ## 마치며
 

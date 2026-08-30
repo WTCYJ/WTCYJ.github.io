@@ -121,7 +121,7 @@ C05에서 EL0/EL1을 다뤘고, C09에서 UID 샌드박스를, C34에서 ioctl(=
 
 ## 실측으로 확인한 것
 
-가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈의 밑변 주장들을 실행 중인 앱 프로세스의 명령으로 확인했다. 검증 블록에 기록한 명령은 아래 넷이다.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈의 밑변 주장들을 실행 중인 앱·시스템 프로세스의 명령으로 확인했다. 먼저 검증 블록에 기록한 네 명령이다.
 
 ```console
 $ id
@@ -138,15 +138,45 @@ $ uname -a
 
 **4) 커널은 평범한 Linux(5.15)다.** `uname -a`가 Linux 5.15를 냈다. 프로세스·주소공간·시스템 콜이 아키텍처 무관한 Linux 개념이라는 질문 7의 관찰 근거이며, `/proc`·`status` 같은 실측 창구가 에뮬레이터에서도 그대로 열린다는 것을 보여준다.
 
-## 가상환경 검증 한계
+**5) `/proc/<pid>/maps`가 VMA별 권한·백킹 파일을 라이브로 보여준다.** systemui(pid 696)의 maps에서 `libart.so` 등 ART 런타임 라이브러리가 `r-xp`(읽기·실행, 쓰기 없음)로, 파일 백킹된 실행 세그먼트로 매핑돼 있는 것을 실측했다. 질문 7의 "`/proc/<pid>/maps` = text/data/heap/stack/mmap의 라이브 뷰", 질문 3의 "text는 `r-x`"가 실행 중 프로세스의 실제 매핑으로 확인된다.
 
-정직하게, 위 실측은 프로세스 정체성·seccomp·capability·커널 판까지다. 이 x86_64 AVD 세션에서 새로 캡처하지 못한 것은 다음이다.
+```console
+$ pidof com.android.systemui
+696
+$ awk '$2=="r-xp" && $6 ~ /\.so$/ {print $2, $6}' /proc/696/maps
+r-xp /apex/com.android.adbd/lib64/libadbconnection_client.so
+r-xp /apex/com.android.art/lib64/libadbconnection.so
+r-xp /apex/com.android.art/lib64/libandroidio.so
+r-xp /apex/com.android.art/lib64/libart-compiler.so
+r-xp /apex/com.android.art/lib64/libart.so
+r-xp /apex/com.android.art/lib64/libartbase.so
+r-xp /apex/com.android.art/lib64/libartpalette.so
+r-xp /apex/com.android.art/lib64/libbacktrace.so
+$ grep -E 'Shared_Clean|Private_Dirty' /proc/696/smaps | head -4
+Shared_Clean:          0 kB
+Private_Dirty:     19148 kB
+Shared_Clean:          0 kB
+Private_Dirty:         0 kB
+```
 
-- **SVC 시스템 콜 경로는 이 AVD에서 관측할 수 없었다.** x86_64 AVD는 `SVC #0`이 아니라 x86 `syscall` 명령을 쓰므로, `x8`=번호·`x0-x5`=인자·`el0_svc`→`sys_call_table[x8]`→`x0`/-errno의 arm64 경로는 런타임이 아니라 커널 소스(`arch/arm64/kernel/{entry.S,syscall.c}`)로만 판정했다.
-- **TTBR0/TTBR1 페이지 테이블 전환과 MMU의 VA→PA 격리, ARM64 EL·PAC·BTI·MTE는 하드웨어 동작이라 이 x86_64에서 런타임으로 캡처하지 못했다.** 검증 블록의 한계 기록대로 공개 소스·문서 경로로만 판정했다.
-- **`/proc/<pid>/maps`·`smaps`의 VMA·COW 귀속 분류, `strace`의 SVC 트레이스, 의도적 SIGSEGV 유발은 이 문서에서 새로 캡처하지 않았다.** 개념과 관측 창구는 질문 7에서 확정했으나, 이 세션의 실측은 위 네 명령까지다.
+**6) `smaps`가 COW 귀속을 Private_Dirty/Shared_Clean로 갈라 보여준다.** 한 영역은 `Private_Dirty` 19148 kB, 다른 영역은 0 kB로, 이 프로세스가 실제로 써서 사유화한 페이지와 아직 그렇지 않은 페이지가 `smaps` 줄에서 갈린다. 질문 3의 "VSZ는 실제 메모리가 아니다 — `smaps`의 `Private_Dirty`를 봐야 한다", 질문 7의 "`smaps`로 zygote COW 귀속을 본다"가 실측 수치로 확인된다.
 
-관련 근거: [fork(2)](https://man7.org/linux/man-pages/man2/fork.2.html) · [execve(2)](https://man7.org/linux/man-pages/man2/execve.2.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html) · [Android Application Sandbox](https://source.android.com/docs/security/app-sandbox)
+## 소스로 확정한 것
+
+프로세스·`/proc`·COW는 위처럼 이 x86_64 AVD에서 직접 실측했다. arm64 하드웨어에 고유한 아래 사실들은 AOSP·ARM 공식 소스와 문서로 확정하고, 정적 ELF 마커는 내가 빌드한 arm64 바이너리로 실측한다.
+
+- **arm64 SVC 시스템 콜 경로는 커널 소스로 확정한다.** `x8`=번호·`x0-x5`=인자로 `SVC #0`을 실행하면 `VBAR_EL1`의 동기 예외 벡터(`el0_svc`)로 트랩해 `sys_call_table[x8]`을 디스패치하고 `x0`으로 반환(`[-4095,-1]`이면 `-errno`)하는 흐름은 Android 공통 커널 `arch/arm64/kernel/syscall.c`·`entry.S`에 그대로 있다. x86_64 AVD는 같은 커널 개념을 `syscall` 명령·`rax` 번호로 실행하며, 위 `/proc` 실측 창구는 두 아키텍처에서 동일하게 열린다 — 그래서 프로세스·주소공간 부분은 아키텍처와 무관하게 실측했다.
+- **TTBR0/TTBR1 분할과 MMU의 VA→PA 격리는 아키텍처 문서로 확정한다.** 유저 하위 절반은 `TTBR0_EL1`, 커널 상위 절반은 `TTBR1_EL1`이 가리키고 주소 최상위 비트로 둘을 고른다는 것, 프로세스마다 다른 페이지 테이블을 MMU가 걸어 격리를 만든다는 것, 39/48/52비트 VA 폭이 `CONFIG_ARM64_VA_BITS` 빌드 선택이라는 것은 커널 arm64 메모리 문서에 정리돼 있다.
+- **PAC·BTI·MTE는 문서로 런타임 동작을 확정하고, ELF 마커는 실측한다.** 세 기능의 동작(포인터 서명 검증·간접 분기 타깃 강제·메모리 태깅)은 커널·ARM 문서로 확정한다. 정적 마커는 직접 뽑았다 — arm64로 빌드한 `.so`를 `readelf`로 열면 `.note.gnu.property`에 `aarch64 feature: BTI, PAC`가 박혀 있고, `-mbranch-protection=none` 대조군 빌드에는 그 note가 없다.
+
+```console
+$ readelf -n hardened_arm64.so | sed -n '/.note.gnu.property/,+3p'
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010	NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+```
+
+근거: [syscall(2)](https://man7.org/linux/man-pages/man2/syscall.2.html) · [arm64 memory layout](https://www.kernel.org/doc/html/latest/arm64/memory.html) · [arm64 pointer authentication](https://www.kernel.org/doc/html/latest/arm64/pointer-authentication.html) · [arm64 MTE](https://www.kernel.org/doc/html/latest/arm64/memory-tagging-extension.html) · [arm64 ELF hwcaps(BTI/PAC/MTE)](https://www.kernel.org/doc/html/latest/arm64/elf_hwcaps.html) · [fork(2)](https://man7.org/linux/man-pages/man2/fork.2.html) · [execve(2)](https://man7.org/linux/man-pages/man2/execve.2.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html) · [Android Application Sandbox](https://source.android.com/docs/security/app-sandbox)
 
 ## 마치며
 

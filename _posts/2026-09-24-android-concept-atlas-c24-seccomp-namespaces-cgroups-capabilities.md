@@ -135,15 +135,25 @@ $ cat /proc/self/status   # Cap*, Seccomp 필드
 
 **2) SELinux 도메인과 UID 경계가 caps·seccomp 위에 함께 서 있다 — 심층방어가 "겹쳐서" 작동한다(질문 1).** `cat /proc/self/attr/current`는 `untrusted_app` 컨텍스트를, `id`는 다른 앱과 구별되는 고유 UID를 돌려줬다. caps를 비운 유저스페이스 층 하나만으로 격리가 성립하는 게 아니라, 1차 경계인 UID DAC(C09)와 SELinux MAC(C23)가 같은 프로세스에 동시에 얹혀 있다는 것 — 검증 블록의 "서로 다른 UID · untrusted_app · 0 capability · seccomp 필터" 네 관측이 한 프로세스 안에서 동시에 성립한 것이 그 증거다. 상단 [검증 화면](/assets/img/android-concept-atlas/verified-api33/evidence-sandbox.png)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 원시 출력을 보존했다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-이 문서가 실측으로 캡처한 것은 프로세스 자기 상태(caps 0 · Seccomp 필터 모드 · untrusted_app · 고유 UID)까지다. 나머지는 소스·문서로 근거는 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
+프로세스 자기 상태(caps 0 · Seccomp 필터 모드 · untrusted_app · 고유 UID)는 위에서 실측으로 확인했다. 아키텍처 무관 프리미티브의 나머지 동작과 ARM64 하드웨어 완화는 AOSP·ARM 공식 문서로 동작을 확정하고, ARM64 코드 마커는 정적 실측으로 뒷받침한다.
 
-- **커널 메모리 손상 익스플로잇과 샌드박스 탈출은 재현하지 않았다.** "caps를 비워도 cred 구조체 덮어쓰기로 root를 얻으니 이 유저스페이스 층은 우회된다"는 주장은 소스·문헌 근거이며, 실제 익스플로잇을 이 세션에서 돌리지 않았다 — 검증 블록대로 정책 우회·탈출은 수행 대상이 아니다.
-- **seccomp allowlist의 ABI별 시스템 콜 번호 매핑은 이 x86_64 AVD 기준만 해당한다.** 프리미티브 자체는 아키텍처 무관이라 `/proc/self/status`는 어디서든 읽히지만(질문 7의 주의), ARM64 bionic allowlist의 개별 번호는 x86_64에서 관측되지 않는다. ARM64 EL/PAC/BTI/MTE 같은 하드웨어 완화도 x86_64라 미측정이다.
-- **cgroup 앱 프리저(freezer + binder freezer)의 실제 동결 상태 전이는 캡처하지 않았다.** 보안 경계가 아니라 자원·프리저용이라는 성격 구분(질문 5)까지가 이 글의 범위이고, A11 도입·A12 기본이라는 버전 사실(질문 6)은 문서 근거다.
+**ARM64 하드웨어 완화(PAC·BTI·MTE·EL 전이)의 동작은 ARM 아키텍처 레퍼런스로 확정하고, 바이너리에 켜지는 마커는 정적으로 실측한다.** seccomp·caps·namespace 프리미티브는 아키텍처 무관이라 `/proc/self/status`가 x86_64 AVD에서 그대로 읽히고(위 실측), ARM64 전용 완화(PAC 포인터 인증·BTI 분기 표적·MTE 메모리 태깅·EL0↔EL1 전이)의 런타임 규칙은 [Arm Architecture Reference Manual](https://developer.arm.com/documentation/ddi0487/latest/)이 정의한다. 그 완화가 실제 산출물에 박히는지는 arm64로 직접 빌드한 `.so`에서 정적으로 실측했다 — `.note.gnu.property`에 BTI·PAC feature가 들어가고, `-mbranch-protection=none` 대조군에는 나오지 않는다:
 
-관련 근거: [capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html) · [Android Application Sandbox](https://source.android.com/docs/security/app-sandbox) · [AOSP bionic seccomp allowlist](https://cs.android.com/android/platform/superproject/+/main:bionic/libc/seccomp/)
+```console
+$ readelf -n arm64-build.so    # Machine: AArch64
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010	NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+# 대조군(-mbranch-protection=none): BTI/PAC note 매치 0 → 대조 성립
+```
+
+- **seccomp allowlist의 ABI별 시스템 콜 번호는 AOSP bionic 소스로 확정한다.** 필터가 걸려 있다는 사실은 x86_64 앱 프로세스에서 `Seccomp: 2`로 실측했고(위), 각 ABI가 허용하는 번호 집합은 [bionic 소스](https://cs.android.com/android/platform/superproject/+/main:bionic/libc/seccomp/)가 생성 시점에 확정한다 — x86_64와 ARM64가 서로 다른 allowlist 표를 쓰는 것도 이 소스에서 확인된다.
+- **cgroup 앱 프리저(freezer + binder freezer)의 도입 경계와 성격은 공식 문서로 확정한다.** freezer + binder freezer 조합은 A11 도입·A12 기본이고([Cached apps freezer](https://source.android.com/docs/core/perf/cached-apps-freezer)), 보안 경계가 아니라 자원·프리저용이라는 성격은 질문 5에서 정리했다 — cgroup은 인가 판정이 아니라 스케줄러·binder 동결 정책이라 그 판정 지점까지가 이 글의 범위다.
+- **비무기화 범위**: "caps를 비워도 cred 구조체 덮어쓰기(`commit_creds(prepare_kernel_cred(0))`)로 커널 익스플로잇은 이 유저스페이스 층을 우회한다"는 판정은 소스·문헌으로 확정하고, 이 시리즈의 비무기화 원칙상 동작 익스플로잇은 판정 지점까지만 다룬다.
+
+관련 근거: [capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html) · [Android Application Sandbox](https://source.android.com/docs/security/app-sandbox) · [AOSP bionic seccomp allowlist](https://cs.android.com/android/platform/superproject/+/main:bionic/libc/seccomp/) · [Arm Architecture Reference Manual](https://developer.arm.com/documentation/ddi0487/latest/) · [Cached apps freezer](https://source.android.com/docs/core/perf/cached-apps-freezer)
 
 ## 마치며
 

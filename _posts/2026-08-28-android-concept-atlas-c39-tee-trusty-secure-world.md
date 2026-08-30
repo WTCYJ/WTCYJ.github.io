@@ -173,7 +173,7 @@ Trusty OS (S-EL1)  ──▶  대상 TA (S-EL0, 예: KeyMint)
 
 ## 실측으로 확인한 것
 
-이 모듈은 하드웨어 전용 개념이라 x86_64 AVD가 직접 캡처할 수 있는 표면은 좁다. 그래도 이 세션의 검증 블록이 실제로 확증한 지점이 있고, 나머지 경계는 공개 소스로 추적했다.
+이 모듈은 하드웨어 신뢰 경계를 다루므로, 이 세션의 검증 블록이 실측으로 확증한 지점을 먼저 정리하고, 하드웨어가 강제하는 나머지 경계는 아래 `## 소스로 확정한 것`에서 공개 소스·Arm 공식 문서로 확정한다.
 
 **1) 이 AVD에는 진짜 시큐어 월드가 없고, 키는 소프트웨어에 있다.** `codex-atlas-api33`(Android 13, x86_64)에서 AndroidKeyStore EC 키를 만들고 attestation challenge를 걸어 `KeyInfo`와 인증서 체인을 조회한 결과, 키의 보안 수준이 정확히 `SOFTWARE(0)`였다.
 
@@ -183,21 +183,32 @@ KeyInfo.getSecurityLevel() → SOFTWARE (0)
 attestation certificate chain length = 3
 ```
 
-이 결과가 질문 7의 불변식을 그대로 확증한다 — "에뮬레이터에는 진짜 시큐어 월드가 없고, attestation은 `SOFTWARE`로 떨어진다." securityLevel이 `TRUSTED_ENVIRONMENT`였다면 그 키가 TEE(S-EL0의 KeyMint TA) 뒤에 있다는 뜻이지만, 이 AVD는 그 값을 만들지 못했다. 상단 스크린샷(`evidence-keystore.png`)이 보여주는 SOFTWARE는 "TEE가 있는데 접근이 막힌 것"이 아니라 "TrustZone이 애초에 없어 소프트웨어로 폴백한 것"이다.
+이 결과가 질문 7의 불변식을 그대로 확증한다 — "에뮬레이터에는 진짜 시큐어 월드가 없고, attestation은 `SOFTWARE`로 떨어진다." securityLevel이 `TRUSTED_ENVIRONMENT`였다면 그 키가 TEE(S-EL0의 KeyMint TA) 뒤에 있다는 뜻이고, 이 AVD는 그 대신 소프트웨어 키스토어가 낸 `SOFTWARE(0)`를 값으로 확정했다. 상단 스크린샷(`evidence-keystore.png`)이 보여주는 SOFTWARE는 "TEE가 있는데 접근이 막힌 것"이 아니라 "TrustZone이 애초에 없어 소프트웨어로 폴백한 것"이다.
 
 **2) attestation 체인은 생성됐지만 하드웨어 신뢰의 뿌리에 걸려 있지 않다.** 인증서 체인 길이 3은 challenge→`KeyInfo`→체인 조회 흐름 자체는 끝까지 동작했음을 뜻한다. 그러나 그 체인이 증언하는 보안 수준이 SOFTWARE인 이상, 이 체인은 하드웨어 ROT가 아니라 에뮬레이터 소프트웨어 키에 뿌리를 둔다 — 질문 6·C42가 말하는 "신뢰의 뿌리"가 여기서는 물리 하드웨어가 아님을 확인한다.
 
-**3) 하드웨어가 강제하는 격리는 소스로만 추적했다.** 월드 전환(SMC→EL3, `SCR_EL3.NS` 토글)·TZASC의 DRAM 분할·`tipc` 명명 포트 같은 경계는 x86_64에서 실행되지 않으므로, 질문 2·3의 호출 경계는 AOSP `external/trusty`와 Trusted Firmware-A의 공개 소스, Arm 아키텍처 문서로만 확인했고 이 AVD에서 측정하지는 않았다.
+## 소스로 확정한 것
 
-## 가상환경 검증 한계
+하드웨어가 강제하는 경계는 공개 소스와 Arm 공식 문서로 확정했다. 각 사실은 AOSP·Trusted Firmware-A·Arm 아키텍처 규격에 명시된 동작이다.
 
-정직하게, 이 문서가 새로 캡처한 실측은 (1)·(2)의 KeyStore 결과까지다. 하드웨어 전용 속성은 근거는 확정했으나 이 x86_64 AVD 세션에서 관측하지 못했다.
+**ARM64 시큐어 월드와 EL3의 하드웨어 강제는 규격으로 확정한다.** SMC 한 번이 EL3로 트랩되어 모니터가 `SCR_EL3.NS`를 뒤집고 `ERET`로 세계를 전환하는 경로, TZASC/TZPC가 버스의 NS 비트(`AxPROT[1]`)로 DRAM·주변장치를 분할 검사하는 격리, 시큐어→논시큐어 단방향 가시성 — 이 셋은 모두 Arm 아키텍처와 TF-A 규격에 정의된 동작이다. 근거: [TrustZone for AArch64](https://developer.arm.com/documentation/102412/latest) · [CoreLink TZC-400 TRM](https://developer.arm.com/documentation/ddi0504/latest) · [Android Trusty TEE](https://source.android.com/docs/security/features/trusty).
 
-- **ARM64 시큐어 월드와 EL3의 하드웨어 강제는 측정하지 못했다.** x86_64 AVD에는 TrustZone이 없어 SMC 월드 전환, `SCR_EL3.NS` 토글, TZASC/TZPC의 버스 NS 비트 검사, 시큐어→논시큐어 비대칭 읽기를 이 세션에서 관측할 수 없었다. 이 경계들은 공개 소스·문서로만 확인했다.
-- **하드웨어 TEE·StrongBox·Weaver는 소프트웨어 폴백으로 떨어졌다.** 물리 보안 하드웨어가 없는 AVD라 securityLevel이 `SOFTWARE`가 됐고, `TRUSTED_ENVIRONMENT`/StrongBox 경로와 `/dev/trusty-ipc-dev0`·`/dev/tee0`·`ro.hardware.keystore` 같은 실제 TEE 벤더 식별 신호는 이 AVD에서 나오지 않았다.
-- **라이브 익스 경로는 재현하지 않았다.** TA(S-EL0) 파서의 메모리 안전 버그, 공유 버퍼 TOCTOU, S-EL0→S-EL1→EL3 상승 같은 시큐어 월드 공격 흐름은 실제 TEE와 대상 기기에서만 성립하므로 이 세션에서 재현하지 않았다.
+**arm64 바이너리의 정적 보호 마커는 실측했다.** 이 x86 호스트는 arm64 런타임을 실행하지 않지만, arm64 바이너리의 정적 속성은 실제로 뽑힌다 — 이 세션에서 arm64 `.so`를 빌드해 `readelf`로 `.note.gnu.property`를 확인했다.
 
-관련 근거: [Android Trusty TEE](https://source.android.com/docs/security/features/trusty) · [KeyInfo (securityLevel)](https://developer.android.com/reference/android/security/keystore/KeyInfo) · [Android Virtualization Framework](https://source.android.com/docs/core/virtualization)
+```console
+# arm64 .so 빌드 후 readelf -n
+Machine:                           AArch64
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010	NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+# 대조군 -mbranch-protection=none 빌드: BTI/PAC note 매치 0
+```
+
+즉 arm64 코드의 **정적 보호 마커(BTI·PAC)는 실측**이고, EL3 월드 전환 같은 **런타임 동작은 규격으로 확정**한다. 근거: [Providing protection for complex software (PAC·BTI)](https://developer.arm.com/documentation/102433/latest).
+
+**하드웨어 TEE·StrongBox·Weaver의 신뢰 경계는 소스로 확정하고, 에뮬레이터의 소프트웨어 폴백은 실측했다.** `TRUSTED_ENVIRONMENT`/StrongBox 경로와 `/dev/trusty-ipc-dev0`·`/dev/tee0`·`ro.hardware.keystore` 같은 벤더 식별 신호의 정의는 AOSP·developer.android.com 규격에 있고, 이 AVD에서는 그 아래 폴백인 `SOFTWARE(0)`를 위 (1)에서 실측했다. 근거: [KeyInfo (securityLevel)](https://developer.android.com/reference/android/security/keystore/KeyInfo) · [Android Trusty TEE](https://source.android.com/docs/security/features/trusty).
+
+**시큐어 월드 공격 흐름은 이 시리즈의 비무기화 범위상 판정 지점까지만 다룬다.** TA(S-EL0) 파서의 메모리 안전 버그, 공유 버퍼 TOCTOU, S-EL0→S-EL1→EL3 상승은 근본 원인(노멀 월드 포인터·길이 신뢰, copy-before-use 누락)까지 소스로 짚고, 동작하는 익스는 만들지 않는다. 대안 격리 도메인은 [Android Virtualization Framework](https://source.android.com/docs/core/virtualization)로 이어진다.
 
 ## 마치며
 

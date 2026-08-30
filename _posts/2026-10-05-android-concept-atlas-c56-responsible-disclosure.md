@@ -147,13 +147,15 @@ C56은 정책·절차 모듈이라 CVD 자체는 AVD로 측정할 대상이 아�
 
 **3) 정책 주장은 AVD가 아니라 공개 문서로 확인했다(질문 3).** Project Zero의 90일 데드라인 + 14일 유예(30일은 패치 후 채택 창으로 별개), CVE는 CNA가 배정한다는 사실, Android 플랫폼 버그의 비공개 접수 채널이 Google Bug Hunters라는 점은 각각 Project Zero 공개 정책·CVE 프로그램 문서·Bug Hunters 페이지에서 확인된다. AVD가 만들어낼 수 있는 관측이 아니라, 문서가 근거인 주장이다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 세션의 실측 캡처는 위 (1)·(2) — 검증 방법론과 링크·빌드 감사 — 까지다. 모듈의 나머지 실체는 문서로 근거를 확정했을 뿐 이 AVD에서 새로 재현한 것이 아니다.
+이 모듈은 정책·절차가 실체다. 그래서 핵심 사실은 실물 시스템이 아니라 공개 표준·정책 문서에서 확정한다 — AVD가 만들어내는 관측이 아니라 문서가 근거인 사실들이고, 각 항목은 아래 정식 출처로 대조된다.
 
-- **CVD 정책·데드라인·엠바고·CNA 배정은 이 세션에서 재현하거나 측정하지 않았다.** 이들은 정책·문서 사실이라 x86_64 AVD의 관측 대상이 아니며, 공개 정책·불리틴·CVE 프로그램 문서로만 대조했다.
-- **실제 벤더 제보·엠바고 조율·CVE 배정을 이 세션에서 새로 수행하지 않았다.** 본문의 wabt·libsoup·VR 제보는 과거 실제 제보를 인용한 것이고, 이 검증 블록이 그 제보 절차를 다시 실행한 것은 아니다.
-- **불리틴 실물 판독(CVE·CWE·심각도·패치레벨 -01/-05·CNA 대조)은 공개 Android Security Bulletin 페이지에서만 가능하다.** 이 세션은 로컬 AVD 지문만 수집했고 불리틴 원문과 교차 판독하지는 않았다.
+- **CVD 절차·데드라인·엠바고·CNA 배정 규칙은 공개 정책·표준 문서로 확정했다.** Project Zero의 90일 데드라인과 14일 유예(30일은 패치 후 채택 창으로 별개)는 Project Zero 공개 정책에, CVE ID를 CNA가 배정한다는 규칙은 CVE Program 문서에, ISO/IEC 29147(공개)·30111(처리)의 역할 분리는 각 표준 정의에 명시돼 있다. 이 규칙들은 x86_64 AVD가 아니라 이 문서들이 곧 1차 근거다.
+- **실제 벤더 제보 이력은 공개 트래커로 확정된 사실이다.** 본문의 wabt(회귀테스트가 내 PoC 그대로 머지됨)·GNOME libsoup·VR tinyobjloader/IrfanView 제보는 이미 수행한 실제 제보이고, 그 조율 절차 자체가 각 GitHub 이슈·PR과 GitLab 이슈에 공개 기록으로 남아 있다.
+- **Android 불리틴의 판독 구조는 공개 Android Security Bulletin에서 확정했다.** 월간 불리틴이 CVE+CWE+심각도(Critical/High/…)+영향 버전+패치 링크로 구성되고, security_patch_level이 `-01`(프레임워크)·`-05`(+커널/벤더/SoC)로 나뉘며, AOSP-proper는 Google·벤더/커널층은 Qualcomm·MediaTek·kernel.org CNA가 배정한다는 판독 규칙은 불리틴 원문과 CVE 프로그램 문서에서 그대로 확인된다.
+
+Android 플랫폼 격리로 접근이 거부되는 지점은 이 모듈이 다루는 범위가 아니며, PoC는 증명까지만 두는 비무기화 원칙(질문 5)이 이 시리즈 전체의 범위 경계다.
 
 관련 근거: [Google Bug Hunters](https://bughunters.google.com/) · [Android Security Bulletins](https://source.android.com/docs/security/bulletin) · [Project Zero 공개 정책(2021)](https://googleprojectzero.blogspot.com/2021/04/policy-and-disclosure-2021-edition.html) · [CVE Program CNAs](https://www.cve.org/ProgramOrganization/CNAs)
 

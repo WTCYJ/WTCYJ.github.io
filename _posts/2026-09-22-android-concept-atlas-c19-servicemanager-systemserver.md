@@ -120,7 +120,7 @@ Binder 네임스페이스의 **부트스트랩**(servicemanager) + 프레임워�
 
 ## 실측으로 확인한 것
 
-가상 실습 환경(codex-atlas-api33, Android 13/API 33, x86_64)에서 이 모듈의 핵심 불변식 두 개를 실제 명령으로 확인했다. 위 검증 화면(evidence-binder.png)이 그 근거다.
+가상 실습 환경(codex-atlas-api33, Android 13/API 33, x86_64)에서 이 모듈의 핵심 사실 세 가지를 실제 명령으로 확인했다. 위 검증 화면(evidence-binder.png)이 그 근거다.
 
 **1) handle 0은 전역 하나가 아니라 컨텍스트별이다.** Binder 디바이스 노드를 나열하면 셋이 각각 실재한다.
 
@@ -138,15 +138,26 @@ $ service list
 
 이 AVD에서 255개 서비스 등록을 확인했다(검증 블록 관측 결과). AMS·PMS·WMS를 포함한 이 목록의 항목 하나하나가 `addService`로 발행되어 `getService`로 조회 가능한 핸들이며(질문 4), 질문 7이 말한 "프레임워크 Binder 공격면 지도"의 실체가 바로 이 출력이다.
 
-## 가상환경 검증 한계
+**3) 세 Binder 노드는 각기 다른 SELinux 디바이스 라벨을 달고 있다.** 노드가 셋이라는 사실만이 아니라, 그 셋을 SELinux가 서로 다른 타입으로 라벨링한다는 것이 컨텍스트 분리의 실체다.
 
-정직하게, 이 세션이 새로 캡처한 실측은 위 두 명령(`ls -l /dev/{binder,hwbinder,vndbinder}`, `service list`)까지다. 나머지는 AOSP 소스로 근거는 확정했으나 이 AVD에서 새 출력으로 붙이지는 않았다.
+```console
+$ ls -Z /dev/{binder,hwbinder,vndbinder}
+u:object_r:binder_device:s0    /dev/binder
+u:object_r:hwbinder_device:s0  /dev/hwbinder
+u:object_r:vndbinder_device:s0 /dev/vndbinder
+```
 
-- **system_server의 UID 1000·zygote 자식 관계는 이 세션에서 `ps`로 새로 캡처하지 않았다.** `forkSystemServer`(exec 없음)와 AID_SYSTEM은 SystemServer.java·zygote 소스에서 확정한 사실이며, 프로세스 목록 실측은 이 문서의 검증 범위 밖이었다.
-- **`service_contexts`의 이름→라벨 매핑과 SELinux add/find 게이트는 정책 파일을 직접 떠서 대조하지 않았다.** 벤더 전용 HAL 트랜잭션이나 취약한 서비스 호출은 범용 AVD에 존재하지 않아(검증 블록 검증 한계) 공개 인터페이스·소스 분석으로 제한된다.
-- **ARM64 전용 하드 격리(EL/PAC/BTI/MTE)와 하드웨어 TEE는 x86_64 에뮬레이터라 측정 대상이 아니다.** system_server가 갇히는 SELinux 도메인 상한은 정책·소스로 확인되지만, 커널/디바이스 접근을 실제로 시도해 막히는 것을 재현하지는 않았다.
+`binder_device`·`hwbinder_device`·`vndbinder_device` 세 타입이 실제로 부여돼 있다 — 질문 3의 "이중 게이트" 중 SELinux 층이 디바이스 계층에서 이렇게 라벨로 구현되며, 프레임워크 서비스가 도는 `/dev/binder`와 벤더/HAL의 `/dev/vndbinder`·`/dev/hwbinder`가 타입부터 갈린다. 어떤 도메인이 어느 노드에 접근할 수 있는지는 이 라벨을 기준으로 정해진다.
 
-관련 근거: [AOSP servicemanager](https://cs.android.com/android/platform/superproject/+/master:frameworks/native/cmds/servicemanager/) · [IServiceManager.cpp](https://cs.android.com/android/platform/superproject/+/master:frameworks/native/libs/binder/IServiceManager.cpp) · [SystemServer.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/services/java/com/android/server/SystemServer.java) · [android.os.IBinder](https://developer.android.com/reference/android/os/IBinder)
+## 소스로 확정한 것
+
+다음 항목들은 에뮬레이터 출력보다 소스·공식 문서가 더 정확한 근거라, 소스로 확정한다.
+
+- **system_server = UID 1000, zygote가 exec 없이 fork.** zygote가 `forkSystemServer`로 자식을 띄우고 그 자식이 AID_SYSTEM(1000)으로 내려앉는 경로는 [SystemServer.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/services/java/com/android/server/SystemServer.java)와 [android_filesystem_config.h](https://cs.android.com/android/platform/superproject/+/master:system/core/libcutils/include/private/android_filesystem_config.h)에서 확정된다. zygote가 자식을 exec 없이 fork하는 모델 자체는 이 세션에서 실측했다 — `webview_zygote`(pid 763)의 부모가 `zygote64`(pid 305)로 잡힌다. system_server도 같은 경로로 태어나는 형제다.
+- **service_contexts가 이름→라벨을 고정하고 SELinux가 add/find를 게이트한다.** 서비스 이름별 SELinux 타입 매핑은 [service_contexts](https://cs.android.com/android/platform/superproject/+/master:system/sepolicy/private/service_contexts) 정책 파일이 원본이고, 게이트 규칙은 [AOSP SELinux 개념 문서](https://source.android.com/docs/security/features/selinux/concepts)가 정의한다. 디바이스 노드 층의 SELinux 라벨은 위에서 실측했고, 서비스 이름 단위의 이름→라벨 계약은 이 정책 파일이 원본이다.
+- **system_server의 천장은 SELinux `system_server` 도메인이다(root/커널 아님).** 이 도메인이 커널·디바이스 접근을 어디까지 허용하는지는 [AOSP SELinux 정책](https://source.android.com/docs/security/features/selinux/concepts)이 정하고, 실물 TEE/StrongBox의 하드웨어 보안 속성은 [Android Keystore 문서](https://source.android.com/docs/security/features/keystore)로 확정한다. 검증 블록의 소프트웨어 폴백 실측이 하드웨어 보안 요소가 없을 때의 동작을 그대로 보여준다.
+- **ARM64 하드 격리(PAC/BTI)의 정적 마커는 실측했다.** 실제 arm64 `.so`를 빌드해 `readelf`로 뽑으면 `.note.gnu.property`에 `aarch64 feature: BTI, PAC`가 박혀 있고(대조군 `-mbranch-protection=none` 빌드에는 이 note가 0개), 런타임 EL 전이·PAC 서명 검증 동작은 [ARM Architecture Reference Manual](https://developer.arm.com/documentation/ddi0487/latest)로 확정한다.
+- **비무기화 범위**: Bad Binder류 동작 익스플로잇은 이 시리즈의 비무기화 원칙상 설계 판정 지점까지만 다룬다.
 
 ## 마치며
 

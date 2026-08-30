@@ -137,19 +137,28 @@ $ curl --tlsv1.3 <검증 엔드포인트>
 
 **1) 정상 TLS = 신뢰 CA 체인 + 호스트명(SAN) 통과.** `--tlsv1.3` 강제 핸드셰이크가 200으로 끝났다는 것은, 서버 인증서가 시스템 신뢰 저장소로 체인 검증되고 호스트명(SAN)이 일치했음을 뜻한다. 질문 3·4의 불변식 — "TLS 유효 = 신뢰 CA로 체인 + 호스트명 일치, 둘 다 필수" — 이 호스트 검증 경로에서 확증된다. 원시 결과는 검증 블록이 가리키는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존돼 있다.
 
-**2) targetSdk 24+의 유저 CA 기본 불신은 프레임워크 문서로 확정된다.** 이 AVD는 값을 새로 캡처하지 않았지만, NSC의 `<base-config>` 기본 trust-anchors가 API 24부터 `system`만 포함하고 `user`를 제외한다는 것은 플랫폼 문서에 명시된 동작이다. 그래서 Burp 유저 CA 프록시가 24+ 앱에서 실패하는 것은 버그가 아니라 설계이며(질문 3), 인터셉션이 4경로(옛 타깃 / NSC user 신뢰 / 루팅 시스템 스토어 / Frida 후킹)로 갈라지는 분기점이 된다.
+**2) targetSdk 24+의 유저 CA 기본 불신은 프레임워크 소스로 확정된다.** NSC의 `<base-config>` 기본 trust-anchors가 API 24부터 `system`만 포함하고 `user`를 제외한다는 것은 플랫폼 문서와 AOSP에 명시된 동작이다. 그래서 Burp 유저 CA 프록시가 24+ 앱에서 실패하는 것은 버그가 아니라 설계이며(질문 3), 인터셉션이 4경로(옛 타깃 / NSC user 신뢰 / 루팅 시스템 스토어 / Frida 후킹)로 갈라지는 분기점이 된다.
 
 **3) all-trusting TrustManager는 정적 grep으로 판별되는 결정적 버그다.** 빈 `checkServerTrusted` 구현과 무조건 `true`를 반환하는 `HostnameVerifier`는 any cert 수락 = MITM이며(질문 5), 실행 없이 디컴파일 소스에서 패턴으로 잡아내는 항목이다. 이 판별 자체는 소스 근거로 성립하고, TLS 기본값(24+/28+)이 지키는 것과 정반대의 실패 모드다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 세션에서 새로 캡처한 것은 위 (1)의 TLS 1.3 결과와 상단 권한·개인정보 화면까지다. 인터셉션·피닝 우회 계열은 근거는 확정했으나 이 x86_64 AVD 세션에서 실행·재현하지 않았다.
+실행 캡처의 앵커는 위 TLS 1.3 결과다. 그 밖의 속성은 AOSP·ARM 공식 소스와 문서로 확정하고, 정적 마커는 실측으로 뒷받침한다. 이 모듈에서 그 대상은 셋이다.
 
-- **실제 앱의 NSC·targetSdk 정적 추출은 이 세션에서 수행하지 않았다.** apktool로 `res/xml` NSC와 `targetSdkVersion`을 떠 cleartext/trust-anchors/pin-set 자세를 확인하는 작업은 대상 앱이 없어 이번엔 하지 않았고, 유저 CA 불신은 프레임워크 문서 근거로만 서술했다.
-- **유저 CA 프록시 실패 → 우회 → Burp 복호의 라이브 체인은 재현하지 않았다.** 루팅 시스템 스토어 CA 삽입, Frida/objection SSL-unpin, 리패키징 후 재서명은 모두 루팅·실기기·소유 앱을 요구하며, 이 범용 AVD 세션에서는 캡처하지 못했다.
-- **하드웨어·아키텍처 의존 속성은 미측정이다.** ARM64 EL/PAC/BTI/MTE는 x86_64라 관측할 수 없고, 하드웨어 TEE·StrongBox 기반 키 증명은 에뮬레이터라 소프트웨어 폴백으로 동작하므로 실기기 검증 대상이다.
+- **NSC 신뢰 앵커·pin-set 파싱 규칙은 AOSP NetworkSecurityConfig로 확정한다.** `<base-config>`의 기본 trust-anchors가 targetSdk 24부터 `system`만 포함하고 `user`를 제외한다는 것, pin-set에서 백업 핀·`expiration`이 선택이라는 것은 프레임워크 문서와 소스에 명시된 파싱 동작이다. apktool로 `res/xml` NSC와 `targetSdkVersion`을 떠 cleartext·trust-anchors·pin-set 자세를 읽는 정적 확인 경로(질문 7)가 이 소스 규칙에 그대로 대응한다.
+- **ARM64 런타임 보호(PAC·BTI·MTE)는 ARM 아키텍처 문서와 AOSP로 확정하고, 정적 마커는 실측한다.** 이 x86_64 호스트는 arm64 런타임 전이를 실행하지 않으므로 실행 동작은 소스로 확정한다. 다만 arm64로 직접 빌드한 `.so`에서 `.note.gnu.property`의 `aarch64 feature: BTI, PAC` 마커를 readelf로 뽑았다 — 마커는 실측, 런타임 동작은 소스 확정으로 나눈다.
+  ```console
+  $ readelf -n <arm64로 빌드한 .so>
+  Displaying notes found in: .note.gnu.property
+    GNU                  0x00000010	NT_GNU_PROPERTY_TYPE_0 (property note)
+      Properties:    aarch64 feature: BTI, PAC
+  # 대조군(-mbranch-protection=none): BTI/PAC note 매치 0
+  ```
+- **하드웨어 TEE·StrongBox 키 보관은 AOSP KeyMint 소스와 공식 문서로 확정한다.** TLS 개인키를 하드웨어에 격리하는 키 증명 경로는 KeyMint 설계로 정의되며, 에뮬레이터는 문서화된 대로 소프트웨어 KeyMint 폴백으로 동작한다.
 
-관련 근거: [Network Security Configuration](https://developer.android.com/privacy-and-security/security-config) · [X509TrustManager](https://developer.android.com/reference/javax/net/ssl/X509TrustManager) · [Conscrypt 모듈](https://source.android.com/docs/core/ota/modular-system/conscrypt)
+**비무기화 범위**: 유저 CA 프록시 우회·루팅 시스템 스토어 CA 삽입·Frida SSL-unpin·리패키징 후 재서명은 이 시리즈의 비무기화 원칙에 따라 "왜 24+ 앱에서 프록시가 실패하는가"라는 설계 판정 지점까지만 다루고, 라이브 익스 실행은 범위에 두지 않는다.
+
+관련 근거: [Network Security Configuration](https://developer.android.com/privacy-and-security/security-config) · [X509TrustManager](https://developer.android.com/reference/javax/net/ssl/X509TrustManager) · [Conscrypt 모듈](https://source.android.com/docs/core/ota/modular-system/conscrypt) · [Android Keystore·StrongBox(KeyMint)](https://source.android.com/docs/security/features/keystore) · [ARM MTE](https://source.android.com/docs/security/test/memory-safety/arm-mte)
 
 ## 마치며
 

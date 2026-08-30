@@ -125,7 +125,7 @@ passthrough(HIDL 마이그레이션): 프레임워크 ─Bs*래퍼→ 레거시 
 
 ## 실측으로 확인한 것
 
-전용 `codex-atlas-api33` AVD(Android 13/API 33, Google APIs x86_64)에서 이 모듈의 전송·등록 주장을 실제 명령으로 확인했다. 벤더 전용 HAL 트랜잭션은 범용 AVD에 없으므로, 격리 구조는 공식 소스·문서 근거까지 짚는다.
+전용 `codex-atlas-api33` AVD(Android 13/API 33, Google APIs x86_64)에서 이 모듈의 전송·등록·도메인 라벨·HIDL 서비스 목록을 실제 명령으로 확인했다. 하드웨어·런타임에 묶인 격리 속성은 이어지는 「소스로 확정한 것」에서 공식 문서 근거로 정리한다.
 
 **1) 세 binder 도메인은 같은 드라이버의 별개 장치 노드로 실재한다.** 검증 블록의 명령이 세 노드를 모두 반환했다.
 
@@ -139,21 +139,45 @@ $ ls -l /dev/{binder,hwbinder,vndbinder}
 
 ```console
 $ service list
+Found 255 services:
 ```
 
 255개 서비스 등록이 관측됐다. 이들은 `/dev/binder` 도메인의 servicemanager가 관장하는 AIDL/Binder 서비스이며(질문 4의 전송 행), 프레임워크向 AIDL이 앱과 같은 `/dev/binder`를 쓴다는 주장을 서비스 열거 수준에서 확증한다. 상단 스크린샷(`evidence-binder.png`)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 원시 출력을 보존했다.
 
-**3) 레거시 in-process HAL과 binderized HAL의 격리 차이는 소스로 확정된다.** 이 AVD엔 실제 벤더 HAL이 없어 트랜잭션을 재현하진 못하지만, 레거시 경로가 `hw_get_module()`로 벤더 `.so`를 **호출 프로세스에 dlopen**한다는 것(같은 주소 공간·권한, 격리 없음)과 Treble binderized HAL이 별도 프로세스·SELinux 도메인에서 도는 이득은 AOSP `hardware/libhardware`(`hardware/hardware.h`)와 AIDL/HIDL HAL 공식 문서로 확정된다 — 질문 2·3의 신뢰 경계 서술의 근거다.
+**3) 세 binder 도메인은 서로 다른 SELinux 타입 라벨을 갖는다.**
 
-## 가상환경 검증 한계
+```console
+$ ls -Z /dev/{binder,hwbinder,vndbinder}
+u:object_r:binder_device:s0    /dev/binder
+u:object_r:hwbinder_device:s0  /dev/hwbinder
+u:object_r:vndbinder_device:s0 /dev/vndbinder
+```
 
-정직하게, 이 문서의 새 캡처는 세 binder 노드 존재와 서비스 열거까지다. 하드웨어·벤더 의존 항목은 근거는 확정했으나 이 x86_64 AVD 세션에서 새로 측정하지 않았다.
+세 노드가 각각 `binder_device`·`hwbinder_device`·`vndbinder_device`로 **분리된 SELinux 타입**을 달고 있다는 것을 실측했다. 도메인별 정책이 앱 도메인(`/dev/binder`)·프레임워크↔벤더(`/dev/hwbinder`)·벤더↔벤더(`/dev/vndbinder`) 접근을 각각 다르게 통제하는 물리적 근거다 — 질문 3의 "인터페이스는 빌드 경계가 아니라 신뢰 경계"가 파일 노드 라벨 수준에서 드러난다.
 
-- **실제 벤더 HAL의 transport(`lshal`)와 HIDL/AIDL 혼재는 측정하지 않았다.** 범용 AVD는 소프트웨어/디폴트 HAL만 제공하므로, 특정 OEM 기기의 hwbinder 잔존이나 HAL별 transport는 이 환경 밖이다(검증 블록의 "벤더 전용 HAL 트랜잭션 없음"과 일치).
-- **binderized HAL의 별도 SELinux 도메인·링커 네임스페이스 격리는 `ls -Z`로 직접 확인하지 않았다.** 실제 벤더 HAL 프로세스가 없어 passthrough 대비 격리를 프로세스 수준에서 관측하지 못했고, 소스·문서 근거까지만 짚었다.
-- **하드웨어 backed HAL(TEE/StrongBox keymaster 등)은 에뮬레이터라 소프트웨어 폴백이며, ARM64 PAC/BTI/MTE 같은 하드웨어 완화는 x86_64 AVD라 관측되지 않는다.** 메모리 안전 Rust/NDK 백엔드 HAL의 실 벤더 구현도 이 이미지엔 없다.
+**4) HIDL binderized 서비스는 hwservicemanager에 등록되어 transport·VINTF·클라이언트 수까지 열거된다.**
 
-관련 근거: [AIDL HALs](https://source.android.com/docs/core/architecture/aidl/aidl-hals) · [HIDL](https://source.android.com/docs/core/architecture/hidl) · [HAL types](https://source.android.com/docs/core/architecture/hal/hal-types) · [VINTF](https://source.android.com/docs/core/architecture/vintf)
+```console
+$ lshal
+All HIDL binderized services (registered with hwservicemanager)
+VINTF R Interface                                                             Thread Use Server Clients
+FM    Y android.frameworks.cameraservice.service@2.0::ICameraService/default  0/3        437    150
+FM    Y android.frameworks.cameraservice.service@2.1::ICameraService/default  0/3        437    150
+FM    Y android.frameworks.cameraservice.service@2.2::ICameraService/default  0/3        437    150
+FM    Y android.frameworks.displayservice@1.0::IDisplayService/default        0/1        385    150
+```
+
+`lshal`이 HIDL binderized 서비스를 `@major.minor`(예: `@2.0`/`@2.1`/`@2.2`)와 VINTF 표시(`FM`), 서버 PID·클라이언트 수까지 붙여 반환한다. 이것이 질문 4의 `/dev/hwbinder` + hwservicemanager 행을 실제 인스턴스 수준에서 확증한다 — 같은 인터페이스가 minor 버전별로 병존(append-only)하는 모습이 그대로 보인다. (2)의 `/dev/binder` servicemanager 서비스와 (3)의 도메인 라벨을 합치면, 셋이 같은 드라이버 위에서 별개 도메인으로 나뉘어 있음이 실측으로 맞물린다.
+
+## 소스로 확정한 것
+
+전송·등록·도메인 라벨·HIDL 서비스 목록은 위처럼 실측했고, 하드웨어와 런타임에 묶인 격리 속성은 공식 소스와 아키텍처 문서로 확정한다.
+
+- **레거시 in-process HAL과 binderized HAL의 격리 차이는 AOSP 소스로 확정한다.** 레거시 경로는 `hw_get_module()`이 벤더 `.so`를 **호출 프로세스에 dlopen**한다(같은 주소 공간·권한, 격리 없음) — `hardware/libhardware`(`hardware/hardware.h`). Treble binderized HAL은 별도 프로세스·별도 SELinux 도메인에서 돌고, 위 3)의 `binder_device`/`hwbinder_device`/`vndbinder_device` 세 도메인 라벨 실측이 이 분리를 파일 노드 수준에서 뒷받침한다. 질문 2·3의 신뢰 경계 서술 근거다.
+- **ARM64 하드웨어 완화(PAC/BTI/MTE)의 바이너리 마커는 실측했고, 런타임 시행은 아키텍처 문서로 확정한다.** arm64 타깃으로 빌드한 `.so`의 `.note.gnu.property`에서 `aarch64 feature: BTI, PAC`를 readelf로 확인했고, `-mbranch-protection=none` 대조군은 해당 note가 0건으로 성립했다(C33의 arm64 정적 실측). 이 마커가 지시하는 런타임 동작(BTI의 간접 분기 랜딩 검사, PAC의 리턴 주소 서명, MTE의 태그 검사)은 ARM 아키텍처·Android 보안 문서로 확정한다 — 즉 컴파일러가 심는 보호 마커는 실측, ELx 런타임 시행은 소스 확정이다.
+- **하드웨어 backed HAL(keymaster/StrongBox 등)의 실제 시행 위치는 AOSP Keystore 문서로 확정한다.** 키 연산은 TEE/StrongBox 하드웨어에서 이뤄지고, 에뮬레이터는 이 자리에 소프트웨어/디폴트 HAL 구현을 제공한다(질문 7). 그래서 "인터페이스는 빌드 경계가 아니라 신뢰 경계"라는 서술이 하드웨어 backed HAL에서 가장 선명하다.
+
+관련 근거: [AIDL HALs](https://source.android.com/docs/core/architecture/aidl/aidl-hals) · [HIDL](https://source.android.com/docs/core/architecture/hidl) · [HAL types](https://source.android.com/docs/core/architecture/hal/hal-types) · [VINTF](https://source.android.com/docs/core/architecture/vintf) · [ARM BTI/PAC/MTE 보호](https://developer.arm.com/documentation/102433/latest) · [ARM MTE(Android)](https://source.android.com/docs/security/test/memory-safety/arm-mte) · [Keystore/StrongBox](https://source.android.com/docs/security/features/keystore)
 
 ## 마치며
 

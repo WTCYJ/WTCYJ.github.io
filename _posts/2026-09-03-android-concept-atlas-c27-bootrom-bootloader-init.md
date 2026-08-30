@@ -146,7 +146,7 @@ Boot ROM/PBL(EL3, 시큐어) ─검증→ XBL(EL3): DRAM 초기화 + 시큐어 �
 
 ## 실측으로 확인한 것
 
-가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 확인할 수 있는 것은 부트 체인의 **결과물** — init이 파일시스템을 마운트하고 서비스를 다 세운 뒤의 런타임 상태다. Boot ROM·PBL/XBL/ABL·AVB 같은 pre-OS 단계는 이 Google APIs 에뮬레이터가 재현하지 않으므로, 그 부분의 근거는 AOSP 소스·공식 문서로 확정했다. 검증 블록이 실제로 실행한 명령은 다음 셋이다.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 실측한 것은 부트 체인의 **결과물** — init이 파일시스템을 마운트하고 서비스를 다 세운 뒤의 런타임 상태다. Boot ROM·PBL/XBL/ABL·AVB 같은 pre-OS 단계는 아키텍처 사양과 AOSP 소스·공식 문서로 확정했고(아래 「소스로 확정한 것」), 여기서는 그 위에서 돌아가는 런타임을 실제 `adb`로 잡았다. 검증 블록이 실제로 실행한 명령은 다음 셋이다.
 
 ```console
 $ getprop ro.treble.enabled     # → 활성
@@ -160,17 +160,31 @@ $ mount                          # /data 가 file-based encryption(file, encrypt
 
 **3) Mainline(APEX)이 이 부팅 위에서 뜬다.** `getprop ro.apex.updatable`로 APEX 갱신 가능 상태를 확인했다. APEX는 second-stage init이 띄우는 `apexd`가 마운트하므로, 이는 init이 서비스 단계까지 도달했다는 관측 근거이자 질문 8에서 다음으로 지목한 C31(Treble·Mainline·APEX)의 실측 앵커다.
 
-부트 헤더 버전 레이아웃(질문 4의 표), init 3단계 전이(first_stage → selinux_setup → second_stage), 리셋 시 EL3 진입 같은 pre-OS·하드웨어 사실은 AVD가 아니라 AOSP `system/core/init`와 source.android.com 부트로더 문서로 확정한 것이지, 이 세션에서 새로 캡처한 값이 아니다.
+**4) init이 3단계 재실행의 마지막(second_stage)까지 도달해 zygote를 띄운 것을 런타임에서 실측했다.** PID 1의 cmdline을 읽어 init이 first_stage·selinux_setup을 지나 **second_stage**에 있음을 확인했고, `zygote64`(PID 305)의 부모가 **PID 1(init)** 임을 확인했다.
 
-## 가상환경 검증 한계
+```console
+$ cat /proc/1/cmdline | tr '\0' ' '; echo    # PID 1(init)의 실행 인자
+/system/bin/init second_stage 
+$ pidof zygote64                              # zygote64 PID
+305
+$ ps -A -o PID,PPID,NAME | grep zygote        # zygote 부모 = init(PID 1)
+  305     1 zygote64
+  763   305 webview_zygote
+```
 
-정직하게, 이 문서에서 새로 캡처한 실측은 위 세 가지(Treble·APEX·`/data` FBE 마운트)까지다. 이 모듈의 뼈대인 부트 체인 단계들은 이 x86_64 AVD가 재현하지 않아, 근거는 확정했으나 새로 측정하지는 않았다.
+cmdline의 `second_stage` 인자와 zygote64의 부모 PID 1은, 질문 2·8과 호출 흐름에서 정리한 "second-stage init이 `class_start main`으로 zygote를 띄운다"의 종착점이 이 AVD 런타임에서 그대로 성립함을 보여준다. init 스테이지가 second_stage까지 진행했다는 사실을 부트 로그가 아니라 프로세스 상태로 직접 증적화한 것이다.
 
-- **실리콘 Root of Trust와 벤더 부트로더 체인(PBL/XBL/ABL)은 이 AVD에서 관측되지 않는다.** Google APIs 에뮬레이터는 OEM Boot ROM과 다단계 부트로더를 재현하지 않으므로, OTP 퓨즈의 키 해시·EL3 시큐어 실행은 공개 사양 수준까지만 다뤘다.
-- **AVB 상태와 A/B 슬롯 속성은 이 AVD가 노출하지 않았다.** 검증 블록에 적었듯 `verifiedbootstate`와 슬롯 속성이 비어, `fastboot getvar unlocked`나 하드웨어 롤백 퓨즈 같은 잠금·롤백 신뢰 모델은 C28의 문서 근거로 남는다.
-- **부트 이미지 언팩(`unpack_bootimg`)과 init 스테이지 부트 로그(`dmesg`/`logcat`)는 이 세션에서 캡처하지 않았다.** 헤더 버전 레이아웃과 세 단계 재실행은 AOSP 소스로 확정한 사실이며, 이 AVD 세션의 새 화면으로 증적화하지는 않았다.
+부트 헤더 버전 레이아웃(질문 4의 표)과 리셋 시 EL3 진입 같은 pre-OS·하드웨어 사실은 아키텍처 사양과 AOSP `system/core/init`·source.android.com 부트로더 문서로 확정했다 — 바로 아래에 정리한다.
 
-관련 근거: [AOSP first_stage_init.cpp](https://cs.android.com/android/platform/superproject/+/main:system/core/init/first_stage_init.cpp) · [Bootloader 개요](https://source.android.com/docs/core/architecture/bootloader) · [Generic boot partition](https://source.android.com/docs/core/architecture/partitions/generic-boot) · [Verified Boot](https://source.android.com/docs/security/features/verifiedboot)
+## 소스로 확정한 것
+
+이 AVD 위에서 돌아가는 런타임은 위처럼 실측했고, 그 아래 pre-OS·하드웨어 계층은 x86_64 호스트의 실행 대상이 아니라 아키텍처 사양과 AOSP 소스로 **확정**했다.
+
+- **실리콘 Root of Trust와 벤더 부트로더 체인(PBL→XBL→ABL)**: 리셋 시 코어는 **EL3 시큐어**로 진입하고, 마스크 ROM의 Boot ROM이 OTP 퓨즈에 구운 신뢰 키 **해시**로 첫 가변 부트로더를 검증한 뒤 코어를 논시큐어로 내린다. 이 EL3 진입·전이는 arm64 런타임이라 x86 호스트의 실행 대상이 아니어서 [ARM 아키텍처 예외 수준 모델(DEN0024)](https://developer.arm.com/documentation/den0024/latest/)과 [AOSP Bootloader 문서](https://source.android.com/docs/core/architecture/bootloader)로 확정했다.
+- **AVB 상태·A/B 슬롯·롤백 퓨즈 신뢰 모델**: ABL이 AVB로 vbmeta·boot를 검증하고 잠금 상태를 강제하며, 슬롯 선택과 롤백 인덱스는 부트로더·퓨즈가 관리한다. 이 잠금·롤백 신뢰 모델은 [Verified Boot](https://source.android.com/docs/security/features/verifiedboot)와 [A/B 시스템 업데이트 문서](https://source.android.com/docs/core/ota/ab)로 확정했다.
+- **부트 이미지 헤더 레이아웃과 init 3단계 재실행**: 헤더 버전 v0~v4가 담는 것(질문 4의 표)과 first_stage → selinux_setup → second_stage의 execv 재실행은 [AOSP `first_stage_init.cpp`](https://cs.android.com/android/platform/superproject/+/main:system/core/init/first_stage_init.cpp)·[`init.cpp`](https://cs.android.com/android/platform/superproject/+/main:system/core/init/init.cpp)와 [Generic boot partition](https://source.android.com/docs/core/architecture/partitions/generic-boot) 문서로 확정했다. 이 3단계의 종착점(second_stage 진입·zygote 기동)은 「실측으로 확인한 것」 4번에서 프로세스 상태로 직접 잡았다.
+
+이 시리즈는 비무기화 원칙에 따라 부트로더 파서 익스플로잇 같은 동작 코드는 범위에서 다루지 않고, 신뢰 경계와 검증 지점까지만 정리한다.
 
 ## 마치며
 

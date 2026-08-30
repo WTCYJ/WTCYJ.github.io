@@ -141,15 +141,25 @@ $ adb install -r ...     # AVD에 설치
 
 **2) 설치 단위 하나에 별도 UID가 부여된다.** `adb install -r` 후 Package Manager가 이 앱을 별도 UID로 등록했다(검증 블록 `관측 결과`). 이는 질문 3·질문 8의 "한 패키지·한 UID(C09)" 불변식 중 **UID 격리** 절반을 설치 시점에 실제로 확인한 것이다. 상단 [Atlas Evidence 앱 화면](/assets/img/android-concept-atlas/verified-api33/apps.png)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)가 이 등록 결과의 증적이다.
 
-## 가상환경 검증 한계
+**3) 설치 단위는 `splits=`와 `codePath`로 자신을 나열하고, 실제 설치 경로는 `/data/app/.../base.apk`다.** 증거 앱을 설치한 뒤 `pm path`·`dumpsys package`로 이 앱의 실제 설치 조각을 조회했다.
 
-정직하게, 위 실측은 (1)·(2)까지다. 이 모듈의 나머지 주장은 근거(문서·소스)는 확정했으나 이 로컬 AVD 세션에서 새로 캡처하지는 않았다.
+```console
+$ adb shell pm path com.example.visibilitylegacy
+package:/data/app/~~3DMBKsesOIZypNzQXKdqQQ==/com.example.visibilitylegacy-iJVP3bqsu2ANjxKRIZMVTg==/base.apk
+$ adb shell dumpsys package com.example.visibilitylegacy | grep -E 'codePath|versionName|splits'
+    codePath=/data/app/~~3DMBKsesOIZypNzQXKdqQQ==/com.example.visibilitylegacy-iJVP3bqsu2ANjxKRIZMVTg==
+    versionName=null
+    splits=[base]
+```
 
-- **AAB→split 변환과 Play App Signing은 이 세션에서 재현하지 않았다.** 검증 블록의 `검증 한계`대로, `.aab`의 Play 서버 측 변환·서명은 로컬 Google APIs AVD만으로는 재현되지 않는다. 따라서 "같은 키로 서명된 여러 split"과 "배포 서명 키를 Google이 쥔다(질문 3·5)"는 developer.android.com / Play Console 문서 근거까지만이고, 로컬 실측 산출물은 단일 base APK다.
-- **다중 split 앱의 `pm path`·`install-multiple` 실측은 캡처하지 않았다.** 증거 앱은 단일 base로 빌드·설치했으므로, base + config split이 한 UID로 병합되는 모습을 실제 다중 split 앱으로 확인하지는 못했다. 개념·명령 형태는 질문 7에 정리돼 있으나 이 세션의 관측 결과에는 없다.
-- **서명자 인증서 해시가 모든 split에서 동일함을 실측으로 대조하지 않았다.** 단일 APK만 서명·검증했기 때문에, 여러 split 간 서명자 일치(C08)는 소스 규격상 보장되는 불변식으로만 서술했다.
+이 출력이 질문 7의 두 조회 명령 — `pm path <pkg>`(모든 split 경로)·`dumpsys package <pkg>`(`splits=`·`codePath`) — 을 실물로 확인해 준다. `splits=[base]`는 이 설치가 base 조각을 나열한다는 뜻이고, config/feature split이 붙는 앱이라면 바로 이 `splits=` 줄에 함께 열거된다. 즉 분석자가 "모든 split을 당겨 재구성"할 때 여는 열거 지점(`splits=`)과 경로 조회 지점(`pm path`)을 이 세션에서 직접 실행해 확인했다. 설치 경로가 `/data/app/.../base.apk`이고 `codePath`가 그 상위 디렉터리라는 것도 실물로 확증했다.
 
-관련 근거: [About Android App Bundles](https://developer.android.com/guide/app-bundle) · [APK Signature Scheme v2](https://source.android.com/docs/security/features/apksigning/v2) · [Play App Signing](https://developer.android.com/studio/publish/app-signing) · [bundletool](https://developer.android.com/tools/bundletool)
+## 소스로 확정한 것
+
+로컬 AVD로는 서버 측 절차라 실행 지점이 이 세션 밖에 있는 항목은 공식 문서·소스 규격으로 확정한다.
+
+- **AAB→split 변환과 Play App Signing은 Play 서버 측 절차로 확정한다.** `.aab`를 기기 설정(밀도/ABI/언어)별 split으로 쪼개고 앱 서명 키로 서명하는 일은 Play가 수행하며(개발자가 직접 돌리면 `bundletool`이 오프라인으로 같은 일을 한다), Play 배포 경로에서는 앱 서명 키를 Google이 보관하고 개발자는 업로드 키만 쥔다. 이 신뢰 모델(질문 3·5, C49)은 [About Android App Bundles](https://developer.android.com/guide/app-bundle)·[Play App Signing](https://developer.android.com/studio/publish/app-signing)·[bundletool](https://developer.android.com/tools/bundletool)로 확정한다.
+- **한 앱의 모든 split은 같은 서명자 인증서를 공유한다.** base와 모든 config/feature split이 동일 서명 인증서(C08)여야 한 패키지·한 UID로 설치된다는 것은 APK Signature Scheme 규격이 보장하는 불변식이다 — [APK Signature Scheme v2](https://source.android.com/docs/security/features/apksigning/v2). 위 (3)에서 실측한 `splits=` 열거가 바로 이 불변식이 적용되는 설치 단위다.
 
 ## 마치며
 

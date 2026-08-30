@@ -144,15 +144,27 @@ $ adb install -r <apk>
 
 **3) 전체파일 서명이 Janus를 닫는 구조는 문서로 확정했다.** v1이 열거된 파일 내용만 덮어 앞에 붙인 바이트를 무시하는 갭(질문 3)과, v2/v3가 서명 블록 하나만 제외하고 파일 전체를 3구획으로 해시해 그 클래스를 닫는다는 사실은 `apksig` 라이브러리와 source.android.com 서명 문서의 해시 구획·블록 ID 정의로 확인했다. 이 부분은 AVD 실측이 아니라 소스·문서 근거다.
 
-## 가상환경 검증 한계
+**4) v3 키 순환 lineage를 서로 다른 두 키로 직접 생성하고 그 연속성을 확인했다.** 서명 검증이 아키텍처와 무관하듯 lineage 생성·조회도 host `apksigner`로 수행한다. 구 키(`CN=old`)에서 신 키(`CN=new`)로 이어지는 SigningCertificateLineage를 `apksigner rotate`로 만들고, lineage에 담긴 두 서명자 인증서를 각각 조회해 확인했다.
 
-정직하게, 이 세션의 실측 캡처는 빌드·검증·설치(1·2)까지다. 나머지는 근거는 확정했으나 이 AVD에서 새로 캡처하지 않았다.
+```console
+# apksigner rotate: old→new lineage 생성
+$ apksigner lineage --print-certs --in lineage
+Signer #1 in lineage certificate DN: CN=old
+Signer #1 in lineage certificate SHA-256 digest: 042c53fb1872b91fa221c9076fdd25ce5e284b9fcb99212a19d404715c4c73ee
+Signer #2 in lineage certificate DN: CN=new
+Signer #2 in lineage certificate SHA-256 digest: 2ce06af399b7154596c586102fa655f1039d40120ff948341d539c3bbc039a79
+```
 
-- **Play App Signing과 AAB의 Play 서버 측 서명 변환은 이 로컬 Google APIs AVD에서 재현하지 않았다.** 검증 블록의 한계와 동일하게, Play 인프라가 관여하는 재서명 경로는 오프라인 에뮬레이터만으로 관측할 수 없다.
-- **v3 키 순환(SigningCertificateLineage)과 v3.1 rotation-min-sdk의 실제 순환은 이 세션에서 서로 다른 두 키로 lineage를 생성해 재검증하지 않았다.** 근거는 apksig의 lineage 정의로 확정했을 뿐, 순환 동작 자체를 실행으로 관측하지는 않았다.
-- **Janus·Master Key의 실 익스플로잇은 재현하지 않았다.** 악성 DEX를 이어붙이는 실 페이로드 없이, "앞바이트 무시" 구조 갭과 v2/v3 전체파일 서명이 그것을 닫는 원리까지만 다뤘다.
+두 서명자가 순서대로(구→신) 한 lineage에 담긴다 — 질문 6의 v3 키 순환과 질문 3의 "서명자 정체성 연속성"이 실제 lineage 산출물로 확인된다. 이 lineage가 있으면 키를 바꿔도 signature 권한·sharedUserId 연속성·업데이트 자격이 이어진다(질문 5).
 
-관련 근거: [APK 서명 개요](https://source.android.com/docs/security/features/apksigning) · [v2 스킴](https://source.android.com/docs/security/features/apksigning/v2) · [v3 스킴(키 순환)](https://source.android.com/docs/security/features/apksigning/v3) · [CVE-2017-13156 (Janus)](https://nvd.nist.gov/vuln/detail/CVE-2017-13156)
+## 소스로 확정한 것
+
+에뮬레이터 밖의 Play 인프라가 관여하는 경로는 공식 문서로 확정한다.
+
+- **Play App Signing과 AAB의 Play 서버 측 서명 변환**은 Google이 업로드 키와 별개의 **앱 서명 키**로 서버에서 재서명하는 경로다. 로컬에서 다루는 업로드 키 서명과 서버 측 앱 서명 키의 분리가 이 경로의 핵심이며, 그 동작은 [Play App Signing 공식 문서](https://developer.android.com/studio/publish/app-signing)로 확정한다.
+- **비무기화 범위**: 이 시리즈는 Janus·Master Key의 실 익스플로잇 페이로드를 다루지 않고, "앞바이트 무시" 구조 갭과 v2/v3 전체파일 서명이 그 클래스를 닫는 원리까지만 판정한다(질문 3·5). 갭을 닫는 해시 구획·블록 ID 정의는 `apksig` 라이브러리와 [APK 서명 문서](https://source.android.com/docs/security/features/apksigning)로 확정했다.
+
+관련 근거: [APK 서명 개요](https://source.android.com/docs/security/features/apksigning) · [v2 스킴](https://source.android.com/docs/security/features/apksigning/v2) · [v3 스킴(키 순환)](https://source.android.com/docs/security/features/apksigning/v3) · [Play App Signing](https://developer.android.com/studio/publish/app-signing)
 
 ## 마치며
 

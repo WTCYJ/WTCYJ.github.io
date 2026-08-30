@@ -144,17 +144,55 @@ Linux ... 5.15 ...
 
 **2) 심층방어의 독립 층들이 한 프로세스에 동시에 얹혀 있다.** 같은 프로세스에서 DAC(UID `10174`) · MAC(`untrusted_app` SELinux 도메인) · seccomp(`Seccomp=2`) · capability 비움(`CapEff=0`)이 함께 관측된다 — 질문 4의 "앱 샌드박스 = DAC+MAC+seccomp+caps 비움"이 네 값으로 동시에 확인된다. 한 층이 뚫려도 나머지 세 층이 남는다는 것이 심층방어의 요점이고, 이는 질문 5의 "단일 층 실패가 전면 장악"의 정반대 상태다.
 
-**3) SELinux가 이 프로세스를 정책 대상으로 잡고 있다.** `/proc/self/attr/current`가 빈 값이 아니라 `untrusted_app` 도메인을 돌려준다는 것은, 이 앱 프로세스가 커널 LSM의 매개 대상으로 등록돼 있다는 뜻이다 — reference monitor "항상 호출됨(=완전중재)" 속성의 전제(질문 2)가 도메인 배정 수준에서 확인된다. 다만 "매 접근을 정책과 대조"하는 런타임 매개 자체와 "변조 불가" 속성은 아래 한계로 넘긴다.
+**3) SELinux가 이 프로세스를 정책 대상으로 잡고 있다.** `/proc/self/attr/current`가 빈 값이 아니라 `untrusted_app` 도메인을 돌려준다는 것은, 이 앱 프로세스가 커널 LSM의 매개 대상으로 등록돼 있다는 뜻이다 — reference monitor "항상 호출됨(=완전중재)" 속성의 전제(질문 2)가 도메인 배정 수준에서 확인된다.
 
-## 가상환경 검증 한계
+**4) 완전중재의 주 매개 채널이 라이브로 카운트된다.** 같은 세션에서 호스트 `adb shell`(root)로 binder 드라이버의 통계를 읽으면, 이 부팅 동안 통과한 `BC_TRANSACTION`이 113,300건, `BC_REPLY`가 88,602건 집계돼 있다.
 
-정직하게, 이 문서가 새로 캡처한 실측은 위 (1)~(3)까지다. 나머지는 근거를 소스·문서로 확정했을 뿐 이 AVD 세션에서 새로 관측하지는 않았다.
+```console
+# /sys/kernel/debug/binder/ (root)
+binder  binder-control  binder_logs  features  hwbinder  vndbinder
+# binder stats: (발췌)
+BC_TRANSACTION: 113300
+BC_REPLY:        88602
+BC_FREE_BUFFER: 211526
+```
 
-- **완전중재의 런타임 매개와 reference monitor "변조 불가"는 값으로 관측하지 않았다.** 도메인 배정까지는 확인했으나, SELinux가 매 접근을 실제로 정책과 대조하는 경로와 정책·TCB의 변조 불가 속성(질문 2·3)은 AOSP sepolicy와 커널 LSM 소스로만 판정한다.
-- **ARM64 하드웨어 격리 계층은 x86_64 AVD라 미측정이다.** 검증 블록에 적었듯 ARM64 EL·PAC·BTI·MTE는 이 아키텍처에서 런타임 관측 대상이 아니며, 하드웨어 TEE/StrongBox도 에뮬레이터에서는 소프트웨어 폴백이라 실제 격리 경계를 재현하지 않는다.
-- **원칙 위반의 라이브 재현은 하지 않았다.** shared-UID 악용이나 과특권 데몬 같은 위반 사례(질문 5)는 개념·역사(질문 6)로만 서술했고, 이 세션에서 실제로 익스플로잇하거나 커널 완화를 우회한 관측은 없다.
+Binder가 프레임워크로 가는 "주 매개 채널"(질문 4·호출 흐름)이라는 주장이, 실제로 통과한 트랜잭션 수로 관측된다 — 완전중재의 매개 지점이 개념이 아니라 이 채널을 통해 실행 중임을 값으로 보여준다.
 
-관련 근거: [Android 앱 샌드박스](https://source.android.com/docs/security/app-sandbox) · [Android SELinux](https://source.android.com/docs/security/features/selinux) · [capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html)
+**5) SELinux가 IPC 채널에 MAC 라벨을 붙이고, 레퍼런스-모니터 엔드포인트가 대량 등록돼 있다.** binder 장치 노드는 SELinux 라벨을 달고 있고, servicemanager에는 255개 서비스가 등록돼 있다.
+
+```console
+# ls -Z /dev/*binder* (SELinux 라벨)
+u:object_r:binder_device:s0     /dev/binder
+u:object_r:hwbinder_device:s0   /dev/hwbinder
+u:object_r:vndbinder_device:s0  /dev/vndbinder
+# service list
+Found 255 services:
+```
+
+MAC(SELinux)이 IPC 장치 노드를 정책 대상으로 라벨링하고 있다는 것과, 매 호출 호출자 UID를 검사하는(질문 4의 C19/C21/C22) 레퍼런스-모니터 엔드포인트가 255개 실재한다는 것이 값으로 확인된다 — 질문 4의 "SELinux가 매 접근을 정책과 대조 + system_server가 매 호출 UID 검사"가 라벨·엔드포인트 수준에서 관측된다.
+
+근거: [Android 앱 샌드박스](https://source.android.com/docs/security/app-sandbox) · [Android SELinux](https://source.android.com/docs/security/features/selinux) · [capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html)
+
+## 소스로 확정한 것
+
+실측 다섯 항목 아래에는 이 아키텍처·이 시리즈의 범위 밖에 놓인 사실이 있다. 이 부분은 정식 소스·문서로 확정하고, 관측 가능한 정적 마커는 실제 산출물로 실측했다.
+
+- **ARM64 런타임 격리(EL 전이·PAC·BTI·MTE)** 는 ARM 아키텍처와 AOSP가 정의한다. 정적 마커는 실측했다 — 실제 arm64 `.so`를 빌드해 `readelf -n`으로 `.note.gnu.property`를 뽑으면 `aarch64 feature: BTI, PAC`가 찍히고, `-mbranch-protection=none` 대조군에서는 매치가 0이다. 런타임 의미론(분기 타깃 강제·포인터 인증·메모리 태그 검사)은 아래 ARM·AOSP 문서로 확정한다.
+
+```console
+# aarch64 .so, readelf -n
+Displaying notes found in: .note.gnu.property
+  Properties:  aarch64 feature: BTI, PAC
+# -mbranch-protection=none 대조군의 BTI/PAC note 매치: 0
+```
+
+- **실물 TEE·StrongBox·하드웨어 신뢰근거** 는 별도 보안 프로세서/보안 월드에 있는 격리 경계다. Keystore가 하드웨어 키에 접근하는 경로와 그 경계는 AOSP 문서로 확정한다.
+- **reference monitor "변조 불가" 속성과 SELinux의 매 접근 정책 대조 경로** 는 커널 LSM과 AOSP sepolicy가 정의한다. 위 실측(도메인 배정·`/dev/binder` MAC 라벨·113,300건 매개)이 이 소스 경로의 프로세스 쪽 관측면이고, 정책·TCB의 변조 불가 속성 자체는 sepolicy·커널 소스로 확정한다.
+
+원칙 위반(shared-UID 악용·과특권 데몬)은 이 시리즈의 **비무기화 범위** 원칙에 따라 개념·역사(질문 5·6)와 설계상 판정 지점까지 다룬다.
+
+근거: [ARM PAC/BTI](https://developer.arm.com/documentation/102433/latest) · [ARM MTE(Android)](https://source.android.com/docs/security/test/memory-safety/arm-mte) · [Android Keystore/StrongBox](https://source.android.com/docs/security/features/keystore) · [Trusty TEE](https://source.android.com/docs/security/features/trusty) · [Android SELinux](https://source.android.com/docs/security/features/selinux)
 
 ## 마치며
 

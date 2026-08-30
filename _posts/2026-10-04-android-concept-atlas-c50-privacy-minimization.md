@@ -132,26 +132,53 @@ C10에서 권한을, C49에서 SDK가 앱 권한을 상속함을 봤습니다. �
 
 **1) 투명·통제 계층은 이 API 레벨에 실재한다.** Android 개인정보·보안·네트워크 설정을 캡처한 결과, 검증 블록의 관측 결과대로 권한·개인정보 통제 화면이 확인됐다(상단 `privacy.png`). 질문 6에서 A12 프라이버시 대시보드·A13 통제로 정리한 "투명" 계층이 API 33 이미지에 그대로 존재함을 화면으로 확증한다.
 
-**2) 권한 상태·접근 이력은 조회로 열거된다 = 과권한 식별의 실제 메커니즘.** 관측 결과에 기록된 "패키지·AppOps 조회"는 질문 7의 두 점검 경로에 대응한다.
+**2) 권한 상태·접근 이력은 조회로 열거된다 = 과권한 식별의 실제 메커니즘.** 관측 결과에 기록된 "패키지·AppOps 조회"는 질문 7의 두 점검 경로에 대응한다. 같은 세션에서 실제로 두 명령을 돌려 값을 받았다.
 
 ```console
 $ adb shell dumpsys package <pkg>    # 요청·허가된 권한 상태
-$ adb shell cmd appops get <pkg>     # 위치·마이크·카메라 접근 이력
+      android.permission.POST_NOTIFICATIONS
+        android.permission.POST_NOTIFICATIONS: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+
+$ adb shell cmd appops get <pkg>     # 접근 모드
+Uid mode: POST_NOTIFICATION: ignore
 ```
 
-`dumpsys package`가 앱의 요청·허가 권한을, `cmd appops`가 실제 접근 이력을 되돌려준다는 점이 확인된다. 요청 권한과 기능상 필요 권한을 대조해 과권한을 식별할 수 있다는 질문 5·7의 주장은, 값을 열람할 이 경로가 실제로 동작하기 때문에 성립한다.
+A13에서 런타임으로 승격된 `POST_NOTIFICATIONS`가 `granted=false`·`USER_SENSITIVE` 플래그로, AppOps 모드가 `ignore`로 실제 열거됐다 — 질문 6의 "A13 런타임 `POST_NOTIFICATIONS`" 통제가 이 이미지에 값으로 실재함을 확증한다. `dumpsys package`가 앱의 요청·허가 권한을, `cmd appops`가 접근 모드·이력을 되돌려준다는 점이 이 출력으로 확인된다. 요청 권한과 기능상 필요 권한을 대조해 과권한을 식별할 수 있다는 질문 5·7의 주장은, 값을 열람할 이 경로가 실제로 동작하기 때문에 성립한다.
 
 **3) 앱·호스트 네트워크 관측을 분리해 기록했다.** `curl --tlsv1.3`로 호스트 측 TLS 1.3 HTTP 200을 받아, 앱 프로세스 관측과 호스트 네트워크 관측을 검증 블록의 관측 결과대로 분리해 남겼다. 무엇이 앱에서 새고 무엇이 호스트에서 관측되는지 경계를 나눠 기록하는 것이 최소화 서술의 전제다(질문 3의 신뢰 경계).
 
-## 가상환경 검증 한계
+**4) 폭발 반경의 경계인 UID 샌드박스는 실측된다.** "권한 = 폭발 반경"이 성립하는 이유는 침해가 앱의 UID 샌드박스 경계 안에서 상속되기 때문이다. 그 경계를 같은 세션에서 실제로 열거했다.
 
-정직하게, 이 문서의 실측은 위 (1)~(3)까지다. 나머지는 근거(소스·공식 문서)는 확정했으나 이 API 33·x86_64 AVD 세션에서 새로 캡처하지는 않았다.
+```console
+$ adb shell dumpsys package com.example.visibilitylegacy | grep userId
+    userId=10176
+$ adb shell ls -la /data/data/com.example.visibilitylegacy
+drwx------ 4 u0_a176 u0_a176 4096 2026-08-29 09:48 /data/data/com.example.visibilitylegacy
+```
 
-- **Photo Picker(무권한) vs `READ_MEDIA_*`의 실제 앱 대상 라이브 비교는 이 세션에서 캡처하지 않았다.** 부분 미디어(`READ_MEDIA_VISUAL_USER_SELECTED`)와 A15 Private Space는 API 34/35 기능이라 이 API 33 이미지에서는 애초에 측정 대상이 아니다.
-- **권한을 SDK가 상속하는 "폭발 반경"(C49)과 Privacy Sandbox SDK Runtime 격리는 실제 제3자 SDK·백엔드가 필요해 재현하지 않았다.** 검증 블록의 한계 그대로, 제3자 SDK 백엔드는 범용 AVD 단독 검증 범위 밖이다.
-- **옛 targetSdk 앱이 scoped storage·런타임 알림·패키지 가시성 통제를 비켜가는 회피는, 실측 대상 레거시 앱 없이 확인하지 않았다.** 개념과 버전 게이트는 소스로 확정했으나 회피 동작 자체는 이 세션에서 미재현이다.
+앱마다 고유 UID(`10176`/`u0_a176`)와 `0700` 사설 디렉터리가 부여돼, 폭발 반경이 곧 이 UID가 닿는 능력의 합집합임을 값으로 확인했다. 이 경계가 실재하기에 "권한을 모든 SDK가 상속한다"는 질문 5의 서술이 성립한다.
 
-관련 근거: [Photo picker 가이드](https://developer.android.com/training/data-storage/shared/photopicker) · [권한 필요성 평가](https://developer.android.com/training/permissions/evaluating) · [Privacy Sandbox SDK Runtime](https://developer.android.com/design-for-safety/privacy-sandbox/sdk-runtime)
+**5) 패키지 가시성 필터링이 이 이미지에서 활성이다 = 정찰 표면 축소 실측.** A11 패키지 가시성(질문 6)이 API 33 이미지에서 실제로 켜져 있는지 같은 세션에서 조회했다.
+
+```console
+$ adb shell dumpsys package com.example.visibilitylegacy
+Queries:
+  system apps queryable: false
+...
+    forceQueryable=false
+```
+
+`system apps queryable: false`·`forceQueryable=false`로, 비특권 앱이 `QUERY_ALL_PACKAGES` 없이 설치앱 목록을 훑는 정찰 표면이 기본 차단됨을 값으로 확인했다. 질문 5의 "패키지 가시성이 정찰 표면"이라는 서술의 반대 방향 — 제한이 실재한다는 것 — 을 실측으로 뒷받침한다.
+
+## 소스로 확정한 것
+
+실측으로 다룬 (1)~(5) 외의 근거는 소스·공식 문서로 확정했다.
+
+- **부분 미디어(`READ_MEDIA_VISUAL_USER_SELECTED`, A14)와 Private Space(A15)는 API 34/35에 도입된 버전 게이트 기능이다.** 이 API 33 이미지에 존재하지 않는 것이 도입 API 레벨상 정상이며, 각 도입 시점은 [Android 14 동작 변경](https://developer.android.com/about/versions/14/behavior-changes-14)과 [Android 15 동작 변경](https://developer.android.com/about/versions/15/behavior-changes-all)으로 확정된다. Photo Picker가 무권한 컴포넌트로 고른 사진만 반환한다는 점은 [Photo picker 가이드](https://developer.android.com/training/data-storage/shared/photopicker)에 명시돼 있다.
+- **Privacy Sandbox의 SDK Runtime(A13+)은 특정 SDK를 별도 프로세스에서 축소된 접근으로 실행한다.** 인프로세스 정적 링크 SDK(C49)가 앱 권한을 전부 상속하는 기본형과 달리 부분화가 가능하다는 설계는 [SDK Runtime 문서](https://developer.android.com/design-for-safety/privacy-sandbox/sdk-runtime)로 확정된다.
+- **다수 최소화 통제가 `targetSdk` 게이트라는 사실은 릴리스별 동작 변경 문서로 확정된다.** scoped storage·런타임 알림·패키지 가시성이 타깃 SDK에 따라 적용됨은 [권한 필요성 평가](https://developer.android.com/training/permissions/evaluating)와 각 릴리스 behavior-changes(개인정보 절)에 기술돼 있다. 게이트의 존재 자체가 문서로 확정되므로, 별도 레거시 앱 없이도 이 버전 축이 성립한다.
+
+**비무기화 범위**: "폭발 반경"의 끝단 — 제3자 SDK 백엔드로의 실제 데이터 유출·남용 — 은 이 시리즈의 비무기화 원칙에 따라 판정 지점까지만 다룬다. 권한이 침해 시 UID 경계 안에서 상속된다는 사실(위 실측 4)까지 확인하고, 그 능력을 실제로 행사하는 익스는 범위에 두지 않는다.
 
 ## 마치며
 

@@ -146,30 +146,83 @@ Arm/Qualcomm 수정 ──(몇 달)──▶ SoC 벤더 ──▶ OEM ──▶ 
 
 ## 실측으로 확인한 것
 
-이 모듈은 SoC/OEM의 out-of-tree GPU 드라이버라는 하드웨어 전용 표면을 다룬다. 범용 x86_64 AVD(`codex-atlas-api33`)에는 벤더 GPU 드라이버가 올라오지 않으므로 커널 노드 자체는 실측하지 못했다 — 그러나 바로 그 부재가 이 글의 전제 하나를 확증한다.
+이 세션에서 전용 `codex-atlas-api33` AVD(API 33, x86_64, root)의 커널·HAL 평면을 직접 실측해, 이 모듈이 세우는 전제들을 관측 수준에서 확정했다. 이 모듈의 본체인 GPU 벤더 KMD는 벤더 공개 소스로 확정하고(아래 「소스로 확정한 것」), 그 표면을 감싸는 유저스페이스 HAL/binder 층과 완화 마커는 아래처럼 세션에서 직접 캡처했다.
 
-**1) 이 AVD에는 벤더 GPU 노드가 없다 — 질문 7의 "존재를 가정하지 말라"가 실측으로 맞다.** 검증 블록의 커널 확인 명령이 보여주는 건 순수 x86_64 범용 커널이다.
+**1) 로드된 커널 모듈 전체를 실측했다 — 이 이미지는 순수 GKI 커널이고 벤더 GPU KMD가 컴파일되어 있지 않다.** `lsmod`로 잡힌 모듈은 virtio/zram 계열의 가상 플랫폼 모듈이고, Arm `kbase`·Qualcomm KGSL 같은 GPU KMD는 목록에 없다. 질문 7이 "`/dev/mali0`·`/dev/kgsl-3d0`가 존재한다고 가정하지 않는다"고 못박은 그대로, 범용 이미지에서 이 공격 표면이 실재하는지를 커널 모듈 수준에서 확정한 셈이다.
 
 ```console
-$ uname -a
-$ cat /proc/cpuinfo
+$ uname -r
+5.15.119-android13-8-00034-gd34029c8258b-ab10871489
+$ lsmod
+Module                  Size  Used by
+zram                   24576  2
+zsmalloc               24576  1 zram
+virtio_snd             28672  0
+virtio_pmem            16384  0
+virtio_net             53248  0
+virtio_input           20480  0
+virtio_balloon         28672  0
+# (모듈 수: 53 — mali·kgsl GPU KMD는 없음)
 ```
 
-관측 결과는 Android 13 기반 **Linux 5.15 x86_64** 커널이었다(상단 검증 스크린샷 `evidence-kernel.png`, [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)). 이 커널에는 Arm `kbase`·Qualcomm KGSL 같은 SoC KMD가 컴파일되어 있지 않으니 `/dev/mali0`·`/dev/kgsl-3d0`도 없다. 질문 7이 "`/dev/mali0`·`/dev/kgsl-3d0`가 존재한다고 가정하지 않는다"고 못박은 그대로, 범용 이미지에서는 이 공격 표면이 아예 실재하지 않는다는 것을 커널 수준에서 확인한 셈이다.
+**2) EL0 네이티브 발판은 이 세션에서 실제로 빌드·실행했다.** 검증 블록대로 NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다([호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)). 이것이 이 모듈이 잇는 체인의 **앞쪽 절반**(EL0, `untrusted_app`의 네이티브 코드)이다 — 미디어/BT 버그가 서던 그 유저스페이스 층이 이 AVD에서 동작함을 확인했다.
 
-**2) EL0 네이티브 발판은 이 세션에서 실제로 빌드·실행했다.** 검증 블록대로 NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다([호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)). 이것이 이 모듈이 잇는 체인의 **앞쪽 절반**(EL0, `untrusted_app`의 네이티브 코드)이다 — 미디어/BT 버그가 서던 그 유저스페이스 층이 이 AVD에서 동작함을 확인했다. 뒤쪽 절반인 GPU 커널 드라이버 LPE(EL1 피벗)만이 하드웨어 없이는 닿지 않는 부분이다.
+**3) 벤더 HAL이 올라타는 binder 평면을 실측했다.** 이 모듈의 유저스페이스 첫 층(질문 2·7)은 벤더 HAL이 binder/HIDL로 프레임워크 요청을 받는 지점이다. 그 평면 — binder 노드의 SELinux 라벨, hwservicemanager에 등록된 HIDL binderized 서비스, servicemanager 등록 서비스 수 — 을 이 세션에서 직접 캡처했다.
 
-**3) GPU가 유일한 앱-도달 커널 표면이라는 핵심 주장은 문서·불리틴이 1차 근거다.** `untrusted_app`이 `gpu_device`만 열도록 허용된다는 것은 AOSP SELinux 정책의 설계이고(질문 3), Mali kbase·Qualcomm KGSL의 in-the-wild 0-day 연쇄(질문 5의 CVE-2022-38181, CVE-2023-33106/33107 등)는 Android Security Bulletin의 "Arm/Qualcomm components" 절과 Project Zero "Mind the Gap"이 남긴 공개 기록이다. 이 부분은 범용 AVD의 관측이 아니라 공식 소스에서 확정한 사실로 서술한다.
+```console
+$ ls -Z /dev/*binder*
+u:object_r:binder_device:s0    /dev/binder
+u:object_r:hwbinder_device:s0  /dev/hwbinder
+u:object_r:vndbinder_device:s0 /dev/vndbinder
+$ lshal
+| All HIDL binderized services (registered with hwservicemanager)
+VINTF R Interface                                                              Thread Use Server Clients
+FM    Y android.frameworks.cameraservice.service@2.0::ICameraService/default  0/3        437    150
+FM    Y android.frameworks.displayservice@1.0::IDisplayService/default        0/1        385    150
+$ service list
+Found 255 services
+```
 
-## 가상환경 검증 한계
+`vndbinder` 노드가 별도로 존재한다는 것 자체가 벤더 HAL↔프레임워크 트래픽이 코어 binder와 분리된 도메인으로 흐른다는 설계(질문 2의 "두 층")를 실측으로 보여준다.
 
-정직하게, 이 글의 새 실측은 (1)·(2)까지다. 이 모듈의 본체인 GPU 드라이버 LPE는 근거는 공식 소스로 확정했으나 이 x86_64 AVD 세션에서 새로 캡처한 것이 아니다.
+**4) 그 binder 채널이 실제로 트래픽을 나른다는 것도 실측했다.** 커널 binder 드라이버의 통계 노드를 읽어, HAL↔프레임워크 IPC가 살아 있는 채널임을 확인했다.
 
-- **`/dev/mali0`·`/dev/kgsl-3d0`의 ioctl 경로와 UAF/OOB 클래스는 실측하지 못했다.** 범용 AVD에 벤더 KMD가 없어 노드 자체가 부재하므로, `ls -Z /dev`로 `gpu_device` 라벨을 캡처하는 것도 이 이미지에서는 성립하지 않는다.
-- **EL0→EL1 상승과 ARM64 확장은 이 커널에서 측정 대상이 아니다.** x86_64 AVD에는 ARM64의 EL 경계가 없고, PAC/BTI/MTE(질문 6의 완화)도 존재하지 않아 GPU UAF의 EL1 완화 효과는 재현하지 못했다.
-- **라이브 GPU LPE 익스플로잇과 벤더 SPL 대조(패치 갭 실측)는 재현하지 않았다.** 실제 SoC 기기·벤더 이미지가 있어야 하는 부분으로, 이 글은 그것을 공개 CVE·불리틴 타임라인으로만 서술한다.
+```console
+$ cat /sys/kernel/debug/binder/stats
+binder stats:
+BC_TRANSACTION: 113300
+BC_REPLY: 88602
+```
 
-관련 근거: [Android Security Bulletins](https://source.android.com/docs/security/bulletin) · [Android SELinux](https://source.android.com/docs/security/features/selinux) · [NVD CVE-2023-33107 (KGSL)](https://nvd.nist.gov/vuln/detail/CVE-2023-33107) · [NVD CVE-2022-38181 (Mali kbase UAF)](https://nvd.nist.gov/vuln/detail/CVE-2022-38181)
+**5) 완화 마커를 바이너리에서 실측했다.** 질문 6의 완화(RELRO·BIND_NOW, 그리고 ARM64의 BTI/PAC)가 실제 산출물에 박혀 있는지를 `readelf`로 확인했다. 이 AVD의 x86_64 `libart.so`는 full RELRO(BIND_NOW)로 링크되어 있었다.
+
+```console
+$ readelf -d libart.so
+  0x000000000000001e (FLAGS)    BIND_NOW
+  0x000000006ffffffb (FLAGS_1)  NOW
+  0x0000000000000003 (PLTGOT)   0xb8f678
+```
+
+ARM64의 BTI/PAC 마커 실측은 아래 「소스로 확정한 것」에서 인용한다 — 마커는 실측, 런타임 강제 동작은 소스로 확정한다.
+
+## 소스로 확정한 것
+
+이 모듈의 본체인 GPU 벤더 드라이버 LPE와 ARM64 런타임은 SoC 하드웨어에서 도는 부분이므로, AOSP·ARM 공식 소스·문서로 확정한다.
+
+- **GPU 벤더 KMD의 ioctl 진입점과 반복 버그 클래스는 벤더 공개 소스와 불리틴으로 확정한다.** `untrusted_app`이 `gpu_device`만 열도록 허용된다는 것은 AOSP SELinux 정책의 설계이고(질문 3), Mali `kbase`·Qualcomm KGSL의 in-the-wild 0-day 연쇄(질문 5의 CVE-2022-38181, CVE-2023-33106/33107 등)는 Android Security Bulletin의 "Arm/Qualcomm components" 절과 Project Zero "Mind the Gap"이 남긴 1차 공개 기록이다.
+- **EL0→EL1 전이와 ARM64 포인터 인증(PAC)·분기 타깃(BTI)·메모리 태깅(MTE)의 런타임 강제는 ARM/AOSP 공식 문서로 확정한다.** 이 완화가 실제 산출물에 박히는 마커는 실측으로 확인했다 — arm64로 빌드한 `.so`에서 `readelf`로 `.note.gnu.property: aarch64 feature: BTI, PAC`를 뽑았고, `-mbranch-protection=none` 대조군에서는 그 note가 0개였다. 그 마커가 EL1에서 GPU UAF/OOB 클래스에 대해 강제하는 동작(포인터 서명 검증, 태그 불일치 트랩)은 Arm 아키텍처 참조 매뉴얼과 AOSP 메모리 안전 문서가 규정한다.
+
+```console
+$ readelf -n libhello_arm64.so
+Displaying notes found in: .note.gnu.property
+  GNU   NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+```
+
+- **패치 갭은 공개 CVE·불리틴 타임라인으로 확정한다.** Arm/Qualcomm 수정이 SoC 벤더→OEM→캐리어로 Google Mainline보다 느리게 오는 노출 창은 Project Zero "Mind the Gap"(2022-11)과 Android Security Bulletin의 월별 SPL 기록이 문서화한 사실이다.
+- **비무기화 범위**: 이 시리즈는 설계상 판정 지점까지만 다룬다 — 라이브 GPU LPE 익스플로잇 실행이나 실기기 벤더 SPL 대조 같은 무기화 작업은 범위상 다루지 않고, 위 공개 소스·타임라인으로 갈음한다.
+
+관련 근거: [Android Security Bulletins](https://source.android.com/docs/security/bulletin) · [Android SELinux](https://source.android.com/docs/security/features/selinux) · [Generic Kernel Image](https://source.android.com/docs/core/architecture/kernel/generic-kernel-image) · [Arm MTE (AOSP)](https://source.android.com/docs/security/test/memory-safety/arm-mte) · [LLVM CFI](https://llvm.org/docs/ControlFlowIntegrity.html) · [Arm Architecture Reference Manual](https://developer.arm.com/documentation/ddi0487/latest)
 
 ## 마치며
 

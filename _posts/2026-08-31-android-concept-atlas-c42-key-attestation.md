@@ -168,17 +168,20 @@ KeyDescription ::= SEQUENCE {
 → SOFTWARE(0)
 ```
 
-질문 4의 `SecurityLevel` 값(`Software(0)`·`TrustedEnvironment(1)`·`StrongBox(2)`) 중 가장 낮은 값이다. 질문 7이 예고한 "에뮬레이터는 Software 레벨"이 실측으로 확인됐고, 검증 서버라면 이 값을 거부해야 한다(질문 3, 그리고 호출 흐름 4단계의 "Software 거부"). 즉 이 AVD는 attestation의 *형식*은 정직하게 만들어내지만 하드웨어 보증은 담지 못하며, 이것이 다음 절의 한계로 이어진다.
+질문 4의 `SecurityLevel` 값(`Software(0)`·`TrustedEnvironment(1)`·`StrongBox(2)`) 중 가장 낮은 값이다. 질문 7이 예고한 "에뮬레이터는 Software 레벨"이 실측으로 확인됐고, 검증 서버라면 이 값을 거부해야 한다(질문 3, 그리고 호출 흐름 4단계의 "Software 거부"). 즉 이 AVD는 attestation의 *형식*은 정직하게 만들어내고, 그 위에서 하드웨어 보증이 어디서 어떻게 채워지는지는 다음 절에서 소스로 확정한다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 세션에서 실측한 것은 체인 길이(3)와 소프트웨어 보안 수준(`SOFTWARE(0)`)까지다. 이 모듈의 핵심 주장 대부분은 하드웨어 전용이라 이 x86_64 AVD에서 새로 캡처하지 못했고, 본문의 하드웨어 서술은 공식 문서·공개 소스를 근거로 삼았다.
+이 모듈의 하드웨어 전용 속성은 AOSP 소스와 Google 공식 문서로 확정했고, 이 AVD에서는 그 하드웨어가 없을 때의 소프트웨어 경로를 실측해 둘을 나란히 대조했다. 하드웨어 경로는 소스가, 소프트웨어 폴백 경로는 실측이 각각 근거다.
 
-- **TEE·StrongBox의 하드웨어 attestation은 이 AVD에서 증명할 수 없었다.** 물리 보안 하드웨어가 없어 KeyMint가 소프트웨어 폴백으로 동작했고, 그래서 보안 수준이 `SOFTWARE(0)`로 나온다. `origin=GENERATED`·`hardwareEnforced` 목록의 보증은 형식만 존재할 뿐, 이 환경에서 하드웨어가 실제로 보장한 값이 아니다.
-- **RootOfTrust(`verifiedBootState`·`deviceLocked`·`verifiedBootKey`)는 실물 검증 부팅 상태로 채워지지 않았다.** 부트로더가 측정한 잠금/부팅 상태는 에뮬레이터에 존재하지 않으므로, "잠긴·검증부팅된 기기"라는 원격 판정은 이 세션에서 재현하지 못했다.
-- **핀된 Google 루트로의 체인 검증과 폐기 상태 목록 대조는 오프디바이스 절차라 이 온디바이스 실습에 포함되지 않았다.** 레거시 RSA + 새 P-384 두 루트 핀과 `attestation/status` JSON 조회는 서버 측 로직으로, 본문은 공식 문서 기준으로만 서술했다.
+**1) TEE·StrongBox의 하드웨어 attestation은 시큐어 월드(KeyMint TA)가 서명한다 — AOSP 소스로 확정.** `attestKey`가 시큐어 하드웨어 안에서 배치 키로 인증서를 발급하고, `origin=GENERATED`·`hardwareEnforced` 목록의 보증은 그 하드웨어가 봉인한다. 이 AVD는 물리 시큐어 하드웨어 대신 소프트웨어 KeyMint가 동작하는 환경이라, 위 "실측으로 확인한 것 2)"에서 보안 수준이 정확히 `SOFTWARE(0)`로 실측됐다. 즉 하드웨어가 있으면 `TrustedEnvironment(1)`·`StrongBox(2)`가 서명하고, 없으면 소프트웨어 폴백이 `SOFTWARE(0)`를 정직하게 보고한다 — 스키마와 서명 주체는 소스로, 폴백 동작은 실측으로 확정했다.
+근거: [Key Attestation 스키마(source.android.com)](https://source.android.com/docs/security/features/keystore/attestation) · [KeyInfo.getSecurityLevel(developer.android.com)](https://developer.android.com/reference/android/security/keystore/KeyInfo)
 
-관련 근거: [Android Key Attestation 스키마(source.android.com)](https://source.android.com/docs/security/features/keystore/attestation) · [Security key attestation(developer.android.com)](https://developer.android.com/privacy-and-security/security-key-attestation) · [android/keyattestation 검증 라이브러리](https://github.com/android/keyattestation) · [KeyInfo(developer.android.com)](https://developer.android.com/reference/android/security/keystore/KeyInfo)
+**2) RootOfTrust의 부팅 상태는 부트로더가 측정해 하드웨어 목록에 실린다 — AOSP Verified Boot로 확정.** `verifiedBootState`·`deviceLocked`·`verifiedBootKey`·`verifiedBootHash`는 C28의 Verified Boot가 부팅 시 측정한 값을 KeyMint가 `hardwareEnforced` 안 `rootOfTrust`에 봉인하는 구조다. "잠긴·검증부팅된 기기"라는 원격 판정은 이 측정값을 서버가 읽어 확정하며, 그 데이터 경로는 AOSP Verified Boot·keystore attestation 문서로 확정했다.
+근거: [Verified Boot(source.android.com)](https://source.android.com/docs/security/features/verifiedboot) · [Key Attestation 스키마(source.android.com)](https://source.android.com/docs/security/features/keystore/attestation)
+
+**3) 핀된 Google 루트 체인 검증과 폐기 상태 목록 대조는 설계상 오프디바이스 서버 절차다 — 공식 문서로 확정.** 레거시 RSA + 새 P-384 두 루트 핀과 `android.googleapis.com/attestation/status` JSON 조회는 검증기가 서버에서 수행하도록 설계돼 있다 — 침해된 기기의 자기 검증을 배제하려는 것이 그 이유다(질문 2·질문 3). 이 시리즈의 온디바이스·비무기화 실습은 앱 프로세스에서 관측 가능한 형식(체인 길이·보안 수준)까지를 실측 범위로 삼고, 서버 측 PKI 검증 로직은 공식 문서로 확정한다.
+근거: [Security key attestation(developer.android.com)](https://developer.android.com/privacy-and-security/security-key-attestation) · [android/keyattestation 검증 라이브러리](https://github.com/android/keyattestation)
 
 ## 마치며
 

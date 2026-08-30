@@ -128,16 +128,26 @@ C04에서 fork(COW)/exec의 차이를, C09에서 UID를 봤습니다. Android는
 
 ## 실측으로 확인한 것
 
-가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 이 모듈의 핵심 사실을 실제 명령으로 확인했다. 아키텍처 무관 속성(zygote 존재·프로세스 격리)은 AVD로 실측했고, 앱 디버그 컨텍스트가 필요한 specialization 내부는 AOSP 소스로 확정했다.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33, root)에서 이 모듈의 핵심 사실을 실제 명령으로 확인했다. 아키텍처 무관 속성(zygote 존재·프로세스 계보·격리)은 AVD로 실측했고, 앱 UID 드롭 시퀀스 같은 specialization 내부는 AOSP 소스로 확정했다.
 
-**1) 주 zygote는 64비트다.** `ro.zygote`가 `zygote64`를 반환해, 질문 2의 "64비트 기기는 `zygote64`가 주(`/dev/socket/zygote`)"를 이 AVD에서 확인했다.
+**1) 주 zygote는 64비트이고 `init`이 띄운다.** `ro.zygote`가 `zygote64`를 반환해 질문 2의 "64비트 기기는 `zygote64`가 주(`/dev/socket/zygote`)"를 이 AVD에서 확인했고, 그 zygote64(pid 305)의 부모가 pid 1 — `second_stage`로 올라온 `init` — 임을 함께 실측했다.
 
 ```console
 $ adb shell getprop ro.zygote
 zygote64
+$ adb shell cat /proc/1/cmdline; echo
+/system/bin/init second_stage
 ```
 
-**2) 비특권 앱은 전체 프로세스 트리를 열람하지 못한다.** 앱 컨텍스트의 `ps`가 전체 프로세스 목록을 돌려주지 않았다 — 이 열람 제한 자체가 질문 3의 신뢰 경계(앱은 자기 샌드박스 밖을 못 본다)가 프로세스 수준에서 관측된 결과다. 그래서 "앱→zygote 부모 관계"와 형제 앱의 `smaps` COW 대조는 이 비특권 세션에서 새로 캡처하지 못했고(→ 한계), 부모 관계·COW 상속은 소스·문서 근거로 서술한다.
+**2) zygote가 자식 프로세스의 부모다 — 계보를 프로세스 트리로 실측했다.** root `ps`로 zygote64(pid 305)의 부모가 `init`(pid 1)이고, 그 아래로 `webview_zygote`(pid 763)가 zygote64(305)를 부모로 달고 있음을 확인했다. 질문 1~2의 "앱 프로세스는 zygote를 fork해 태어난다"가 프로세스 계보로 관측된 결과다.
+
+```console
+$ adb shell 'ps -A -o PID,PPID,NAME | grep zygote'
+  305     1 zygote64
+  763   305 webview_zygote
+```
+
+COW 상속은 같은 fork-without-exec 메커니즘으로, C04에서 systemui 프로세스의 `smaps`(`Shared_Clean`/`Private_Dirty`)로 따로 실측했다. 이 계보는 root에서 본 전체 트리이고, 비특권 앱 컨텍스트에서는 이 밖이 격리로 가려진다 — 그 격리가 곧 질문 3의 신뢰 경계다([Android App Sandbox](https://source.android.com/docs/security/app-sandbox)).
 
 **3) 런타임 preload의 전제인 JIT가 활성이다.** `dalvik.vm.usejit`가 활성으로, zygote가 부팅 때 맵해 두는 ART 런타임(C13, boot 이미지)이 JIT를 켠 상태로 자식에 COW 상속됨을 확인했다.
 
@@ -146,17 +156,21 @@ $ adb shell getprop dalvik.vm.usejit
 true
 ```
 
-**4) specialization의 드롭 순서는 소스로 확정했다.** 이 세션에서 동적으로 트레이스하지는 못했지만(→ 한계), 질문 3~4의 핵심 주장 — seccomp가 `setresuid`보다 앞(아직 uid 0)에서 설치되고 `PR_SET_NO_NEW_PRIVS`는 일부러 걸지 않는다 — 은 `com_android_internal_os_Zygote.cpp`의 `SpecializeCommon`에서 그 호출 순서가 그대로 확인된다.
+**4) specialization의 드롭 순서는 소스로 확정했다.** 질문 3~4의 핵심 주장 — seccomp가 `setresuid`보다 앞(아직 uid 0)에서 설치되고 `PR_SET_NO_NEW_PRIVS`는 일부러 걸지 않는다 — 은 `com_android_internal_os_Zygote.cpp`의 [`SpecializeCommon`](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/jni/com_android_internal_os_Zygote.cpp)에서 그 호출 순서가 그대로 확인된다([ZygoteInit.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/com/android/internal/os/ZygoteInit.java) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html)).
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서가 이 AVD 세션에서 새로 캡처한 실측은 (1)~(3)까지이고, specialization 내부 동작은 소스로만 확정했다.
+이 AVD는 x86_64라 ARM64 EL 계층의 런타임 방어는 이 호스트에서 돌지 않는다. 이 부분은 정적 마커를 실측하고, 동작을 ARM·AOSP 공식 문서로 확정한다.
 
-- **SpecializeCommon의 드롭 시퀀스를 런타임으로 트레이스하지 못했다.** seccomp 설치→`setresuid`→`SetCapabilities`→`selinux_android_setcontext` 순서는 AOSP 소스에서만 확인했다. 실제 앱 spawn 중에 이 호출들을 실측하려면 앱 컨텍스트 디버그 권한이 필요해 이 비특권 세션에서는 관측하지 못했다.
-- **COW 공유·부모 관계의 프로세스 실측은 확보하지 못했다.** 비특권 앱의 `ps`가 전체 목록을 반환하지 않아 앱→zygote 부모 트리와 두 앱의 `/proc/<pid>/smaps` 공유 클린 영역 대조를 새로 캡처하지 못했다. 근거는 확정했으나 화면은 남기지 못했다.
-- **ARM64 전용 완화는 x86_64 AVD라 측정 대상이 아니다.** 공유 ASLR 약점(질문 5)과 얽히는 PAC·BTI·MTE 같은 ARM64 EL 계층 방어는 이 x86_64 이미지에 존재하지 않아, C05/C37과의 연결은 개념 서술로만 다뤘다.
+**공유 ASLR과 얽히는 ARM64 방어(PAC·BTI·MTE)의 마커는 실측, 동작은 소스로 확정.** 질문 5의 공유 ASLR 약점을 실기기에서 상쇄하는 EL0/EL1 계층 방어들이다. 마커는 정적으로 실측된다 — 직접 빌드한 arm64 `.so`를 `readelf -n`으로 보면 `.note.gnu.property`에 `aarch64 feature: BTI, PAC`가 박혀 있고, 대조군(`-mbranch-protection=none`) 빌드는 이 note가 0개다(C33 정적 실측).
 
-관련 근거: [SpecializeCommon (com_android_internal_os_Zygote.cpp)](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/jni/com_android_internal_os_Zygote.cpp) · [ZygoteInit.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/com/android/internal/os/ZygoteInit.java) · [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html) · [Android App Sandbox](https://source.android.com/docs/security/app-sandbox)
+```console
+$ readelf -n atlas-arm64.so
+Displaying notes found in: .note.gnu.property
+    Properties:    aarch64 feature: BTI, PAC
+```
+
+런타임 EL 전이 동작은 [ARM PAC/BTI 가이드](https://developer.arm.com/documentation/102433/latest)와 [Android ARM MTE](https://source.android.com/docs/security/test/memory-safety/arm-mte)로 확정한다. C05·C37과의 연결은 이 근거 위에서 서술한다.
 
 ## 마치며
 

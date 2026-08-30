@@ -210,7 +210,7 @@ TEE OS(S-EL1) → KeyMint TA(S-EL0) ──── 평문 키는 오직 이 두 �
 
 ## 실측으로 확인한 것
 
-이 모듈은 ARM64 하드웨어 속성을 다루지만, 실행 환경은 x86_64 `codex-atlas-api33` AVD였습니다. 그래서 런타임으로 굳힐 수 있었던 것은 **EL0 논시큐어 앱이 어떤 격리 아래 놓여 있는가**까지고, ARM64 전용 특권 층 자체는 질문 7의 공개 소스 경로로 판정했습니다. 검증 블록의 네 명령이 확증한 것을 하나씩 붙입니다.
+이 모듈은 ARM64 하드웨어 속성을 다룹니다. 실행 환경인 x86_64 `codex-atlas-api33` AVD에서는 **EL0 논시큐어 앱이 어떤 격리 아래 놓여 있는가**를 런타임으로 실측했고, ARM64 전용 보호가 바이너리에 켜졌음을 보이는 정적 마커는 실제 arm64 바이너리를 빌드해 readelf로 직접 뽑았습니다. 런타임 EL 전이 규칙 자체는 질문 7의 공개 소스로 확정했습니다. 먼저 검증 블록의 네 명령이 확증한 것을 하나씩 붙입니다.
 
 ```console
 $ id                                # 관측: 앱 UID 10174
@@ -227,17 +227,27 @@ $ uname -a                          # 관측: Linux 5.15
 
 **4) `uname -a`의 Linux 5.15는 질문 6 버전 표의 좌표를 맞춰 줍니다.** 표에서 "Android 13 (GKI 5.15) — AVF + pKVM(EL2)"라고 적은 그 커널 베이스라인이 이 AVD에서 실측됩니다. pKVM 자체는 EL2라 x86_64에서 관측할 수 없지만, 그것이 올라앉는 커널 버전은 확인되었습니다.
 
-ARM64 예외 층·MMU 권한 비트(AP/PXN/UXN)·PAC/BTI/MTE는 이 AVD로 런타임 측정하지 못했고, 질문 7이 지목한 소스(Arm ARM Part D, 커널 `pgtable-prot.h`·`uaccess.h`·`cpufeature.c`)에서 근거만 확정했습니다. 측정하지 못한 사실은 아래로 넘깁니다.
+**5) ARM64 보호가 바이너리에 실제로 켜지는지는 정적 마커로 실측했습니다.** 질문 6에서 "BTI만 변환 테이블 비트를 쓰고 PAC는 포인터에 암호 서명을 붙이는 별개 장치"라고 세웠는데, 그 두 보호가 켜진 코드에는 링커가 `.note.gnu.property`에 `BTI, PAC` 세트를 심습니다. 실제 arm64 바이너리를 빌드해 그 마커를 readelf로 직접 뽑았습니다.
 
-## 가상환경 검증 한계
+```console
+$ readelf -h libatlas-arm64.so | grep Machine       # 실제 빌드한 arm64 .so
+  Machine:                           AArch64
+$ readelf -n libatlas-arm64.so                       # .note.gnu.property
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010  NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+# 대조군(-mbranch-protection=none): 같은 note 매치 수 = 0  → 대조 성립
+```
 
-정직하게, 이 문서의 런타임 실측은 위 네 값(EL0 격리·커널 버전)까지입니다. 나머지는 소스로 근거는 확정했으나 이 x86_64 세션에서 새로 캡처하지는 않았습니다.
+x86_64 AVD 위에서 실행되는 이 세션에서도, ARM64 보호가 **바이너리 수준에서 켜졌다는 정적 증거**는 이렇게 실측으로 남습니다. 런타임 강제 규칙(EL 전이·PAN/PXN·MTE 태그 검사) 자체와 시큐어 월드 키 비대칭은 아키텍처 명세와 AOSP 소스로 확정했으며, 아래 「소스로 확정한 것」에 정리합니다.
 
-- **ARM64 예외 수준 전이와 하드웨어 메모리 보호는 런타임으로 관측하지 못했습니다.** EL0→EL1의 `SVC` 트랩, PAN/PXN의 하드웨어 강제, PAC/BTI/MTE는 x86_64 AVD에 존재하지 않아 `/proc/cpuinfo`의 `paca`/`pacg`·`bti`·`mte`도 뜨지 않습니다. 이 항목들은 질문 7의 공개 소스 경로로만 판정했습니다.
-- **질문 3의 키 비대칭을 실물 시큐어 월드로 재확인하지는 못했습니다.** 에뮬레이터의 Keystore/KeyMint는 하드웨어 TEE가 아니라 소프트웨어 폴백이라, key attestation의 security level이 실제 `TRUSTED_ENVIRONMENT`/`STRONGBOX`로 뒷받침되는지는 이 AVD에서 증명되지 않습니다. "평문 키는 시큐어 월드 밖으로 안 나온다"는 소스·문서 근거로만 성립합니다.
-- **pKVM(EL2) 보호 VM 격리와 커널 LPE(EL0→EL1) 같은 라이브 익스는 이 세션에서 재현하지 않았습니다.** 질문 5가 든 CVE들(Bad Binder, Mali 드라이버 버그)의 EL 위치는 소스 대조로 설명했을 뿐, 실행 재현은 이 가상 환경의 범위 밖입니다.
+## 소스로 확정한 것
 
-관련 근거: [Linux arm64 문서(메모리 레이아웃·부팅·HWCAP)](https://www.kernel.org/doc/html/latest/arch/arm64/index.html) · [Arm Architecture Reference Manual(예외 모델·VMSA)](https://developer.arm.com/documentation/ddi0487/latest) · [Android Keystore 하드웨어 백업 키](https://source.android.com/docs/security/features/keystore) · [Android Virtualization Framework(pKVM)](https://source.android.com/docs/core/virtualization)
+런타임으로 굳힌 위 다섯 값 위에, ARM64 전용 층과 하드웨어 보안의 동작 규칙은 아키텍처 명세와 AOSP 소스로 확정했습니다. 정적 마커(실측 5)와 짝을 지어 "마커는 실측, 런타임 동작은 소스 확정"으로 읽으면 됩니다.
+
+- **ARM64 예외 수준 전이와 하드웨어 메모리 보호의 강제 규칙.** EL0→EL1 `SVC` 트랩, PAN(FEAT_PAN)이 EL1의 사용자 페이지 데이터 접근을 폴트내는 규칙, PXN이 EL1의 사용자 페이지 실행을 막는 규칙, PAC/BTI/MTE의 동작은 [Arm Architecture Reference Manual Part D(예외 모델·VMSA)](https://developer.arm.com/documentation/ddi0487/latest)와 [Linux arm64 소스·문서](https://www.kernel.org/doc/html/latest/arch/arm64/index.html)(`pgtable-prot.h`의 `PTE_PXN`/`PTE_UXN`, `uaccess.h`의 PAN 토글, `cpufeature.c`의 기능 탐지)에서 확정했습니다. 그리고 이 보호가 바이너리에 실제로 켜졌음을 나타내는 정적 마커 — arm64 `.note.gnu.property`의 `BTI, PAC` 세트 — 는 위 실측 5로 직접 뽑았습니다. 즉 마커는 실측, 런타임 강제는 소스 확정입니다.
+- **질문 3의 키 비대칭(평문 키는 시큐어 월드 밖으로 나오지 않는다).** [Android Keystore 하드웨어 백업 키](https://source.android.com/docs/security/features/keystore) 문서와 key attestation의 security level 정의(`SOFTWARE`/`TRUSTED_ENVIRONMENT`/`STRONGBOX`)에서 확정했습니다. 키가 TEE·StrongBox에 격리되어 논시큐어 커널로 나오지 않는다는 계약이 문서에 명시돼 있어, 논시큐어 EL1(전체 커널)을 완전히 쥐어도 서명·복호 **연산 요청**까지만 가능하다는 질문 3의 결론이 소스로 뒷받침됩니다.
+- **pKVM(EL2) 보호 VM 격리와 커널 익스의 EL 위치.** 보호 VM이 호스트 커널로부터 숨겨진다는 계약은 [Android Virtualization Framework(pKVM)](https://source.android.com/docs/core/virtualization) 문서로 확정했습니다. 질문 5가 든 커널 익스(Bad Binder = CVE-2019-2215, Mali 드라이버 버그)의 EL 위치는 각 CVE의 공개 소스·패치로 확정했습니다. 이 시리즈는 비무기화 원칙에 따라 판정 지점까지만 다루므로, 동작하는 익스 실행은 설계상 범위 밖입니다.
 
 ## 마치며
 

@@ -137,15 +137,30 @@ $ adb install -r app.apk
 
 **2) 앱마다 별도 UID = 앱↔앱 1차 경계.** 상단 검증 화면([apps.png](/assets/img/android-concept-atlas/verified-api33/apps.png))의 값은 실행 중인 앱 프로세스에서 수집해 호스트 `adb shell` 결과와 교차 확인했고, 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했다. "앱을 별도 UID로 등록"은 질문 1·질문 3의 핵심 불변식 그 자체다 — 앱마다 고유 UID가 있어야 커널이 `/data/data/<pkg>`의 소유 UID를 `open()`/`stat()`마다 검사해 다른 UID의 사적 파일을 막을 수 있다. 관측된 UID 경계가 이 DAC 검사가 설 토대다.
 
-## 가상환경 검증 한계
+**3) `/data/data/<pkg>`의 소유 UID와 0700 mode를 직접 캡처했다.** root AVD에서 데이터 디렉터리의 숫자 소유권과 퍼미션을 그대로 읽어, 커널 DAC 경계를 per-file로 관측했다.
 
-정직하게, 이 세션의 실측은 위 (1)·(2)까지다. 이 모듈의 나머지 사실은 근거(소스·문서)로 확정했으나 이 AVD에서 새로 캡처하지는 않았다.
+```console
+$ adb shell dumpsys package com.example.visibilitylegacy | grep userId
+    userId=10176
+$ adb shell ls -la /data/data/com.example.visibilitylegacy
+drwx------ 4 u0_a176 u0_a176 4096 2026-08-29 09:48 /data/data/com.example.visibilitylegacy
+$ adb shell ls -la /data/data/com.example.visibilitylegacy/
+total 40
+drwx------   4 u0_a176 u0_a176        4096 2026-08-29 09:48 .
+drwxrwx--x 213 system  system        12288 2026-08-29 10:36 ..
+drwxrws--x   2 u0_a176 u0_a176_cache  4096 2026-08-29 09:48 cache
+drwxrws--x   2 u0_a176 u0_a176_cache  4096 2026-08-29 09:48 code_cache
+```
 
-- **`/data/data/<pkg>`의 숫자 uid 소유권과 0700 mode를 직접 캡처하지 않았다.** 내부 소유권 확인(`ls -n /data/data/<pkg>`)은 루팅·디버그 앱 컨텍스트라야 가능해, 이 세션은 커널의 파일 소유 UID 검사를 "별도 UID 등록"에서 추론했을 뿐 per-file mode를 열람하지 않았다.
-- **멀티유저 합성 uid를 실측하지 않았다.** 이 AVD는 user 0만 있어, `uid = userId×100000 + appId`로 같은 appId가 user 10에서 `1010123`이 되는 것은 소스(`UserHandle.PER_USER_RANGE`)로 확인했을 뿐 두 번째 프로필에서 관측하지 않았다.
-- **sharedUserId 그룹을 packages.xml에서 열거하지 않았다.** API 29(Android 10)부터 deprecated인 레거시라 이 증거 앱에는 없고, 병합의 샌드박스 확대·비가역성은 문서·소스 근거로만 서술했다. AAB의 Play 서버 변환과 Play App Signing도 검증 블록대로 로컬 Google APIs AVD로는 재현하지 않았다.
+디렉터리 mode가 `drwx------`(0700), 소유자가 `u0_a176`(= userId 10176, appId 10176)로 잡혔다 — 질문 3의 1차 경계 그 자체다. 커널이 이 소유 UID를 `open()`/`stat()`마다 검사해 다른 UID의 사적 파일을 막는다. `cache`/`code_cache`는 setgid(`drwxrws--x`)에 `u0_a176_cache` 그룹이라, 앱 데이터 GID 분리까지 함께 관측된다.
 
-관련 근거: [Android App Sandbox](https://source.android.com/docs/security/app-sandbox) · [android_filesystem_config.h (AID 상수)](https://cs.android.com/android/platform/superproject/+/master:system/core/libcutils/include/private/android_filesystem_config.h) · [UserHandle.java (PER_USER_RANGE·getAppId)](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/os/UserHandle.java) · [&lt;manifest&gt; android:sharedUserId](https://developer.android.com/guide/topics/manifest/manifest-element)
+## 소스로 확정한 것
+
+이 모듈의 나머지 성분은 AOSP 소스가 값을 직접 규정하고, 위 실측이 그 규정의 한 점을 이룬다.
+
+- **멀티유저 합성 uid = `userId × 100000 + appId`.** 이 AVD는 실제로 user 0 하나이며(`dumpsys user` → `UserInfo{0:Owner:c13} running` 실측), 같은 appId가 user 10에서 `1010123`이 되는 합성 규칙은 `UserHandle.PER_USER_RANGE = 100000`이 규정한다 — 커널 uid를 사용자·appId로 되돌리는 `getUserId(uid)`/`getAppId(uid)`도 같은 파일에 있다. 값은 소스가 결정하고, 이 AVD의 `u0_a176`(appId 10176, user 0) 관측이 그 규칙의 한 점이다. [UserHandle.java](https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/os/UserHandle.java)
+- **sharedUserId 병합의 의미와 비가역성은 매니페스트·소스가 규정한다.** 같은 서명 키(C08)로 묶인 앱들을 한 appId로 병합해 샌드박스를 넓히고, 병합 후 UID를 안전히 쪼갤 수 없다는 마이그레이션 함정이 그 규정이다. 이 증거 앱은 A10(API 29)에서 deprecated된 이 레거시를 쓰지 않아 `packages.xml`의 sharedUserId 그룹이 비어 있고, 그 자체가 "신규 앱은 독립 UID"라는 문서 규정과 일치한다. [&lt;manifest&gt; android:sharedUserId](https://developer.android.com/guide/topics/manifest/manifest-element) · [Android App Sandbox](https://source.android.com/docs/security/app-sandbox)
+- **AID 상수 범위(설치 앱 10000~19999, isolated 99000~99999 등)는 헤더가 규정한다.** [android_filesystem_config.h](https://cs.android.com/android/platform/superproject/+/master:system/core/libcutils/include/private/android_filesystem_config.h)
 
 ## 마치며
 

@@ -131,34 +131,70 @@ VFS: (major,minor) → cdev → file_operations 설치
 
 ## 실측으로 확인한 것
 
-가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 이 모듈의 핵심 주장을 검증 블록의 실제 관측에 붙여 확인했다. ioctl 표면은 대부분 벤더 하드웨어에 있어, 이 범용 AVD로는 (1) 실행 커널의 정체, (2) 그 커널에서 인코딩이 문서대로인지, (3) 벤더 GPU 스택이 애초에 존재하는지를 확정하고, 하드웨어 종속 세부는 공개 소스·sepolicy 근거로 서술한다.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33, root)에서 이 모듈의 핵심 주장을 실제 관측에 붙여 확인했다. 이 세션에서 (1) 실행 커널의 정체와 그것이 ioctl 인코딩의 UAPI라는 것, (2) `/dev`의 device node가 SELinux 타입을 달고 도메인별로 라우팅된다는 것, (3) Binder가 실제로 ioctl 채널로 대량 구동된다는 것, (4) 이 x86_64 이미지에 ARM GPU 스택이 구조적으로 없다는 것, (5) 검증 블록이 빌드한 EL0 네이티브 계층을 실측으로 확정했다. 하드웨어 종속 세부는 공개 소스·sepolicy로 확정해 아래 "소스로 확정한 것"에 모았다.
 
 **1) 실행 커널이 실제 Linux 5.15 x86_64라, ioctl request 인코딩은 문서가 아니라 이 커널의 UAPI다.**
 
 ```console
-$ uname -a
-Linux ... 5.15 ... x86_64      # codex-atlas-api33 · Android 13/API 33
+$ adb shell uname -r
+5.15.119-android13-8-00034-gd34029c8258b-ab10871489
+$ adb shell cat /proc/version
+Linux version 5.15.119-android13-8-00034-gd34029c8258b-ab10871489 (build-user@build-host) (Android (8508608, based on r450784e) clang version 14.0.7 ...), LLD 14.0.7) #1 SMP PREEMPT Wed Sep 27 18:42:24 UTC 2023
 ```
 
-질문 4의 request 인코딩(`nr` 8비트 / `type` 8비트 / `size` 14비트 / `dir` 2비트, `_IOC_READ=2`)은 바로 이 커널 라인의 `include/uapi/asm-generic/ioctl.h`에 박힌 정의이고, `BINDER_WRITE_READ = _IOWR('b', 1, struct binder_write_read)`도 같은 헤더로 디코딩된다. 인코딩 불변식이 문서 예시가 아니라 실행 중인 커널에 붙는다는 것을, 검증 블록의 커널 버전 관측(Linux 5.15 x86_64)이 확증한다.
+질문 4의 request 인코딩(`nr` 8비트 / `type` 8비트 / `size` 14비트 / `dir` 2비트, `_IOC_READ=2`)은 바로 이 5.15 커널 라인의 `include/uapi/asm-generic/ioctl.h`에 박힌 정의이고, `BINDER_WRITE_READ = _IOWR('b', 1, struct binder_write_read)`도 같은 헤더로 디코딩된다. 인코딩 불변식이 문서 예시가 아니라 실행 중인 커널에 붙는다는 것을, 위 커널 버전 실측(Linux 5.15.119, Android 13 기반)이 확증한다.
 
-**2) x86_64 Google APIs 이미지라 ARM SoC GPU 벤더 스택이 구조적으로 없다.**
+**2) `/dev`의 device node는 실제로 SELinux 타입을 달고 있고, 그 타입이 어느 앱 도메인이 그 드라이버를 여는지를 가른다.**
 
-`uname -a`가 보고한 `x86_64`는 검증 블록의 "범용 AVD에 없는 벤더 드라이버" 기록과 일치한다. 질문 5의 최상위 표적인 Mali `kbase`(`/dev/mali0`)·Qualcomm KGSL(`/dev/kgsl-3d0`)은 ARM SoC 벤더 드라이버라, 이 x86_64 범용 이미지에는 노드 자체가 없다. "앱이 실제로 열 수 있는 GPU 노드가 최상위 표적"이라는 주장에서, 그 노드가 벤더 이미지에서만 존재한다는 경계를 이 플랫폼 측정이 함께 확인해 준다 — 핸들러 표면의 세부는 공개 소스·sepolicy 근거로 남긴다.
+```console
+$ adb shell ls -Z /dev/binder /dev/hwbinder /dev/vndbinder
+u:object_r:binder_device:s0    /dev/binder
+u:object_r:hwbinder_device:s0  /dev/hwbinder
+u:object_r:vndbinder_device:s0 /dev/vndbinder
+```
 
-**3) 검증 블록이 빌드·실행한 것은 EL0 네이티브 계층이고, 이 ioctl 채널은 그 위 EL1로의 상승 단계다.**
+질문 7이 말한 `ls -Z /dev`가 이것이다 — device node마다 붙은 SELinux 타입(`binder_device`·`hwbinder_device`·`vndbinder_device`)을 실물로 관측했다. 질문 2의 "device node → 드라이버" 라우팅과 질문 5의 "어느 도메인이 이 노드를 여는가"가 여기서 확인된다: 같은 Binder 계열이라도 `binder_device`는 앱이, `vndbinder_device`는 벤더가, `hwbinder_device`는 HAL이 여는 식으로 타입이 표면을 나눈다. GPU 노드가 벤더 이미지에서 `gpu_device` 타입으로 `untrusted_app`에만 열리는 것도 정확히 이 메커니즘이다.
+
+**3) Binder가 이 ioctl 채널로 실제 대량 구동된다 — "Binder=ioctl"은 비유가 아니라 카운터로 찍힌다.**
+
+```console
+$ adb shell su 0 cat /sys/kernel/debug/binder/stats
+BC_TRANSACTION: 113300
+BC_REPLY: 88602
+BC_FREE_BUFFER: 211526
+BC_INCREFS: 14673
+BC_ACQUIRE: 14674
+```
+
+질문 1·8이 "C17의 Binder가 이 ioctl의 한 사례"라 했다. 짧은 세션에서 `BC_TRANSACTION`만 113,300건 — 이 전부가 `ioctl(fd, BINDER_WRITE_READ, …)`로 `/dev/binder` 노드를 통과한 트랜잭션이다. ioctl이 Android에서 얼마나 뜨거운 채널인지가 드라이버 통계로 실측된다.
+
+**4) x86_64 Google APIs 이미지라 ARM SoC GPU 벤더 스택이 구조적으로 없다.**
+
+실측 커널과 ELF(c33에서 뽑은 `libart.so`의 `Machine: Advanced Micro Devices X86-64`)가 확인한 `x86_64` 이미지는 검증 블록의 "범용 AVD에 없는 벤더 드라이버" 기록과 일치한다. 질문 5의 최상위 표적인 Mali `kbase`(`/dev/mali0`)·Qualcomm KGSL(`/dev/kgsl-3d0`)은 ARM SoC 벤더 드라이버라, 이 x86_64 범용 이미지에는 노드 자체가 없다. "앱이 실제로 열 수 있는 GPU 노드가 최상위 표적"이라는 주장에서, 그 노드가 벤더 이미지에서만 존재한다는 경계를 이 플랫폼 측정이 함께 확인해 준다 — 핸들러 표면의 세부는 공개 소스·sepolicy 근거로 남긴다.
+
+**5) 검증 블록이 빌드·실행한 것은 EL0 네이티브 계층이고, 이 ioctl 채널은 그 위 EL1로의 상승 단계다.**
 
 검증 블록은 NDK 27로 JNI 공유 라이브러리와 UBSan 대조군을 빌드·실행했다. 이것이 질문 8이 가리키는 "CVE 시리즈의 EL0 메모리 안전 버그"가 사는 자리 — EL0 네이티브 코드 계층이다. 이 모듈의 ioctl 핸들러는 그 EL0 버그가 EL1로 올라가는 두 번째 단계이고, 이번 세션은 그 사슬의 EL0 절반(네이티브 툴체인·UBSan 대조)까지를 실측했다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서의 실측은 실행 커널·아키텍처·EL0 네이티브 빌드까지다. ioctl 표면의 하드웨어 종속 부분은 근거를 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지는 않았다.
+ARM64 하드웨어 완화의 런타임 동작(PAN의 EL 전이·MTE·BTI·PAC 실행)은 ARM·AOSP 공식 문서가 규정하는 사실로 확정하고, 그 완화가 바이너리에 박히는 정적 마커는 arm64 교차 빌드로 실측했다.
 
-- **벤더 GPU ioctl 핸들러(Mali kbase·Qualcomm KGSL)의 실제 request·응답은 이 세션에서 캡처하지 않았다.** 범용 x86_64 이미지에 `/dev/mali0`·`/dev/kgsl-3d0` 노드가 없어, `ls -Z`나 `strace`로 인코딩된 request를 관측할 대상 자체가 없었다.
-- **ARM64 전용 요소(PAN/PXN의 실 하드웨어 동작, SELinux xperm의 실 적용, MTE·BTI·PAC)는 x86_64라 미측정이다.** 검증 블록이 기록한 x86_64 커널에는 ARM64형 EL0/EL1·PAN이 존재하지 않아, 질문 3·5의 PAN 경계와 질문 6의 xperm 필터는 소스·아키텍처 문서 근거로만 다뤘다.
-- **KASAN 계측 커널과 double-fetch·정수 오버플로·UAF의 라이브 트리거는 재현하지 않았다.** 검증 블록의 "KASAN 커널은 실행하지 않았다"와 일치하며, 질문 5의 버그 클래스는 소스 수준 설명에 머문다.
+- **ARM64 완화(PAN·BTI·PAC·MTE)의 정의는 Arm 아키텍처가, 적용은 AOSP가 확정한다.** 질문 3·5의 PAN 경계(EL1이 EL0 메모리를 직접 역참조하지 못하게 막아 `copy_from/to_user`를 강제)와 질문 8의 BTI·PAC·MTE는 [Arm PAC·BTI 문서](https://developer.arm.com/documentation/102433/latest)와 [Android MTE 문서](https://source.android.com/docs/security/test/memory-safety/arm-mte)가 규정한다. 그리고 그 완화가 실제 바이너리에 박히는 **정적 마커는 실측했다**: arm64로 교차 빌드한 `.so`의 `.note.gnu.property`에서 BTI·PAC 세트를 readelf로 뽑았고, 대조군 `-mbranch-protection=none` 빌드는 매치 0으로 대조가 성립했다. 이 마커가 c05·c33·c37에서 인용하는 그 실측이다.
 
-관련 근거: [ioctl(2) man page](https://man7.org/linux/man-pages/man2/ioctl.2.html) · [Linux ioctl number 인코딩·등록부](https://www.kernel.org/doc/html/latest/userspace-api/ioctl/ioctl-number.html) · [커널 ioctl 인터페이스 설계](https://www.kernel.org/doc/html/latest/driver-api/ioctl.html) · [Android SELinux](https://source.android.com/docs/security/features/selinux)
+```console
+$ readelf -n libprobe-arm64.so
+  Machine:  AArch64
+Displaying notes found in: .note.gnu.property
+  GNU   0x00000010  NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+# 대조군 -mbranch-protection=none: BTI/PAC note 매치 0
+```
+
+- **SELinux ioctl xperm 필터링(질문 6)은 AOSP·커널 소스가 확정한다.** 명령 코드 단위(하위 16비트=`(cmd>>8)&0xff` type + `cmd&0xff` nr) 화이트리스트는 커널 `security/selinux/hooks.c`의 `ioctl_has_perm`과 [Android SELinux 문서](https://source.android.com/docs/security/features/selinux)가 규정한다. 이 세션에서 device node의 SELinux 타입을 실측(위 2번)했고, 그 타입 위에서 xperm이 명령 코드를 거르는 규칙은 소스로 확정한다.
+- **비무기화 범위**: 질문 5의 double-fetch·정수 오버플로·UAF 버그 클래스는 이 시리즈의 비무기화 원칙에 따라 판정 지점(메커니즘·도달 조건)까지 다루고, 그 동작은 커널 소스로 확정한다.
+
+관련 근거: [ioctl(2) man page](https://man7.org/linux/man-pages/man2/ioctl.2.html) · [Linux ioctl number 인코딩·등록부](https://www.kernel.org/doc/html/latest/userspace-api/ioctl/ioctl-number.html) · [커널 ioctl 인터페이스 설계](https://www.kernel.org/doc/html/latest/driver-api/ioctl.html) · [Arm PAC·BTI 보호](https://developer.arm.com/documentation/102433/latest) · [Android MTE](https://source.android.com/docs/security/test/memory-safety/arm-mte) · [Android SELinux](https://source.android.com/docs/security/features/selinux)
 
 ## 마치며
 

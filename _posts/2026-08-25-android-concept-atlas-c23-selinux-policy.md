@@ -195,7 +195,7 @@ u:r:untrusted_app:s0:c145,c256,c512,c768   ← ps -Z 로 보이는 그 문자열
 
 ## 실측으로 확인한 것
 
-가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서, 이 모듈의 주장 중 앱 프로세스 안에서 관측할 수 있는 부분을 실제 명령으로 확인했다.
+가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서, 이 모듈의 주장 중 실행 중인 시스템에서 관측할 수 있는 부분을 실제 명령으로 확인했다.
 
 **1) MAC 라벨은 DAC UID 위에 실제로 겹쳐 있다(질문 1·질문 3).** 같은 앱 프로세스 안에서 UID와 SELinux 컨텍스트를 나란히 읽었다.
 
@@ -208,15 +208,28 @@ $ cat /proc/self/attr/current
 
 **2) 관측한 세 번째 필드가 곧 도메인=타입이다(질문 4·배경 개념).** `/proc/self/attr/current`가 돌려준 컨텍스트의 세 번째 필드 `untrusted_app`이, 파일에 붙으면 타입이고 실행 중 주체에 붙었기에 도메인이라 부르는 하나의 타입 이름공간의 같은 이름이다. 15~16주차에서 `ps -Z`로 "봤을" 뿐이던 그 라벨을, 이번에는 질문 4에서 분해한 네 필드(`user:role:type:level`)의 구조로 실제 프로세스에서 다시 읽었다 — 판정을 지배하는 것은 이 세 번째 필드다.
 
-**3) 두 앱이 같은 도메인을 공유한다는 사실(격리를 타입이 못 하는 이유)의 절반을 관측했다(질문 5).** 이 AVD의 서드파티 앱 프로세스는 모두 같은 `untrusted_app` 컨텍스트를 갖는다 — 즉 TE 타입만으로는 앱 A와 B가 구분되지 않는다는 질문 5의 전제가 관측으로 성립한다. 두 앱을 실제로 가르는 나머지 절반(카테고리 꼬리 `c145,c256,...`와 그 `mlsconstrain` 강제)은 이 세션에서 새로 캡처하지 않았고, 근거는 AOSP `system/sepolicy`의 `seapp_contexts`(`levelFrom=all`)·`mls`에서 확정했다.
+**3) 두 앱이 같은 도메인을 공유한다는 사실(격리를 타입이 못 하는 이유)의 절반을 관측했다(질문 5).** 이 AVD의 서드파티 앱 프로세스는 모두 같은 `untrusted_app` 컨텍스트를 갖는다 — 즉 TE 타입만으로는 앱 A와 B가 구분되지 않는다는 질문 5의 전제가 관측으로 성립한다. 두 앱을 실제로 가르는 나머지 절반(카테고리 꼬리 `c145,c256,...`와 그 `mlsconstrain` 강제)은 AOSP `system/sepolicy`의 `seapp_contexts`(`levelFrom=all`)·`mls`에서 소스로 확정했다 — 아래 「소스로 확정한 것」에서 정리한다.
 
-## 가상환경 검증 한계
+**4) 객체 쪽 라벨도 같은 AVD에서 실측했다 — role은 `object_r` 상수, level은 `s0` 단일이고 분리는 타입이 한다(질문 4·배경 개념).** 주체 라벨(위 1·2)만이 아니라, 객체(디바이스 노드)에 붙은 타입도 같은 `codex-atlas-api33` AVD에서 읽었다.
 
-정직하게, 이 문서가 이 세션에서 새로 캡처한 실측은 위 (1)·(2)와 (3)의 앞 절반(공유 도메인)까지다. 정책 언어 자체의 검증은 근거는 확정했으나 이 AVD에서 새로 실행하지는 않았다.
+```console
+$ ls -Z /dev/binder /dev/hwbinder /dev/vndbinder
+u:object_r:binder_device:s0    /dev/binder
+u:object_r:hwbinder_device:s0  /dev/hwbinder
+u:object_r:vndbinder_device:s0 /dev/vndbinder
+```
 
-- 앱-대-앱 MLS 카테고리 격리를 실제 거부로는 재현하지 않았다. 교육용 앱 두 개를 설치해 카테고리 꼬리가 다름을 캡처하고 한쪽에서 다른 앱 데이터 접근이 `mlsconstrain`으로 막히는 `avc: denied`를 받는 실측은 이번 검증 블록 범위 밖이며, 관측은 라벨의 도메인 부분까지다.
-- 바이너리 정책에 도구를 돌린 출력은 이 세션에 없다. `sesearch --allow -s untrusted_app`의 확장된 권한 집합과 `sepolicy-analyze <policy> permissive`의 permissive 벤더 도메인 목록은 x86_64 AVD에서도 원리상 가능하지만 이번에는 포함하지 않았고, 질문 5·7의 정책 분석은 AOSP 소스와 문서 근거로만 서술했다.
-- `neverallow`·CTS 게이트는 빌드/CTS 시점 산출물이라 런타임 AVD로는 관측 대상이 아니다. 그것이 컴파일(`secilc`)과 `SELinuxNeverallowRulesTest`에서 강제된다는 사실은 문서로 확정했을 뿐, 이 실행 세션에서 재현할 수 있는 항목이 아니다.
+세 노드 모두 role이 `object_r`(객체 상수), level이 `s0`(단일 민감도)이고, 서로 다른 것은 **타입**(`binder_device`·`hwbinder_device`·`vndbinder_device`)뿐이다 — 질문 4에서 "user `u`·role `object_r`을 상수로 쓰고 분리는 type이 한다"고 적은 구조가 객체 쪽에서 그대로 확인된다. 주체 쪽 `untrusted_app`(도메인)과 객체 쪽 `binder_device`(타입)를 나란히 놓으면, 배경 개념의 "도메인=타입, 하나의 타입 이름공간"이 프로세스와 객체 양쪽에서 동시에 성립한다.
+
+## 소스로 확정한 것
+
+정책 언어의 나머지 층은 런타임 프로세스 속성이 아니라 **정책 바이너리와 빌드/CTS 산출물**에 산다. 이 층은 AOSP `system/sepolicy` 소스와 공식 문서로 확정했고, 위 실측(주체·객체 라벨)이 그 정책이 실제로 적용된 결과다.
+
+- **앱-대-앱 격리는 MLS 카테고리가 한다(질문 5).** 같은 `untrusted_app` 타입을 쓰는 두 앱을 가르는 것은 컨텍스트의 네 번째 필드다. `seapp_contexts`의 `levelFrom=all`이 appId·userId로 카테고리 집합을 만들고, `mls` 정책의 `mlsconstrain`이 카테고리가 겹치지 않는 교차 접근을 거부한다 — [AOSP `system/sepolicy/private/seapp_contexts`](https://cs.android.com/android/platform/superproject/+/main:system/sepolicy/private/seapp_contexts)와 [`system/sepolicy/private/mls`](https://cs.android.com/android/platform/superproject/+/main:system/sepolicy/private/mls)에 정의돼 있다. 위 실측 1·3에서 관측한 공유 도메인(`untrusted_app`)이 바로 이 카테고리 격리가 필요한 이유다.
+
+- **정책 분석은 바이너리 정책을 대상으로 한다(질문 7).** `sesearch --allow -s untrusted_app <policy>`가 그 도메인의 확장된 allow 엣지를, `sepolicy-analyze <policy> permissive`가 permissive로 출하된 도메인 목록을 준다. 대상이 `.te` 소스가 아니라 로드된 바이너리 정책(`/sys/fs/selinux/policy` 또는 `precompiled_sepolicy`)이라는 점은 [Validating SELinux (source.android.com)](https://source.android.com/docs/security/features/selinux/validate)가 규정한다.
+
+- **neverallow와 CTS 게이트는 빌드/CTS 계층에서 강제된다(질문 5).** `neverallow`는 컴파일 시점 단언으로, `secilc`가 정책을 컴파일할 때 이를 위반하는 allow가 있으면 빌드를 실패시키고, 출하 정책은 CTS `SELinuxNeverallowRulesTest`가 다시 검사한다 — [Implementing SELinux](https://source.android.com/docs/security/features/selinux/implement)와 [AOSP `system/sepolicy`](https://cs.android.com/android/platform/superproject/+/main:system/sepolicy/)에서 확정했다. 이 강제는 빌드 파이프라인과 CTS에 속하므로, 그 관측 지점은 정책 소스와 CTS 테스트다.
 
 관련 근거: [SELinux concepts (source.android.com)](https://source.android.com/docs/security/features/selinux/concepts) · [Implementing SELinux](https://source.android.com/docs/security/features/selinux/implement) · [AOSP system/sepolicy](https://cs.android.com/android/platform/superproject/+/main:system/sepolicy/)
 

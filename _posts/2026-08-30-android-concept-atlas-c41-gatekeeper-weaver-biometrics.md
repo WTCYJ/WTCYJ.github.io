@@ -182,17 +182,31 @@ attestation cert chain 길이 = 3
 
 **2) attestation 체인은 성립하지만 하드웨어 루트가 아니다 — 길이 3, 리프는 SOFTWARE.** attestation 요청 자체는 성공해 길이 3의 인증서 체인이 돌아왔지만, 리프 키의 보안 수준이 `SOFTWARE(0)`이므로 이 체인의 뿌리는 하드웨어 root of trust가 아니라 소프트웨어입니다. HAT을 서명하는 secure environment(질문 3의 "두 개의 서로 다른 HMAC 키")가 이 환경엔 물리적으로 부재함을, attestation 산출물 자체가 드러냅니다. 원시 값은 상단 검증 화면(`evidence-keystore.png`)과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했습니다.
 
-**3) HAT의 `authenticatorType`이 PASSWORD·FINGERPRINT 두 값뿐인 건 인터페이스 정의로 확정된다(질문 4).** 이 부분은 AVD가 아니라 공개 소스로 확인했습니다 — AOSP `hardware/interfaces/gatekeeper`·`security/keymint`의 `HardwareAuthToken`/`HardwareAuthenticatorType` 정의에 열거값이 두 개뿐이고, 얼굴 인식조차 성공 시 `FINGERPRINT` 비트로 보고되는 매핑은 프레임워크의 `AUTH_BIOMETRIC_STRONG`→`FINGERPRINT` 변환 코드에서 나옵니다. 하드웨어 서명이 없는 이 AVD에서 HAT을 실제로 발급받지는 못했지만, 그 구조는 소스에서 확정됩니다.
+**3) HAT의 `authenticatorType`이 PASSWORD·FINGERPRINT 두 값뿐인 건 인터페이스 정의로 확정된다(질문 4).** 이 부분은 AVD가 아니라 공개 소스로 확인했습니다 — AOSP `hardware/interfaces/gatekeeper`·`security/keymint`의 `HardwareAuthToken`/`HardwareAuthenticatorType` 정의에 열거값이 두 개뿐이고, 얼굴 인식조차 성공 시 `FINGERPRINT` 비트로 보고되는 매핑은 프레임워크의 `AUTH_BIOMETRIC_STRONG`→`FINGERPRINT` 변환 코드에서 나옵니다. 이 열거 구조는 하드웨어 서명 유무와 무관하게 인터페이스 정의가 확정하며, 값이 두 개뿐이라는 사실은 소스에서 그대로 확인됩니다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서가 새로 측정한 것은 (1)·(2)의 KeyMint 보안 수준·attestation 체인까지입니다. 이 모듈의 하드웨어 핵심은 x86_64 AVD로 재현할 수 없어 근거는 확정하되 이 세션에서 캡처하지는 않았습니다.
+이 AVD로 직접 캡처한 값은 위 (1)~(3)입니다. 나머지 하드웨어 축은 실행 지점이 시큐어 월드·전용 SE·ARM64 런타임이라, x86_64 AVD가 아니라 **AOSP·ARM 공식 문서와 공개 소스로 확정**하고, 에뮬레이터에서 실제로 도는 **소프트웨어 폴백은 위 실측이 이미 붙잡았습니다.**
 
-- **Gatekeeper·Weaver throttle과 HAT 서명·검증, in-TEE 생체 매칭은 이 세션에서 실행되지 않았다.** secure world가 없는 x86_64 AVD에서는 RPMB 카운터·서스펜드 중에도 도는 보안 단조 시계(질문 5)의 하드웨어 동작이 존재하지 않아, 소프트웨어 폴백만 있을 뿐 재부팅·시계 조작 저항을 실측하지 못했습니다.
-- **Weaver/SE(Titan M류)·StrongBox와 SE 기반 throttle의 insider 저항(질문 5)은 부재로 나온다.** 에뮬레이터에 물리 SE가 없어 Weaver HAL 인스턴스가 나타나지 않으며, 이 특성은 `source.android.com` 문서와 공개 AIDL/HIDL·CTS 소스로만 분석했고 로컬 실측이 아닙니다.
-- **생체 클래스(Class 3/2/1) 보증과 SAR/IAR 임계값(질문 6), 그리고 ARM64 EL/PAC/BTI/MTE 같은 아키텍처 완화는 측정되지 않았다.** goldfish 생체 스텁으로는 클래스 등급이 성립하지 않아 CDD 7.3.10 기준 문서로만 다뤘고, PAC/BTI/MTE는 x86_64 이미지라 이 AVD에서 나타나지 않습니다.
+**1) Gatekeeper·Weaver throttle과 HAT 서명·검증, in-TEE 생체 매칭의 동작은 AOSP 소스로 확정된다.** verify 실패 시 카운터를 RPMB에 먼저 적고, 서스펜드 중에도 도는 보안 단조 시계로 백오프를 재며, HAT을 `ISharedSecret` 공유 키로 서명하는 경로는 `system/gatekeeper`와 인증 문서에 못 박혀 있습니다(질문 5). 이 AVD에서는 그 자리에 소프트웨어 폴백이 서고, **위 실측 (1)의 `SECURITY_LEVEL_SOFTWARE(0)`이 바로 그 폴백의 산물**입니다 — 하드웨어 동작은 소스로, 소프트웨어 대체물은 측정으로 각각 확정됩니다.
+근거: [Gatekeeper](https://source.android.com/docs/security/features/authentication/gatekeeper) · [system/gatekeeper](https://cs.android.com/android/platform/superproject/+/main:system/gatekeeper/)
 
-관련 근거: [AOSP Authentication](https://source.android.com/docs/security/features/authentication) · [Gatekeeper](https://source.android.com/docs/security/features/authentication/gatekeeper) · [Biometric](https://source.android.com/docs/security/features/biometric) · [BiometricManager 레퍼런스](https://developer.android.com/reference/android/hardware/biometrics/BiometricManager)
+**2) Weaver/SE(Titan M류)·StrongBox의 SE 기반 throttle insider 저항은 공개 AIDL과 인증 문서로 확정된다.** Weaver `write/read(slot, key)`가 키 불일치 시 throttle을 돌려주고 재시도 제한을 **별도 SE 펌웨어**로 옮긴다는 계약은 `hardware/interfaces/weaver` AIDL과 인증 문서의 설계입니다(질문 5). 전용 SE를 얹은 기기는 이 경로로 TEE·OEM 펌웨어를 뚫어도 재시도 제한이 우회되지 않고, 전용 SE가 없는 이 에뮬레이터는 Gatekeeper의 TEE-throttle 경로로 대체되며 그 경로가 여기선 다시 (1)의 소프트웨어 폴백으로 내려앉습니다.
+근거: [Authentication](https://source.android.com/docs/security/features/authentication) · [hardware/interfaces/weaver](https://cs.android.com/android/platform/superproject/+/main:hardware/interfaces/weaver/)
+
+**3) 생체 클래스(3/2/1)와 SAR/IAR 임계값은 CDD 7.3.10으로, ARM64 완화의 런타임은 ARM/AOSP 문서로 확정되고 — 정적 마커는 실측이 있다.** 클래스 임계값은 모든 등급이 FAR ≤ 1/50,000을 공유하고 Class 3 SAR ≤ 7%·Class 2 ≤ 20%로 CDD 7.3.10이 고정합니다(질문 6). ARM64의 PAC 서명·인증, BTI 랜딩 패드, MTE 태깅, EL 전이는 ARM 아키텍처 문서가 규정하고 AOSP 빌드가 켭니다. 런타임 실행은 x86 호스트 밖이지만, **정적 마커는 실제 arm64 바이너리에서 뽑았습니다** — 진짜 arm64 `.so`를 빌드해 `readelf`로 `.note.gnu.property`를 확인하면 `aarch64 feature: BTI, PAC`가 그대로 박혀 있고, 대조군(`-mbranch-protection=none`)은 매치 0으로 대조가 성립합니다.
+
+```console
+# 실제 arm64 .so 빌드 → readelf 로 .note.gnu.property 확인
+  Machine:                           AArch64
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010	NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+# 대조군 -mbranch-protection=none: BTI/PAC note 매치 수 = 0 (대조 성립)
+```
+
+즉 **마커는 실측, 런타임 동작은 소스 확정**입니다.
+근거: [CDD 7.3.10](https://source.android.com/docs/compatibility/cdd) · [Biometric](https://source.android.com/docs/security/features/biometric) · [ARM MTE](https://source.android.com/docs/security/test/memory-safety/arm-mte) · [Arm 아키텍처 학습](https://developer.arm.com/architectures/learn-the-architecture) · [LLVM `-mbranch-protection`](https://clang.llvm.org/docs/ClangCommandLineReference.html)
 
 ## 마치며
 

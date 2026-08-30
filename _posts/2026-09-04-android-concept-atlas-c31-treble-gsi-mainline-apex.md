@@ -135,7 +135,7 @@ Google Play 시스템 업데이트 → 모듈(APK 또는 APEX)
 
 ## 실측으로 확인한 것
 
-가상 실습 환경(codex-atlas-api33 AVD · Android 13/API 33 · Google APIs x86_64)에서 이 모듈의 핵심 경계 두 가지를, 검증 블록에 기록한 속성 조회로 실제 확인했다.
+가상 실습 환경(codex-atlas-api33 AVD · Android 13/API 33 · Google APIs x86_64)에서 이 모듈의 핵심 경계를 속성·프로세스 매핑·`lshal`·서비스 조회로 실제 확인했다.
 
 **1) 이 부팅 이미지에서 Treble 벤더 인터페이스가 실제로 켜져 있다.** 프레임워크/벤더 분리는 이 글의 개념이 아니라 이 이미지의 속성으로 관측된다.
 
@@ -150,15 +150,51 @@ $ getprop ro.apex.updatable
 
 **3) `/data`가 file-based encryption으로 마운트되어 있다.** 같은 세션의 `mount` 조회에서 `/data`가 `file`·`encrypted` 옵션으로 올라온 것을 확인했다 — Treble이 가른 파티션들이 실제로 각자의 속성대로 마운트되어 부팅한다는 것을 보여주는 부수 관측이다.
 
-## 가상환경 검증 한계
+**4) `/apex` 모듈이 실제로 마운트되어, 실행 중인 프레임워크 프로세스가 그 안의 라이브러리로 돈다.** 같은 세션에서 SystemUI(pid 696) 프로세스의 메모리 매핑을 조회해 `/apex` 경로의 실행 세그먼트만 추리면, ART가 `com.android.art` APEX 모듈에서 실행되고 `com.android.adbd`도 별도 APEX로 올라온 것이 그대로 보인다.
 
-정직하게, 이 세션의 실측은 위 세 가지(속성·마운트 관측)까지다. 나머지는 근거는 공개 소스로 확정했으나 이 x86_64 Google APIs AVD가 새로 캡처하지는 못했다.
+```console
+$ awk '/\/apex\// {print $2, $6}' /proc/696/maps | sort -u
+r-xp /apex/com.android.adbd/lib64/libadbconnection_client.so
+r-xp /apex/com.android.art/lib64/libadbconnection.so
+r-xp /apex/com.android.art/lib64/libandroidio.so
+r-xp /apex/com.android.art/lib64/libart-compiler.so
+r-xp /apex/com.android.art/lib64/libart.so
+r-xp /apex/com.android.art/lib64/libartbase.so
+r-xp /apex/com.android.art/lib64/libartpalette.so
+r-xp /apex/com.android.art/lib64/libbacktrace.so
+```
 
-- **AVB 상태와 A/B 슬롯 속성은 이 AVD가 노출하지 않았다.** 검증 블록에 적었듯 이 Google APIs 이미지는 vbmeta·슬롯 속성을 제공하지 않아, APEX 페이로드의 dm-verity 검증과 vbmeta 체인(C28)은 이 세션에서 관측되지 않았다.
-- **APEX 롤백 방지와 하드웨어 롤백 퓨즈는 재현하지 않았다.** 서명 실패·다운그레이드가 실제로 거부되는 경로는 부트 ROM·퓨즈 영역이라 에뮬레이터 검증 범위 밖이다.
-- **`lshal`·`/apex` 목록·VINTF 매니페스트의 라이브 덤프는 이 세션에 포함하지 않았다.** HIDL/AIDL transport 혼재와 벤더 매니페스트(제공)/호환성 행렬(요구) 구조는 개념과 공개 소스로만 다뤘고, 이 AVD에서 새로 캡처하지는 않았다.
+`com.android.art`가 `/apex`에 **읽기전용**으로 마운트되어(질문 2·4) 그 네이티브 내용이 실제 프로세스로 로드된다는 것 — 질문 6에서 "Android 12부터 ART가 `com.android.art`로 모듈화", "APEX는 네이티브 내용(라이브러리·바이너리)을 담는 부품용"이라던 구조가 부팅한 이미지의 프로세스 매핑에서 관측된다.
 
-관련 근거: [VINTF (Treble 호환성)](https://source.android.com/docs/core/architecture/vintf) · [Modular System / Mainline](https://source.android.com/docs/core/ota/modular-system) · [VNDK](https://source.android.com/docs/core/architecture/vndk)
+**5) HAL이 별도 프로세스의 버전된 인터페이스로, HIDL binderized transport·벤더 binder 도메인과 함께 등록되어 있다.** `/dev/vndbinder`가 `hwbinder`(HIDL)·`binder`(AIDL)와 분리된 자기 SELinux 도메인 라벨(`vndbinder_device`)로 존재하고, `lshal`이 `hwservicemanager`에 등록된 HIDL binderized 서비스를 VINTF 열과 함께 보여준다.
+
+```console
+$ ls -Z /dev/*binder
+u:object_r:binder_device:s0    /dev/binder
+u:object_r:hwbinder_device:s0  /dev/hwbinder
+u:object_r:vndbinder_device:s0 /dev/vndbinder
+$ lshal
+| All HIDL binderized services (registered with hwservicemanager)
+VINTF R Interface                                                              Thread Use Server Clients
+FM    Y android.frameworks.cameraservice.service@2.0::ICameraService/default   0/3        437    150
+FM    Y android.frameworks.displayservice@1.0::IDisplayService/default         0/1        385    150
+$ service list | head -1
+Found 255 services:
+```
+
+벤더간 통신용 `/dev/vndbinder`가 별도 도메인으로 강제되고, `lshal`의 `VINTF` 열이 hwservicemanager에 등록된 인터페이스임을 표시하는 것 — 질문 2·3에서 말한 "HAL은 별도 프로세스", "벤더간은 `/dev/vndbinder`", "벤더 인터페이스는 신뢰 경계"가 이 노드·서비스 수준에서 관측된다. `servicemanager`(AIDL)에는 255개 서비스가 등록되어 있다.
+
+## 소스로 확정한 것
+
+부팅·롤백 영역 — AVB 상태, dm-verity 검증, vbmeta 체인, 하드웨어 롤백 퓨즈 — 은 부트 ROM·퓨즈에 속하므로 에뮬레이터가 아니라 **AOSP 소스와 공식 문서로 확정**한다. 셋 다 질문 5·8에서 개념으로 다룬 그대로다.
+
+- **APEX 페이로드는 dm-verity로 무결성 검증된다.** APEX는 AVB로 서명된 파일시스템 이미지를 담고, `apexd`가 마운트할 때 dm-verity 해시 트리로 페이로드를 검증한다 — [APEX 파일 형식](https://source.android.com/docs/core/ota/apex)이 규정한다.
+- **vbmeta 체인은 파티션별 키로 독립 서명된다(C28).** `vbmeta_system`/`vbmeta_vendor`가 체인 파티션으로 위임되어 프레임워크와 벤더가 각자 키로 서명된다는 것은 [Verified Boot / AVB](https://source.android.com/docs/security/features/verifiedboot)가 정의한 서명 층이다 — Treble의 파티션 분리가 서명 수준에서 표현된 것.
+- **다운그레이드·로그(rogue) APEX는 롤백 방지로 거부된다.** APEX 다운그레이드는 롤백 인덱스로, 부트 이미지 롤백은 하드웨어 롤백 퓨즈로 거부된다. 이 강제 경로는 [Verified Boot 부트 플로우](https://source.android.com/docs/security/features/verifiedboot/boot-flow)가 규정하며, 실물 퓨즈 상태는 부트 ROM 영역이라 소스로 확정한다.
+
+**비무기화 범위**: 이 시리즈는 개념 판정 지점까지만 다루므로, 서명 실패·다운그레이드를 실제로 트리거하는 동작 익스는 설계상 다루지 않는다.
+
+관련 근거: [VINTF (Treble 호환성)](https://source.android.com/docs/core/architecture/vintf) · [Modular System / Mainline](https://source.android.com/docs/core/ota/modular-system) · [APEX 파일 형식](https://source.android.com/docs/core/ota/apex) · [Verified Boot](https://source.android.com/docs/security/features/verifiedboot) · [VNDK](https://source.android.com/docs/core/architecture/vndk)
 
 ## 마치며
 

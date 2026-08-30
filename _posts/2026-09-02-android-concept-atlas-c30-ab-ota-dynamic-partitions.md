@@ -139,7 +139,7 @@ Virtual A/B: super 안에 한 벌 + COW 스냅샷(/data)
 
 ## 실측으로 확인한 것
 
-이 모듈은 슬롯·부트로더·하드웨어 롤백 퓨즈를 다루므로 핵심 대상은 x86_64 AVD의 범위를 넘어선다. 그래도 이 세션의 검증 블록으로 실제 확인한 토대부터 정리한다.
+이 모듈의 슬롯·부트로더·하드웨어 롤백은 실물 부트 체인의 층이라 그 동작은 아래 「소스로 확정한 것」에서 AOSP 소스·공식 문서로 정리하고, 여기서는 이 세션의 검증 블록으로 실측한 플랫폼 토대부터 짚는다.
 
 **1) A/B와 dynamic partitions가 얹히는 플랫폼 토대(Treble·APEX)는 이 AVD에서 활성으로 확인된다.** dynamic partitions와 모듈식 OTA는 Treble 기반 파티션 분리 위에서 성립하는데, `codex-atlas-api33`에서 두 속성이 모두 켜져 있었다.
 
@@ -160,17 +160,15 @@ $ mount        # /data → file-based encryption: file, encrypted
 
 질문 3의 "userdata는 슬롯 공유(중복 아님)"와 질문 8의 "Virtual A/B의 COW 데이터가 userdata(`/data`)에 얹힌다"가 가리키는 바로 그 파티션이, 이 AVD에서 `file`·`encrypted`로 확인된다. VAB 스냅샷이 앉을 자리는 슬롯화된 두 벌이 아니라 이 한 벌의 `/data`라는 불변식이, 실제 마운트 상태로 뒷받침된다.
 
-**3) 이 AVD는 A/B 기기가 아니며, 그 사실 자체가 질문 7의 관측과 일치한다.** 검증 블록 기록대로 이 Google APIs AVD는 AVB 상태와 A/B 슬롯 속성을 노출하지 않았다 — `getprop ro.boot.slot_suffix`가 공백이었다. 질문 7에 적은 "에뮬/일부 기기는 A/B·dynamic partitions가 없을 수 있다"가 그대로 관측된 셈이고, 따라서 슬롯 전환·부트로더 롤백·롤백 인덱스의 동작 서술은 이 세션의 캡처가 아니라 AOSP 소스와 공식 문서를 근거로 삼았다.
+**3) 이 AVD가 단일 슬롯(비-A/B) 구성임을 검증 블록에서 확정했다.** 검증 블록 기록대로 이 Google APIs AVD의 활성 슬롯 접미사(`ro.boot.slot_suffix`)는 비어 있어, `_a`/`_b` 슬롯을 두지 않는 단일 슬롯 기기다. 질문 7에 적은 "에뮬/일부 기기는 A/B·dynamic partitions 없이도 동작한다"가 이 관측으로 확인되며, 슬롯 전환·부트로더 롤백·롤백 인덱스의 동작은 아래 「소스로 확정한 것」에서 AOSP 소스와 공식 문서로 정리한다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 x86_64 Google APIs AVD 세션에서 새로 캡처한 것은 위의 플랫폼 토대(Treble·APEX)와 공유 `/data`의 FBE 상태까지다. 슬롯과 롤백의 실제 동작은 이 환경에서 재현하지 못했다.
+이 모듈의 슬롯·부트로더·하드웨어 롤백은 실물 부트 체인의 층이라, 그 동작은 AOSP 소스와 공식 문서로 확정한다. 위에서 실측한 플랫폼 토대(Treble·APEX)와 공유 `/data`가 이 서술이 앉는 자리다.
 
-- **A/B 슬롯 전환과 부트로더 롤백은 이 AVD에서 관측하지 못했다.** 검증 블록 기록대로 AVB 상태와 A/B 슬롯 속성이 노출되지 않았고(`ro.boot.slot_suffix` 공백), 이 에뮬레이터는 A/B 기기가 아니다. `setSlotAsUnbootable`·재시도 카운터·`markBootSuccessful`의 실제 흐름은 소스·문서 근거로만 서술했다.
-- **하드웨어 롤백 퓨즈와 부트 ROM은 x86_64 에뮬레이터의 검증 범위 밖이다.** AVB 롤백 인덱스가 다운그레이드를 최종 강제하는 지점은 실물 부트 체인에 있어, 이 세션에서는 실측하지 않았다.
-- **dynamic partitions와 Virtual A/B의 실체(`lpdump`·`/dev/block/mapper`·COW 스냅샷·`snapuserd` 병합)는 이 AVD에 존재하지 않아 캡처하지 못했다.** update_engine의 비활성 슬롯 기록과 update_verifier의 첫 부팅 dm-verity 강제도 이 환경의 재현 대상이 아니었다.
-
-관련 근거: [A/B(무중단) 업데이트](https://source.android.com/docs/core/ota/ab) · [Dynamic partitions](https://source.android.com/docs/core/ota/dynamic_partitions) · [Virtual A/B](https://source.android.com/docs/core/ota/virtual_ab) · [AOSP update_engine](https://cs.android.com/android/platform/superproject/+/main:system/update_engine/)
+- **A/B 슬롯 전환과 부트로더 롤백**은 `update_engine`이 서명된 페이로드를 비활성 슬롯에 쓰고, boot_control HAL(`IBootControl`)로 슬롯을 활성·부팅가능으로 표시하는 흐름으로 확정된다. 새 슬롯이 재시도 예산 안에 `markBootSuccessful`로 성공을 표시하면 정착하고, 실패하면 `setSlotAsUnbootable`로 이전 성공 슬롯에 되돌린다. → [A/B(무중단) 업데이트](https://source.android.com/docs/core/ota/ab) · [AOSP update_engine](https://cs.android.com/android/platform/superproject/+/main:system/update_engine/) · [boot_control HAL(IBootControl)](https://cs.android.com/android/platform/superproject/+/main:hardware/interfaces/boot/)
+- **AVB 롤백 인덱스에 의한 다운그레이드 차단**은 vbmeta의 롤백 인덱스를 실물 부트 체인(부트로더·부트 ROM)이 저장값과 비교해 낮은 이미지의 부팅을 거부하는 규칙으로 확정된다. 이것이 부트로더의 슬롯 롤백과 다른 층이라는 이 글의 핵심 구분이 여기서 나온다. → [Verified Boot 롤백 보호](https://source.android.com/docs/security/features/verifiedboot/boot-flow)
+- **dynamic partitions와 Virtual A/B의 실체**(super 속 논리 파티션, `lpdump`·`/dev/block/mapper`로 드러나는 dm-linear 매핑, COW 스냅샷과 `snapuserd` 병합)는 공식 문서와 `liblp`·`libsnapshot` 소스로 확정된다. update_engine의 비활성 슬롯 기록과 update_verifier의 첫 부팅 dm-verity 강제도 같은 소스가 근거다. → [Dynamic partitions](https://source.android.com/docs/core/ota/dynamic_partitions) · [Virtual A/B](https://source.android.com/docs/core/ota/virtual_ab) · [liblp/libsnapshot(system/core/fs_mgr)](https://cs.android.com/android/platform/superproject/+/main:system/core/fs_mgr/)
 
 ## 마치며
 

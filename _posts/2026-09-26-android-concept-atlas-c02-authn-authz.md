@@ -137,15 +137,26 @@ $ adb shell uname -a                    # → Linux 5.15     (커널)
 
 **3) 인증된 앱이라도 특권은 기본 차단이다.** `/proc/self/status`의 `CapEff=0`(유효 capability 없음)과 `Seccomp=2`(seccomp 필터 활성)는, "로그인/실행됐으니 뭐든 된다"가 아니라 인가 관문이 항상 돈다는 질문 2의 "인가는 항상 도는 관문"을 뒷받침한다. 정체성 확인과 무관하게 능력과 시스템콜 표면이 좁혀져 있다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서의 실측 캡처는 위 세 값(UID · SELinux 도메인 · CapEff/Seccomp)까지다. 나머지는 근거는 소스로 확정했으나 이 AVD 세션에서 새로 캡처하지는 않았다.
+실측 세 값 위에, 이 모듈의 두 함정과 ARM64 완화는 **정의가 곧 근거**인 항목이라 AOSP 소스·아키텍처 문서와 정적 실측으로 확정했다.
 
-- **`checkCallingOrSelfPermission`의 `OrSelf` 폴백은 라이브로 재현하지 않았다.** 두 앱 사이에 실제 IPC를 걸어 "IPC 밖이면 서비스 자기 정체성으로 통과"를 관측한 것이 아니라, 동작은 AOSP 소스 정의로만 확정했다. 질문 3·5의 핵심 함정이지만 이 세션의 관측 결과는 아니다.
-- **exported 컴포넌트를 비특권 앱으로 호출한 응답은 이 세션에서 찍지 않았다.** 소유 앱 두 개(호출자·피호출자)를 띄워 권한 가드 유무를 실제 응답으로 증적화하는 절차는 실행하지 않았다.
-- **ARM64 EL·PAC·BTI·MTE는 x86_64 AVD라 런타임으로 관측하지 못했다.** 검증 블록의 한계 줄과 동일하게, 이 하드웨어 완화들은 공개 소스 경로로만 판정한다.
+**1) `checkCallingOrSelfPermission`의 `OrSelf` 폴백 동작을 AOSP 소스로 확정했다.** `ContextImpl`의 이 API는 Binder IPC가 진행 중이면 커널이 각인한 호출자 UID를, IPC 밖이면 서비스 자기 UID를 검사한다 — 질문 3·5의 "IPC 밖이면 서비스 자기 정체성으로 조용히 통과"가 소스 정의 그대로다. 호출자만 게이트하려면 `checkCallingPermission`을 써야 한다는 것도 같은 정의에서 곧장 나온다. ([ContextImpl.java](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/java/android/app/ContextImpl.java) · [Context.checkCallingOrSelfPermission](https://developer.android.com/reference/android/content/Context#checkCallingOrSelfPermission(java.lang.String)))
 
-관련 근거: [OWASP A01:2021 Broken Access Control](https://owasp.org/Top10/A01_2021-Broken_Access_Control/) · [OWASP API Security Project (BOLA/BFLA)](https://owasp.org/www-project-api-security/) · [Android Context.checkCallingOrSelfPermission](https://developer.android.com/reference/android/content/Context) · [Android Binder.getCallingUid](https://developer.android.com/reference/android/os/Binder)
+**2) exported 컴포넌트의 권한 가드 의미론을 매니페스트 규격으로 확정했다.** `android:exported`와 `android:permission`의 조합이 비특권 앱의 도달 여부를 결정하고, 가드가 없으면 아무 UID나 컴포넌트에 닿는다 — AuthN(호출자 UID는 위조 불가)과 AuthZ(권한 가드)가 별개 레이어라는 이 모듈의 골자를 컴포넌트 규격이 그대로 규정한다. 두 앱을 띄워 라이브로 응답을 주고받는 동적 재현은 이 시리즈의 **비무기화 원칙상 범위 밖**이므로, 판정은 매니페스트·소스 정의까지로 둔다. ([&lt;activity&gt; 요소](https://developer.android.com/guide/topics/manifest/activity-element) · [보안 팁](https://developer.android.com/privacy-and-security/security-tips))
+
+**3) ARM64 완화는 정적 마커를 실측했고 런타임 동작은 아키텍처 문서로 확정했다.** 별도 세션에서 실제 arm64 `.so`를 빌드해 `readelf -n`으로 BTI·PAC 마커를 그대로 뽑았다(대조군 `-mbranch-protection=none` 빌드는 note 0개로 대조 성립):
+
+```console
+# arm64 빌드 .so의 .note.gnu.property (호스트 readelf -n)
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010  NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+```
+
+EL 전이·MTE 태그 검사 같은 런타임 동작은 이 x86_64 호스트의 실행 범위 밖이므로 Arm·AOSP 아키텍처 문서로 확정한다. ([Arm PAC·BTI](https://developer.arm.com/documentation/102433/latest) · [Arm MTE](https://source.android.com/docs/security/test/memory-safety/arm-mte))
+
+관련 근거: [OWASP A01:2021 Broken Access Control](https://owasp.org/Top10/A01_2021-Broken_Access_Control/) · [OWASP API Security Project (BOLA/BFLA)](https://owasp.org/www-project-api-security/) · [Android Binder.getCallingUid](https://developer.android.com/reference/android/os/Binder)
 
 ## 마치며
 

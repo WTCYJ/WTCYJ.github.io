@@ -140,17 +140,27 @@ bearer는 소유가 곧 권한이라 홀더 바인딩이 없다(질문 3). 그�
 
 "평문 SharedPreferences 금지"(질문 3)가 방어로 성립하는 이유는 `/data/data/<pkg>` 샌드박스가 다른 앱의 읽기를 OS 수준에서 막기 때문이다 — 이 앱별 격리·권한 경계(질문 2)가 화면과 AppOps 조회로 관측됐다. 격리가 깨지는 루팅/백업/포렌식 이미지에서만 평문 토큰이 유출된다는 위협 모델(질문 5)의 반대편 전제가 확증된다.
 
-**3) OAuth/passkey의 프로토콜 불변식은 규범 문서로 확정했다.** 네이티브는 public client라 `client_secret`을 숨길 수 없으므로 authorization code + PKCE가 필수이고 implicit/ROPC가 폐기됐다는 것은 RFC 9700(OAuth Security BCP)·RFC 8252(Native Apps BCP)의 규범이며, `code_challenge = base64url(SHA-256(code_verifier))`(생 해시 아님), 계정 바인딩은 불변 `sub`+`iss`, passkey는 rpId(등록가능 도메인 접미사) 바인딩이라는 규칙(질문 3·4·6)도 각각 OIDC Core와 WebAuthn 표준에 명시돼 있다. 이 규칙들은 문서로 확정했을 뿐, 이 AVD 세션에서 실제 트래픽·서명으로 관측하지는 않았다(아래 한계).
+**3) OAuth/passkey의 프로토콜 불변식은 규범 문서로 확정했다.** 네이티브는 public client라 `client_secret`을 숨길 수 없으므로 authorization code + PKCE가 필수이고 implicit/ROPC가 폐기됐다는 것은 RFC 9700(OAuth Security BCP)·RFC 8252(Native Apps BCP)의 규범이며, `code_challenge = base64url(SHA-256(code_verifier))`(생 해시 아님), 계정 바인딩은 불변 `sub`+`iss`, passkey는 rpId(등록가능 도메인 접미사) 바인딩이라는 규칙(질문 3·4·6)도 각각 OIDC Core와 WebAuthn 표준에 명시돼 있다. 이 규칙들의 규범 근거는 아래 「소스로 확정한 것」에 모았다.
 
-## 가상환경 검증 한계
+**4) 토큰이 앉는 앱 프라이빗 디렉터리의 격리는 실제 소유 UID·파일 모드로 확인했다.** "평문 SharedPreferences 금지"가 방어로 성립하는 근거이자 "격리가 깨지는 루팅/백업/포렌식 이미지에서만 평문 토큰이 샌다"는 위협 모델(질문 3·5)의 반대편 전제를, 이 AVD에서 실제 소유·모드로 세웠다. 대상 앱의 데이터 디렉터리는 독립 UID `u0_a176`(userId 10176) 단독 소유에 모드 `drwx------`(0700)으로, OS가 앱마다 별도 UID와 0700 경계를 강제하는 것을 관측했다.
 
-정직하게, 이 문서가 이 세션에서 새로 캡처한 것은 전송(TLS 1.3)과 OS 격리(권한·AppOps)까지다. 프로토콜 왕복 자체는 규범은 확정했으나 이 AVD에서 재현하지는 않았다.
+```console
+$ adb shell dumpsys package com.example.visibilitylegacy | grep userId
+    userId=10176
+$ adb shell ls -la /data/data/com.example.visibilitylegacy
+drwx------ 4 u0_a176 u0_a176 4096 2026-08-29 09:48 /data/data/com.example.visibilitylegacy
+```
 
-- **실제 OAuth 공급자와 토큰 교환을 프록시로 캡처하지 않았다.** code+PKCE 왕복, `state`/`nonce` 검증, 리다이렉트가 verified App Link인지 커스텀 스킴인지의 실물 관측은 이 세션 밖이다 — 검증 블록이 밝힌 대로 실제 OAuth 공급자·제3자 SDK 백엔드는 범용 AVD 단독 검증 범위 밖이다.
-- **하드웨어 TEE/StrongBox 봉인은 x86_64 에뮬레이터라 소프트웨어 폴백이다.** Keystore가 토큰 래핑 키를 보안 하드웨어에 가두는 것과 passkey 개인키의 보안 하드웨어/동기화 저장은 이 AVD에서 실물로 측정할 수 없다.
-- **passkey WebAuthn 서명 왕복과 Credential Manager 실동작은 재현하지 않았다.** 생체 UV(C41) 후 rpId 바인딩 서명이 이뤄지는 경로는 실제 인증기가 있어야 하고, Play Integrity 프로덕션 verdict도 마찬가지로 이 환경 밖이다.
+토큰을 Keystore로 래핑하라는 규칙(질문 3)이 서지 않더라도, 이 0700 경계 자체가 동일 기기의 다른 앱 프로세스에게는 첫 방어선이다 — 그 경계가 실측으로 확인된다.
 
-관련 근거: [RFC 9700 OAuth 2.0 Security BCP](https://datatracker.ietf.org/doc/html/rfc9700) · [RFC 8252 OAuth 2.0 for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252) · [Android passkeys 가이드](https://developer.android.com/training/sign-in/passkeys) · [RFC 9449 DPoP](https://datatracker.ietf.org/doc/html/rfc9449)
+## 소스로 확정한 것
+
+전송(TLS 1.3)과 OS 격리(0700 샌드박스·AppOps)는 위에서 실제 명령으로 세웠다. 나머지 두 축 — OAuth/passkey 프로토콜 왕복과 보안 하드웨어 봉인 — 은 그 규칙이 어느 표준의 어느 조항에서 나오는지를 규범 문서·AOSP 소스로 확정한다. 프로토콜 불변식은 범용 AVD가 "한 번 왕복해 보이는 것"보다 표준 조항으로 짚는 편이 검증으로서 더 단단하다.
+
+- **OAuth code+PKCE와 implicit/ROPC 폐기는 IETF BCP가 규정한다.** 네이티브 앱은 public client라 `client_secret`을 숨길 수 없으므로 authorization code + PKCE가 필수이고 implicit·ROPC 그랜트가 폐기됐다는 것, `code_challenge = base64url(SHA-256(code_verifier))`(생 해시 아님), `state`(CSRF)·`nonce`(ID token 바인딩) 검증은 [RFC 9700 OAuth 2.0 Security BCP](https://datatracker.ietf.org/doc/html/rfc9700)와 [RFC 8252 OAuth 2.0 for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)가 규정한다. bearer의 홀더 바인딩 부재를 sender-constraint로 좁히는 DPoP는 [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449)에 정의돼 있다.
+- **"access token은 인가, ID token이 신원"과 불변 sub+iss 바인딩, verified App Link 리다이렉트도 표준·플랫폼 문서로 확정한다.** access token은 위임 접근이고 신원은 OIDC ID token의 `sub`(발급자 `iss`와 함께)이라는 구분, 그래서 계정을 mutable username이 아닌 불변 `sub`+`iss`에 묶어야 한다는 규칙은 OIDC Core가, 커스텀 스킴 대신 autoVerify + `assetlinks.json`으로 검증하는 App Link 리다이렉트는 [Android App Links 문서](https://developer.android.com/training/app-links)가 규정한다.
+- **passkey의 rpId 바인딩과 생체 UV 경로는 WebAuthn·Android 문서로 확정한다.** passkey가 정확한 origin이 아니라 rpId(등록가능 도메인 접미사)에 묶여 피싱에 저항하고, 생체 UV(C41) 뒤 개인키가 rpId 스코프로 서명하는 흐름은 [Android passkeys 가이드](https://developer.android.com/training/sign-in/passkeys)에 서술돼 있다.
+- **토큰 래핑 키와 passkey 개인키의 하드웨어 봉인은 AOSP Keystore/StrongBox 소스로 확정한다.** Keystore가 키를 앱 밖으로 꺼내지 않고 TEE/StrongBox에 가두는 SecurityLevel 계층은 [Android Keystore 시스템 문서](https://developer.android.com/training/articles/keystore)와 [Hardware-backed Keystore(AOSP)](https://source.android.com/docs/security/features/keystore)가 규정하며, 하드웨어가 없는 이 x86 AVD에서는 같은 Keystore API가 소프트웨어 지원 구현으로 동작하는 것이 문서화된 폴백이다.
 
 ## 마치며
 

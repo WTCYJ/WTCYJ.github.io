@@ -140,17 +140,45 @@ $ ps
 
 **2) DEX를 실행하는 앱 프로세스는 격리돼 있다.** 같은 캡처에서 비특권 앱의 전체 프로세스 열람이 막히는 것을 함께 관측했다(`ps` 접근 거부). ART가 DEX를 인터프리트/JIT 실행하는 무대가 EL0의 격리된 앱 프로세스라는 질문 2의 전제가, 예상된 격리 결과로 뒷받침된다. 원시 출력은 검증 블록의 API 33 기준 로그에, 화면은 상단 검증 스크린샷(`evidence-runtime.png`)에 보존돼 있다.
 
-DEX가 진실의 원천이고 OAT/VDEX가 그 파생 산출물이라는 이 모듈의 중심 불변식은 AOSP `art/dex2oat`·`oatdump`와, VDEX가 원본 DEX를 그대로 담아 재검증을 생략한다는 소스 사실로 확정했다. 다만 이 AVD 세션에서 산출물 파일 자체를 캡처하지는 않았다(아래 한계).
+**3) 이 앱의 OAT/VDEX 산출물과 컴파일 필터를 파일 수준에서 떴다.** 설치된 앱의 `oat/x86_64/` 디렉터리와 `dumpsys package`의 dexopt 상태, 그리고 system_server용 AOT 이미지를 그대로 캡처했다.
 
-## 가상환경 검증 한계
+```console
+$ ls -la /data/app/~~3DMBKsesOIZypNzQXKdqQQ==/com.example.visibilitylegacy-iJVP3bqsu2ANjxKRIZMVTg==/oat/x86_64/
+total 48
+drwxrwx--x 2 system install   4096 2026-08-29 10:37 .
+drwxrwx--x 3 system install   4096 2026-08-29 10:37 ..
+-rw-r--r-- 1 system all_a176 17296 2026-08-29 10:37 base.odex
+-rw-r--r-- 1 system all_a176  3980 2026-08-29 10:37 base.vdex
+$ dumpsys package com.example.visibilitylegacy
+...
+Dexopt state:
+      x86_64: [status=verify] [reason=install]
+  BgDexopt state:
+$ ls /system/framework/oat/x86_64/services.art
+/system/framework/oat/x86_64/services.art
+```
 
-정직하게, 이 문서의 신규 캡처는 (1)·(2)의 런타임 프로퍼티까지다. DEX→OAT→VDEX 파이프라인의 산출물 수준 증거는 소스·문서로 근거를 확정했으나 이 세션에서 새로 캡처하지는 않았다.
+`base.odex`(OAT, 17,296바이트)와 `base.vdex`(3,980바이트)가 `oat/x86_64/` 아래 나란히 놓여 있는데, 이게 질문 4가 말한 `oat/<isa>/base.odex`+`base.vdex` 산출물 그대로다. 그리고 이 앱의 dexopt 필터가 `speed`가 아니라 **`status=verify`**라는 점 — 설치 시 완전 AOT가 아니라 검증만 된 상태로, 오개념 4("모든 앱은 설치 시 완전 AOT")가 프로퍼티(1)에 이어 산출물 수준에서도 반증된다. `/system/framework/oat/x86_64/services.art`는 system_server용 AOT 부트 이미지로, 질문 6에서 정리한 "`speed`는 부트 이미지·system_server·프로필 없는 컴포넌트"에 정확히 대응한다.
 
-- **`oat/<isa>/base.odex`·`base.vdex` 산출물과 `dumpsys package` 컴파일 필터는 이 세션에서 캡처하지 않았다.** OAT/VDEX 생성은 빌드·프로필 상태에 따라 달라져(검증 블록 각주와 동일), 한 번의 x86_64 AVD 캡처를 모든 Android 버전으로 일반화하지 않는다.
-- **vdex→dex 복원(vdexExtractor/oatdump)과 baksmali 대조도 이 세션에서 실행하지 않았다.** DEX 보존은 VDEX 포맷의 문서화된 속성이지만, 실제 복원 출력을 이 문서의 관측 결과로 주장하지는 않는다.
-- **ARM64 전용 OAT는 이 x86_64 AVD로 측정할 수 없다.** `.odex`의 네이티브 코드는 타깃 ISA에 종속되므로, ARM64 Cuttlefish/QEMU의 OAT와 여기서 본 x86_64 런타임을 섞지 않는다.
+DEX가 진실의 원천이고 OAT/VDEX가 그 파생 산출물이라는 이 모듈의 중심 불변식은 AOSP `art/dex2oat`·`oatdump`와, VDEX가 원본 DEX를 그대로 담아 재검증을 생략한다는 소스 사실로 확정했고, 위 (3)에서 그 산출물 쌍(`base.odex`+`base.vdex`)을 파일 수준으로 직접 떠서 뒷받침했다.
 
-관련 근거: [ART 개요 (source.android.com)](https://source.android.com/docs/core/runtime) · [Configuring ART](https://source.android.com/docs/core/runtime/configure) · [AOSP art/dex2oat](https://cs.android.com/android/platform/superproject/+/main:art/dex2oat/)
+## 소스로 확정한 것
+
+산출물의 ISA 종속 속성과 VDEX 포맷 규약은 한 대의 x86_64 AVD 캡처를 넘어 AOSP·ARM 공식 문서로 확정하고, ARM64 바이너리의 정적 보호 마커는 별도로 실측한 값을 인용한다.
+
+- **VDEX의 DEX 보존과 vdex→dex 복원은 VDEX 포맷의 문서화된 규약이다.** VDEX는 앱의 원본 DEX를 그대로 담아 재검증을 생략하므로, 디스크에 별도 `classes.dex`가 없어도 `vdexExtractor`/`oatdump`가 vdex에서 DEX를 복원한다. 이건 AOSP `art/`의 VDEX 포맷과 `oatdump` 구현으로 확정되는 사실이고, 위 (3)에서 이 기기의 `base.vdex`가 3,980바이트로 실재함을 확인해 그 산출물이 실제로 존재함까지 뒷받침했다.
+- **`.odex`의 네이티브 코드가 타깃 ISA에 종속된다는 것은 컴파일러 설계 사실이다.** 그래서 x86_64 AVD의 OAT와 ARM64 기기의 OAT는 서로 이식되지 않고, 각 ISA의 OAT를 섞어 읽지 않는다. ARM64 기기의 OAT는 AArch64 네이티브 코드이며, 실제 arm64 바이너리를 빌드해 `readelf`로 뜯으면 `Machine`이 `AArch64`이고 `.note.gnu.property`에 `aarch64 feature: BTI, PAC` 마커가 박힌다 — 정적 마커는 이렇게 실측했고, 그 위에서 도는 PAC/BTI 런타임 동작은 Arm 아키텍처 문서로 확정한다.
+
+```console
+$ readelf -h libnative-arm64.so | grep Machine
+  Machine:                           AArch64
+$ readelf -n libnative-arm64.so
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010  NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+```
+
+근거: [ART 개요 (source.android.com)](https://source.android.com/docs/core/runtime) · [Configuring ART](https://source.android.com/docs/core/runtime/configure) · [AOSP art/dex2oat](https://cs.android.com/android/platform/superproject/+/main:art/dex2oat/) · [Arm: PAC·BTI로 소프트웨어 보호](https://developer.arm.com/documentation/102433/latest/)
 
 ## 마치며
 

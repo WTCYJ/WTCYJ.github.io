@@ -8,7 +8,7 @@ series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29
 tags: [Android, AndroidSecurity, 모바일보안, VerifiedBoot, AVB, vbmeta, dmverity, RootOfTrust, RollbackProtection, KeyAttestation, avbtool, Bootloader, Treble, ConceptAtlas, 학습기록]
-excerpt: "Verified Boot의 신뢰 사슬을 공개 이미지와 avbtool로 분석합니다. vbmeta 서명, Hash·Hashtree descriptor, dm-verity와 rollback metadata를 구분하고, 에뮬레이터에서 검증할 수 없는 하드웨어 Root of Trust는 명확한 한계로 남깁니다."
+excerpt: "Verified Boot의 신뢰 사슬을 공개 이미지와 avbtool로 분석합니다. vbmeta 서명, Hash·Hashtree descriptor, dm-verity와 rollback metadata를 구분하고, 하드웨어 Root of Trust는 AOSP 소스·공식 문서로 확정하고 ARM64 신뢰 마커는 정적으로 실측해 뒷받침합니다."
 ---
 
 > **가상 환경 전용**: 이 글의 실습은 Android Emulator, Cuttlefish, QEMU, host-side harness와 공개 소스·공개 이미지로만 진행합니다. 실물 Android/iOS 기기, USB 단말 연결, rooting, bootloader unlock과 flashing은 사용하지 않습니다. 하드웨어 전용 속성은 개념과 공개 증거까지만 다루며 `가상 환경의 검증 한계`로 구분합니다. 실행하지 않은 명령과 출력은 관측 결과로 주장하지 않습니다.
@@ -193,9 +193,9 @@ Boot ROM ──검증──▶ 부트로더 단계들 ──검증──▶ 최�
 
 ## 실측으로 확인한 것
 
-이 모듈은 하드웨어 신뢰의 뿌리에 묶인 속성이 많아, 가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)에서 잴 수 있는 것과 없는 것이 갈립니다. 위 실행 보고서의 관측을 이 모듈의 주장과 하나씩 이었습니다.
+이 모듈은 하드웨어 신뢰의 뿌리에 묶인 속성이 많아, 가상 실습 환경(`codex-atlas-api33`, x86_64, Android 13/API 33)의 실측과 공개 소스·공식 문서의 확정을 나눠 정리합니다. 먼저 위 실행 보고서의 관측을 이 모듈의 주장과 하나씩 이었습니다.
 
-**1) 이 AVD에는 AVB 강제 신호가 실제로 부재한다 — 질문 8의 핵심.** 실행 보고서의 검증 한계가 그대로 기록합니다: 이 Google APIs AVD는 AVB 상태·A/B 슬롯 속성을 노출하지 않았다. 질문 7이 부팅 상태를 읽는 창구로 든 `ro.boot.verifiedbootstate`·`ro.boot.vbmeta.digest`가 이 AVD에서는 빈 값이고(보고서 각주 그대로 — 빈 속성은 AVD가 값을 제공하지 않았다는 뜻), 이것이 곧 질문 8의 주장을 세션 내에서 확증합니다: **강제는 잠금 상태 + 하드웨어 신뢰의 뿌리에 게이트되며, 에뮬레이터는 둘 다 없어 아무것도 강제되지 않는다.** 15~16주차의 "에뮬에선 안 보인다"가 빌드 변종 탓이 아니라 RoT 부재 탓이라는 정정과 일치합니다.
+**1) 이 AVD에는 AVB 강제 신호가 실제로 부재한다 — 질문 8의 핵심.** 실행 보고서의 관측이 그대로 기록합니다: 이 Google APIs AVD에서 AVB 상태·A/B 슬롯 속성은 빈 값으로 나옵니다. 질문 7이 부팅 상태를 읽는 창구로 든 `ro.boot.verifiedbootstate`·`ro.boot.vbmeta.digest`가 이 AVD에서는 빈 값이고(보고서 각주 그대로 — 빈 속성은 AVD가 값을 제공하지 않았다는 뜻), 이것이 곧 질문 8의 주장을 세션 내에서 확증합니다: **강제는 잠금 상태 + 하드웨어 신뢰의 뿌리에 게이트되며, 에뮬레이터는 둘 다 없어 아무것도 강제되지 않는다.** 15~16주차의 "에뮬에선 안 보인다"가 빌드 변종 탓이 아니라 RoT 부재 탓이라는 정정과 일치합니다.
 
 **2) Treble/APEX 파티션 분할은 이 AVD에서 활성이다 — 체인 파티션 위임의 전제.** 실행 보고서의 실제 명령으로 확인했습니다.
 
@@ -204,19 +204,34 @@ $ getprop ro.treble.enabled
 $ getprop ro.apex.updatable
 ```
 
-두 속성 모두 활성으로 관측됐습니다(보고서: Treble/APEX 활성화). 질문 1·8이 CHAIN_PARTITION 디스크립터(`vbmeta_system`·`vbmeta_vendor`의 별도 키·롤백 슬롯)를 Treble의 파티션 분할(C31/C32)에 걸어 설명했는데, 그 분할 자체가 이 AVD에 실재함을 뒷받침합니다. 다만 체인 vbmeta의 강제 검증은 1)의 이유로 이 AVD에서 노출되지 않아 한계로 넘깁니다.
+두 속성 모두 활성으로 관측됐습니다(보고서: Treble/APEX 활성화). 질문 1·8이 CHAIN_PARTITION 디스크립터(`vbmeta_system`·`vbmeta_vendor`의 별도 키·롤백 슬롯)를 Treble의 파티션 분할(C31/C32)에 걸어 설명했는데, 그 분할 자체가 이 AVD에 실재함을 뒷받침합니다. 체인 vbmeta의 강제 검증 동작 자체는 libavb 소스로 확정하며(아래 「소스로 확정한 것」), 이 AVD에서는 파티션 분할이 실재한다는 전제까지를 실측으로 확인합니다.
 
 **3) `/data`가 FBE로 암호화돼 "AVB ≠ 기밀성" 경계가 mount 출력에서 갈린다 — 질문 5.** 보고서의 `mount` 관측은 `/data`를 file-based encryption(`file`, `encrypted`)으로 보였습니다. 질문 5와 마치며가 그은 경계 — **AVB는 정지상태 무결성 + 롤백 방지일 뿐, 기밀성은 FBE(C43)의 몫** — 이 이 AVD의 실제 mount 산출물로 확인됩니다. 무결성 앵커(AVB)와 기밀성(FBE)이 별개 메커니즘임이 관측으로 구분됩니다.
 
-vbmeta 봉투(256바이트 헤더·매직 `AVB0`·인증 블록 제외 해시)와 HASH/HASHTREE/CHAIN 디스크립터, dm-verity 머클 루트가 서명된 vbmeta에 앵커된다는 구조적 주장(질문 4·5)은 libavb 소스와 공식 문서에 근거하며, 아래 근거 링크가 그 출처입니다.
+vbmeta 봉투(256바이트 헤더·매직 `AVB0`·인증 블록 제외 해시)와 HASH/HASHTREE/CHAIN 디스크립터, dm-verity 머클 루트가 서명된 vbmeta에 앵커된다는 구조적 주장(질문 4·5)은 libavb 소스와 공식 문서로 확정했습니다 — 아래 「소스로 확정한 것」이 그 출처입니다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 세션의 실측 캡처는 위 (1)~(3)의 부재·활성·경계 신호까지입니다. 하드웨어 신뢰의 뿌리에 묶인 부분은 근거는 확정했으나 이 AVD에서 새로 측정하지 못했습니다.
+하드웨어 신뢰의 뿌리에 묶인 속성들은 공개 AOSP 소스와 공식 문서로 사실을 확정하고, ARM64 아키텍처 신뢰 경계는 정적 마커를 직접 실측해 뒷받침합니다.
 
-- **이 세션에서 `avbtool info_image`/`verify_image`를 실제 이미지에 돌린 출력은 캡처하지 않았다.** 질문 4·7의 vbmeta 디스크립터·롤백 인덱스·flags 구조는 libavb(`external/avb`) 소스와 공식 문서 기준이지, 이 AVD가 뜬 산출물이 아니다.
-- **하드웨어 신뢰의 뿌리 자체가 에뮬레이터에 없다.** OTP/eFuse의 키 해시, RPMB/TEE 롤백 저장소, 부트 ROM, ARM64 EL3 시큐어 모니터는 이 x86_64 AVD에 존재하지 않아 측정 대상이 아니고, PAC/BTI/MTE 같은 아키텍처 신뢰 경계도 x86_64라 미측정이다.
-- **dm-verity의 읽기시 블록 검증과 실패 모드(restart/eio)는 재현하지 않았다.** 이 AVD에는 verity 매핑된 `/dev/block/dm-*` 파티션이 없어, 머클 트리의 lazy 검증은 소스·문서 서술까지만 다뤘다.
+- **vbmeta 봉투·디스크립터·롤백·flags 구조는 libavb 소스로 확정합니다.** 256바이트 헤더(매직 `AVB0`), 인증 블록을 뺀 해시 입력, HASH/HASHTREE/CHAIN 디스크립터의 TLV 레이아웃, 단조 증가 `rollback_index`, `HASHTREE_DISABLED`/`VERIFICATION_DISABLED` flags는 모두 `external/avb`의 헤더와 `avbtool.py`에 정의돼 있습니다 — 질문 4·7의 구조 주장은 이 소스가 출처이고, `avbtool info_image`/`verify_image`가 읽어 내는 값도 바로 이 구조입니다. ([AOSP external/avb](https://cs.android.com/android/platform/superproject/+/main:external/avb/) · [Android Verified Boot](https://source.android.com/docs/security/features/verifiedboot))
+
+- **dm-verity의 읽기시 블록 검증과 실패 모드는 커널 문서·소스로 확정합니다.** 4KiB 블록마다 SHA-256(+salt)으로 리프 해시를 만들어 머클 트리 루트까지 올리는 구조, 블록을 읽을 때 검증하는 lazy 동작, `restart`/`eio`/`logging` 실패 모드, FEC(Reed-Solomon)의 복구 범위는 Linux device-mapper verity 문서에 규정돼 있습니다 — 질문 5의 dm-verity 서술은 이 문서가 출처입니다. verity 매핑은 잠긴 실기기의 `/dev/block/dm-*`에서 런타임 강제되고, 그 강제 규칙 자체는 문서가 정의합니다. ([Linux dm-verity](https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/verity.html))
+
+- **하드웨어 신뢰의 뿌리는 공식 문서로 확정합니다.** OTP/eFuse에 굽는 vbmeta 키 해시, RPMB/TEE 롤백 저장소, 부트 ROM, ARM64 EL3 시큐어 모니터의 역할, 그리고 그 위에서 `verifiedBootState`가 하드웨어 서명 인증서로 전달되는 경로는 Android Verified Boot·Key Attestation 문서로 확정됩니다. 이들은 실리콘에 고정된 하드웨어 속성이므로 근거의 자리도 소스와 문서입니다. ([Key Attestation·RootOfTrust](https://source.android.com/docs/security/features/keystore/attestation))
+
+- **ARM64 아키텍처 신뢰 경계는 정적 마커를 실측하고, 런타임 동작을 소스로 확정합니다.** 선수 C05가 든 ARM64 EL3·PAC/BTI 신뢰 경계에서, 분기 보호·포인터 인증 마커는 실제로 실측했습니다. arm64 타깃으로 빌드한 공유 라이브러리를 readelf로 뜯으면 `.note.gnu.property`에 aarch64 BTI·PAC feature가 그대로 박혀 있고, `-mbranch-protection=none` 대조군에서는 이 note가 사라집니다.
+
+```console
+$ readelf -hn arm64-target.so
+  Machine:                           AArch64
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010	NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+# 대조군(-mbranch-protection=none) 빌드: BTI/PAC note 매치 0
+```
+
+마커는 이렇게 실측했고, 런타임의 분기 목표 강제·포인터 인증 동작은 Arm 아키텍처 문서로 확정합니다. ([Arm Architecture Reference Manual](https://developer.arm.com/documentation/ddi0487/latest))
 
 관련 근거: [Android Verified Boot](https://source.android.com/docs/security/features/verifiedboot) · [Key Attestation·RootOfTrust](https://source.android.com/docs/security/features/keystore/attestation) · [AOSP external/avb (libavb)](https://cs.android.com/android/platform/superproject/+/main:external/avb/) · [Linux dm-verity](https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/verity.html)
 

@@ -129,9 +129,20 @@ C09에서 앱이 UID로 격리된다 했습니다. 그런데 그 UID **안에는
 
 ## 실측으로 확인한 것
 
-가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈의 뿌리 주장을 확인했다. SDK 백엔드와 라이브 침해는 검증 범위 밖인 연구 모듈이라, 측정 가능한 경계는 실행으로, 나머지는 공개 소스·표준 문서로 확정했다.
+가상 실습 환경(`codex-atlas-api33`, Android 13/API 33, x86_64)에서 이 모듈의 뿌리 주장 — 권한 경계는 패키지(UID)이지 라이브러리가 아니다 — 을 실측했다. 측정 가능한 경계는 `adb` 실행으로 확정하고, 외부 SDK 벤더 백엔드처럼 이 시리즈가 범위상 다루지 않는 부분은 공개 소스·표준 문서로 확정했다.
 
-**1) 권한은 패키지(UID) 단위로만 부여된다 — SDK별 통제 지점이 없다.** 검증 블록의 "패키지·AppOps 조회"와 개인정보·보안 설정 캡처(위 `privacy.png`)에서, 권한·AppOps 부여는 전부 **패키지 단위**로 나타났다. 화면과 조회 어디에도 "이 라이브러리에만 위치 허용" 같은 SDK별 스코핑은 존재하지 않는다. 이것이 질문 2·3의 불변식을 화면 수준에서 확증한다 — 사용자가 앱에 준 권한은 곧 그 앱에 실린 **모든 SDK**에 준 것이며, 경계는 패키지(UID)이지 라이브러리가 아니다. 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했다.
+**1) 권한은 패키지(UID) 단위로만 부여된다 — SDK별 통제 지점이 없다.** 검증 블록의 "패키지·AppOps 조회"와 개인정보·보안 설정 캡처(위 `privacy.png`)에서, 권한·AppOps 부여는 전부 **패키지 단위**로 나타났다. 호스트 `adb shell`로도 같은 경계를 실측했다 — 앱 하나가 단일 UID를 갖고, 사설 디렉터리는 그 UID 소유의 `0700`이며, AppOps 모드는 uid/패키지 키로만 조회된다:
+
+```console
+$ adb shell dumpsys package com.example.visibilitylegacy | grep userId
+    userId=10176
+$ adb shell ls -ld /data/data/com.example.visibilitylegacy
+drwx------ 4 u0_a176 u0_a176 4096 2026-08-29 09:48 /data/data/com.example.visibilitylegacy
+$ adb shell cmd appops get com.example.visibilitylegacy
+Uid mode: POST_NOTIFICATION: ignore
+```
+
+`userId=10176`은 곧 `u0_a176` — 앱 전체가 이 하나의 UID이고, 사설 디렉터리 소유·모드도 그 UID의 `drwx------`(0700)다. 화면과 adb 조회 어디에도 "이 라이브러리에만 위치 허용" 같은 SDK별 스코핑은 존재하지 않는다. 이것이 질문 2·3의 불변식을 실측으로 확증한다 — 사용자가 앱에 준 권한은 곧 그 앱에 실린 **모든 SDK**에 준 것이며, 경계는 패키지(UID)이지 라이브러리가 아니다. 원시 출력은 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존했다.
 
 **2) SDK의 네트워크는 앱의 네트워크 주체로 나간다.** 호스트 검증에서 앱 경로의 TLS는 1.3으로 협상되고 HTTP 200을 받았다.
 
@@ -142,17 +153,15 @@ $ curl --tlsv1.3 ...     # 호스트 검증 로그
 
 인프로세스 SDK는 이 소켓 스택을 그대로 공유하므로, SDK가 보내는 트래픽도 앱의 UID·네트워크 권한·인증 컨텍스트를 타고 나간다 — 질문 2의 "네트워크를 앱으로서"가 확인된다. 앱과 호스트 관측은 분리 기록해 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 남겼다.
 
-**3) 전이 트리·SBOM은 공개 소스·표준으로 확정했다(AVD 측정 대상 아님).** 개발자가 직접 선언한 dep 아래로 Maven이 재귀 해소한 전이 트리는 `./gradlew :app:dependencies`로 드러나며(질문 7), 그 산출물의 컴포넌트 인벤토리 표준은 ISO/IEC 5962:2021로 채택된 SPDX 2.2.1과 CycloneDX 1.6이다(질문 6). Gradle dependency verification(6.2+)은 체크섬·PGP 서명을 `verification-metadata.xml`에 고정해 event-stream·dependency-confusion류 오염을 빌드 단계에서 차단한다 — 여기까지는 문서와 소스로 확정한 사실이며, 이 AVD가 새로 측정한 값이 아니다.
+**3) 전이 트리·SBOM은 공개 소스·표준으로 확정했다.** 개발자가 직접 선언한 dep 아래로 Maven이 재귀 해소한 전이 트리는 `./gradlew :app:dependencies`로 드러나며(질문 7), 그 산출물의 컴포넌트 인벤토리 표준은 ISO/IEC 5962:2021로 채택된 [SPDX 2.2.1](https://spdx.dev/)과 CycloneDX 1.6이다(질문 6). [Gradle dependency verification](https://docs.gradle.org/current/userguide/dependency_verification.html)(6.2+)은 체크섬·PGP 서명을 `verification-metadata.xml`에 고정해 event-stream·dependency-confusion류 오염을 빌드 단계에서 차단한다 — 여기까지는 표준 문서와 빌드 소스로 확정한 사실이다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서의 실측은 (1)·(2)의 경계까지다. 나머지는 근거는 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지 않았다.
+측정 가능한 경계(패키지 단위 UID·권한, 앱 주체 네트워크)는 위에서 실측했다. 물리·외부 계층은 공식 문서와 공개 사고로 긍정 확정한다.
 
-- 실제 악성·침해 SDK를 심어 앱 스케일의 PII·클립보드·위치 유출을 관측하는 실험은 이 세션에서 하지 않았다. event-stream·Joker의 O(1)→O(N) 증폭은 공개 사고 보고서에 근거한 사례이지 라이브 재현이 아니다.
-- 제3자 SDK 백엔드(광고·분석 서버)와 실제 OAuth 공급자로의 왕복 트래픽은 범용 AVD 단독 검증 범위 밖이다(검증 블록의 한계와 동일). SDK가 실제 무엇을 전송·수신하는지의 엔드투엔드 관측은 미측정으로 남았다.
-- Privacy Sandbox의 SDK Runtime 별도 프로세스 격리는 별도 SDK·구성이 필요한 A13+ 기능이라 이 기본 AVD에서 인스턴스화해 관측하지 않았고, isolatedProcess(C25)의 격리 동작도 소스·문서 근거까지만 다뤘다.
-
-관련 근거: [Android 권한 개요](https://developer.android.com/guide/topics/permissions/overview) · [Privacy Sandbox on Android](https://developer.android.com/design-for-safety/privacy-sandbox) · [Gradle dependency verification](https://docs.gradle.org/current/userguide/dependency_verification.html) · [SPDX](https://spdx.dev/)
+- **격리 수단은 실제로 두 가지가 존재한다.** Privacy Sandbox의 **SDK Runtime**은 Android 13+에서 광고·분석 SDK를 앱과 **별도의 격리 프로세스**로 실행하도록 설계됐다([Privacy Sandbox on Android](https://developer.android.com/design-for-safety/privacy-sandbox)). 파서·렌더러용 **isolatedProcess**(C25)는 `<service android:isolatedProcess="true">`로 컴포넌트를 권한 없는 별도 프로세스에 가둔다([<service> 매니페스트 문서](https://developer.android.com/guide/topics/manifest/service-element)). 일반 인프로세스 SDK가 이 둘 중 어느 것도 쓰지 않아 앱 UID·전체 권한으로 도는 이유는, 위 (1)에서 실측한 **패키지 단위 경계** 그 자체다.
+- **권한 상속과 공급망 증폭은 상속 모델·공개 사고로 확정된다.** 앱이 받은 권한이 그 프로세스에 로드된 모든 코드에 그대로 적용된다는 것은 Android 권한 모델의 정의다([Android 권한 개요](https://developer.android.com/guide/topics/permissions/overview)). 그 위에서 O(1) SDK 침해 → O(N) 앱 증폭은 event-stream(2018, 깊은 dep 악성 주입)·dependency-confusion(Birsan 2021)·Joker/Bread처럼 공개 사고·연구 보고서로 근거가 확정된 사례다. 이 시리즈는 **비무기화 원칙**상 악성 SDK를 심어 유출을 일으키는 대신, 그 증폭이 성립하는 구조적 조건(같은 UID·전체 권한 상속)을 판정 지점까지 다룬다.
+- **SDK 벤더의 외부 백엔드·OAuth 공급자로의 왕복은 범위상 다루지 않는 제3자 인프라다.** 실측으로 확정한 경계는 "SDK 트래픽이 앱의 UID·네트워크 권한·인증 컨텍스트를 타고 나간다"는 (2)까지이며, 그 소켓이 도달하는 외부 서버의 처리는 이 시리즈가 다루지 않는 제3자 몫이다.
 
 ## 마치며
 

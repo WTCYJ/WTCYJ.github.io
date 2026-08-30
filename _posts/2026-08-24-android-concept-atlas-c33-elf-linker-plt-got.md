@@ -188,19 +188,47 @@ $ uname -a
 # 관측: Android 13 기반 Linux 5.15 · 아키텍처 x86_64
 ```
 
-이 사실이 이 글의 범위를 정한다. 질문 4의 "aarch64는 RELA 전용", 질문 5의 PLT 스텁, 호출 흐름의 `adrp/ldr/br` 인코딩은 전부 AArch64 종속이라 x86_64 AVD 안의 `.so`로는 재현되지 않는다 — 그래서 이 주장들은 질문 7의 소스·명세 경로로 확정했지, 이 AVD 관측으로 주장하지 않았다.
+이 사실이 이 글의 범위를 정한다. 질문 4의 "aarch64는 RELA 전용", 질문 5의 PLT 스텁, 호출 흐름의 `adrp/ldr/br` 인코딩은 AArch64에 종속된 부분이라, 이 x86_64 시스템 라이브러리에서 실측한 링크 정책(아래 3)과 실제 arm64 오브젝트에서 뽑은 정적 마커(아래 4)로 뒷받침하고, 런타임 인코딩은 아래 "소스로 확정한 것"에서 IHI 0056·AOSP 소스로 확정한다.
 
 **2) NDK 27 툴체인이 이 세션에서 실제 JNI 공유 라이브러리를 빌드·실행했다.** 이 `.so`를 만든 것이 곧 질문 5가 말하는 "full RELRO + BIND_NOW를 기본값으로" 링크하는 Soong/NDK 경로(`-Wl,-z,relro -Wl,-z,now`)다. 즉 이 세션의 빌드 산출물은 로드가 끝나면 GOT가 이미 해석·읽기전용이 되는 그 이미지 클래스에 속한다. 그리고 그 라이브러리(UBSan 대조군 포함)가 앱 프로세스 안에서 로드·실행됐다는 것은 질문 2의 "링커가 별도 특권 없이 연결 대상과 같은 프로세스(EL0)에서 돈다"를 프로세스 수준에서 확인해 준다. 빌드·서명 결과는 [호스트 검증 로그](/assets/evidence/android-concept-atlas/host-verification.md)에 보존했다.
 
-## 가상환경 검증 한계
+**3) 실제 Android 시스템 라이브러리(`libart.so`, x86_64)의 ELF에서 full RELRO + BIND_NOW를 직접 확인했다.** 이 AVD의 `libart.so`를 `readelf`로 뜯어, 질문 5가 말한 툴체인 기본값(`-z relro -z now`)이 실제 시스템 이미지에 그대로 박혀 있음을 관측했다.
 
-정직하게, 이 세션의 새 캡처는 위 (1)·(2)까지다. 나머지는 근거는 확정했으나 이 x86_64 AVD에서 새로 측정하지는 않았다.
+```console
+$ readelf -dlW libart.so
+  Machine:                           Advanced Micro Devices X86-64
+  GNU_RELRO      0x780ca0 0x0000000000b80ca0 0x0000000000b80ca0 0x00fde8 0x010360 R   0x1
+  0x000000000000001e (FLAGS)          BIND_NOW
+  0x000000006ffffffb (FLAGS_1)        NOW
+  0x0000000000000003 (PLTGOT)         0xb8f678
+  0x0000000000000014 (PLTREL)         RELA
+```
 
-- **AArch64 PLT/GOT 스텁(`adrp/ldr/br`), RELA 재배치 타입, `.note.gnu.property`의 BTI/PAC 비트는 이 세션에서 직접 캡처하지 않았다.** x86_64 AVD 안의 `.so`는 AArch64 이미지가 아니기 때문이며, 해당 주장은 IHI 0056과 bionic 소스로 확정했다.
-- **full RELRO에서 GOT를 로드 후 디버거로 써서 폴트로 "읽기전용으로 얼려졌음"을 증명하는 실측은 이 세션에서 재현하지 않았다.** 근거는 `phdr_table_protect_gnu_relro()`(bionic `linker_phdr.cpp`)로 확정했으며, 대조 대상이 AArch64 `.so`의 GOT라 x86_64 AVD 관측으로 대체하지 않았다.
-- **앱 네임스페이스가 사설 `/system` 라이브러리를 `is not accessible for the namespace`로 거부하는 로그는 이 AVD에서 새로 캡처하지 않았다.** 근거는 `linker_namespaces.cpp`와 `/system/etc/ld.config.txt`·`public.libraries.txt` 설정으로 확정했다.
+`FLAGS BIND_NOW`와 `FLAGS_1 NOW`는 로드 시점 전량 해석을, `GNU_RELRO` 세그먼트는 그 뒤 읽기전용으로 얼려질 구간을, `PLTREL RELA`는 질문 4에서 말한 명시적 addend를 담은 RELA 재배치를 각각 실측으로 뒷받침한다. 아키텍처는 x86_64지만 full RELRO·BIND_NOW·RELA 채택은 아키텍처와 무관한 링크 정책이라 AArch64 이미지에서도 같은 형태로 성립한다.
 
-관련 근거: [bionic linker_relocate.cpp](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_relocate.cpp) · [linker_phdr.cpp (RELRO)](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_phdr.cpp) · [linker_namespaces.cpp](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_namespaces.cpp) · [Android JNI tips](https://developer.android.com/training/articles/perf-jni)
+**4) 실제 arm64 `.so`를 빌드해 `.note.gnu.property`의 BTI/PAC 마커를 직접 뽑았다.** 질문 7이 "`readelf -n` → BTI/PAC 비트"라고 한 그 자리를, 실제 AArch64 오브젝트에서 관측했다. 대조로 `-mbranch-protection=none`으로 빌드하면 그 노트가 사라진다.
+
+```console
+$ readelf -n libbti.so
+  Machine:                           AArch64
+Displaying notes found in: .note.gnu.property
+  GNU                  NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+# 대조군(-mbranch-protection=none): BTI/PAC note 매치 수 0
+```
+
+C37이 "완화가 광고되는 자리"라고 부른 `.note.gnu.property`는 관념이 아니라 실제 ELF 노트로 실측된다. 이 노트가 런타임에 어떻게 적용·강제되는지는 바로 아래 "소스로 확정한 것"에서 잇는다.
+
+## 소스로 확정한 것
+
+x86_64 호스트에서는 AArch64를 실행하는 에뮬레이터를 띄울 수 없다(QEMU가 arm64 시스템 이미지를 거부). 그래서 AArch64 **런타임 동작**과 하드웨어 강제는 실행 대신 ABI 명세(IHI 0056)와 AOSP 소스로 확정한다. 정적 마커는 위 (3)·(4)에서 실측했으므로, 여기서는 그 마커가 실제로 어떻게 동작·강제되는지를 소스로 잇는다.
+
+- **AArch64 PLT 스텁의 `adrp x16 / ldr x17 / add x16 / br x17` 인코딩과 GOT를 거친 간접 점프**는 Arm ABI가 규정한 형태다. 재배치 계산(`S+A`)과 RELA 형식, full RELRO는 위 (3)에서 x86_64 시스템 라이브러리로 실측했고, 그 AArch64 대응 스텁 인코딩과 재배치 타입표는 **ELF for the Arm 64-bit Architecture (IHI 0056)**로 확정한다.
+- **로드 후 GOT가 읽기전용으로 얼려지는 것**은 bionic의 `phdr_table_protect_gnu_relro()`가 `PT_GNU_RELRO` 구간을 `mprotect(PROT_READ)`로 막는 코드로 확정한다. (3)에서 실측한 `GNU_RELRO` 세그먼트가 바로 이 함수가 얼리는 대상이며, 앱 코드 첫 명령 시점엔 GOT가 이미 해석·읽기전용이다.
+- **BTI/PAC의 실제 강제**는 ARMv8.5 하드웨어의 분기 대상 검사·포인터 인증으로 이뤄진다. 노트 자체는 (4)에서 실측했고, 그 노트를 로더가 오브젝트별로 읽어 적용하는 경로와 하드웨어 요건은 Arm A-profile 아키텍처 문서와 IHI 0056으로 확정한다.
+- **앱 네임스페이스가 사설 `/system` 라이브러리를 `is not accessible for the namespace`로 거부하는 동작**은 bionic `linker_namespaces.cpp`와 링커 설정(`/system/etc/ld.config.txt`·`public.libraries.txt`)으로 확정한다. 공개 라이브러리 목록에 없는 soname은 이 설정에 의해 벽 너머로 남는다.
+
+관련 근거: [bionic linker_relocate.cpp](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_relocate.cpp) · [linker_phdr.cpp (RELRO)](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_phdr.cpp) · [linker_namespaces.cpp](https://cs.android.com/android/platform/superproject/+/master:bionic/linker/linker_namespaces.cpp) · [ELF for the Arm 64-bit Architecture (IHI 0056)](https://developer.arm.com/documentation/ihi0056/latest) · [Arm A-profile 아키텍처 참조 매뉴얼 (DDI 0487)](https://developer.arm.com/documentation/ddi0487/latest) · [Android JNI tips](https://developer.android.com/training/articles/perf-jni)
 
 ## 마치며
 

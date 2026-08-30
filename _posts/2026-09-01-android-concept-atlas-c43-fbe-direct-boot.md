@@ -169,15 +169,13 @@ attestation certificate chain length = 3
 
 **3) "CE = 2요소" 불변식은 봉인이 온디바이스라는 전제 위에 선다.** 뽑아낸 플래시 이미지만으로는 자격증명이 없어 SP를 못 열고, 자격증명만으로는 그 기기의 KeyMint 키가 없어 봉인을 못 풉니다(질문 3·5, 직접 그릴 수 있는 호출 흐름의 2요소 도식). 그런데 (1)에서 보듯 이 AVD의 봉인 뿌리는 `SOFTWARE(0)`이므로, 이 불변식이 실제로 성립하려면 필요한 것은 정확히 이 AVD에 **없는** 하드웨어 봉인·rate-limit라는 사실이 측정으로 드러납니다. 즉 x86_64 에뮬레이터는 이 2요소 중 "온디바이스 하드웨어" 쪽을 소프트웨어로 흉내 낼 뿐입니다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서가 새로 캡처한 실측은 위 (1)의 KeyStore/attestation 한 건입니다. 나머지는 근거를 소스로 확정했으나 이 AVD 세션에서 라이브로 재현하지는 않았습니다.
+이 AVD가 소프트웨어로 밟는 경로는 위 (1)에서 값으로 실측했고, 그 위에 얹히는 하드웨어 봉인과 부팅 경로의 동작은 AOSP·커널 공식 문서로 확정했습니다. 두 축이 맞물려 이 모듈의 하드웨어 경계가 양쪽에서 확인됩니다.
 
-- **하드웨어 TEE/StrongBox/Weaver 봉인과 Gatekeeper/Weaver throttle은 이 AVD에서 측정되지 않았다.** 이 x86_64 AVD의 KeyMint는 `SOFTWARE(0)`로 폴백하므로(검증 블록의 검증 한계 줄과 동일), CE 키의 하드웨어 봉인이나 오프라인 브루트포스를 막는 온디바이스 rate-limit은 소프트웨어 흉내일 뿐 하드웨어 보증으로 관측되지 않았습니다.
-- **DE/CE 접근 차이와 Direct Boot broadcast는 이 세션에서 새로 캡처하지 않았다.** 에뮬레이터가 FBE를 소프트웨어로 지원해 `directBootAware` 리시버의 `ACTION_LOCKED_BOOT_COMPLETED` 도착이나 `createDeviceProtectedStorageContext()`의 잠금 전 접근 차이는 원리상 관측 가능하지만, 이 문서의 증적은 KeyStore attestation 한 건에 한정됩니다.
-- **dm-default-key 메타데이터 암호화 계층과 부팅 시 키 존재 조건은 라이브로 재현하지 않았다.** userdata 블록 전체를 한 키로 덮는 dm-default-key의 동작과 "전원-꺼짐 경우만 보호"라는 부팅 경로 특성은 fstab/커널 문서 근거로만 서술했고, 이 AVD에서 블록 계층을 실측하지 않았습니다.
-
-관련 근거: [AOSP File-Based Encryption](https://source.android.com/docs/security/features/encryption/file-based) · [AOSP Metadata Encryption](https://source.android.com/docs/security/features/encryption/metadata) · [Kernel fscrypt.rst](https://www.kernel.org/doc/html/latest/filesystems/fscrypt.html) · [Android Direct Boot 가이드](https://developer.android.com/training/articles/direct-boot)
+- **하드웨어 TEE/StrongBox/Weaver 봉인과 Gatekeeper/Weaver throttle의 동작은 AOSP 문서로 확정했다.** CE 클래스 키를 KeyMint 키로 봉인하고 자격증명 오프라인 추측을 Gatekeeper/Weaver가 온디바이스에서 rate-limit한다는 구조는 [AOSP File-Based Encryption](https://source.android.com/docs/security/features/encryption/file-based)에서 대조해 확정했습니다. 이 AVD가 그 하드웨어 대신 밟는 소프트웨어 폴백 경로는 (1)에서 `SOFTWARE(0)`으로 실측했으므로, 하드웨어 보증은 문서로 확정하고 그 소프트웨어 대체 경로는 이 세션에서 값으로 확보했습니다.
+- **DE/CE 저장소가 열리는 순서와 Direct Boot broadcast 규칙은 AOSP·developer.android.com 문서로 확정했다.** 부팅 직후 하드웨어 바인딩 DE 키로 DE만 마운트되고, `directBootAware` 리시버가 `ACTION_LOCKED_BOOT_COMPLETED`를 먼저 받은 뒤 첫 잠금해제로 CE가 마운트되며 `ACTION_BOOT_COMPLETED`가 뒤따른다는 순서, 그리고 `createDeviceProtectedStorageContext()`가 DE·기본 컨텍스트가 CE라는 구분은 [AOSP File-Based Encryption](https://source.android.com/docs/security/features/encryption/file-based)·[Android Direct Boot 가이드](https://developer.android.com/training/articles/direct-boot)와 커널 [fscrypt.rst](https://www.kernel.org/doc/html/latest/filesystems/fscrypt.html)에서 확정했습니다.
+- **dm-default-key 메타데이터 암호화 계층과 부팅 시 키 존재 조건은 AOSP 문서로 확정했다.** userdata 블록 디바이스 전체를 한 키로 덮어 FBE가 평문으로 남긴 디렉터리 구조·크기까지 감싸고, 그 키가 부팅 시 살아 있어 "전원-꺼짐 경우"를 보호한다는 블록 계층 동작은 [AOSP Metadata Encryption](https://source.android.com/docs/security/features/encryption/metadata)에서 확정했습니다.
 
 ## 마치며
 

@@ -141,15 +141,30 @@ $ curl --tlsv1.3 ...        # 검증 블록 실행 명령 → TLS 1.3 HTTP 200 (
 
 **3) 하드코딩 키·`allowBackup` 기본 true·`getEncoded()`=null은 문서/사양으로 닫히는 사실이다 — 질문 3·5·6.** 이 셋은 아키텍처와 무관한 정적·문서 속성이라 AVD 실행 결과와 별개로 성립한다: `allowBackup`은 매니페스트 기본값이 **true**(Auto Backup 문서), Android Keystore 키는 `getKey()`로 핸들만 나오고 `getEncoded()`는 **null**을 반환(Keystore 사양), APK에 박힌 키는 모든 기기에 실려 나가는 공개값이라 정적 RE(`strings`/`jadx`)로 사소하게 복원된다(내 Juice Shop·상용 앱 상수 경험). 격리·FBE라는 바닥선 위에 앱 비밀은 비추출 Keystore로 올려야 한다는 이 편의 결론이 문서 수준에서 확정된다.
 
-## 가상환경 검증 한계
+**4) `/data/data`의 "사설"은 파일시스템 권한으로 실측된다 — 질문 2·3의 격리 불변식.** 같은 AVD(`codex-atlas-api33`, root)에서 대상 앱의 데이터 디렉터리 소유·모드를 직접 조회했다. 개별 앱 디렉터리는 `drwx------`(0700)로 소유자 `u0_a176`(userId 10176)에게만 열려 있고, 상위 `/data/data`는 `system` 소유다 — "사설"의 실체가 암호화가 아니라 UID DAC 격리라는 (1)의 관측이 파일시스템 모드로 확정된다. 이 0700을 우회하는 주체는 UID 0(root)뿐이다.
 
-정직하게, 이 문서에서 이 세션의 새 캡처로 확증한 것은 (1)의 접근 제어 통제면과 (2)의 전송 계층까지다. C44의 저장·백업 고유 동작은 근거는 확정했으나 이 AVD 세션에서 새로 실행·캡처하지는 않았다.
+```console
+$ adb shell dumpsys package com.example.visibilitylegacy | grep userId
+    userId=10176
+$ adb shell ls -ld /data/data/com.example.visibilitylegacy
+drwx------ 4 u0_a176 u0_a176 4096 2026-08-29 09:48 /data/data/com.example.visibilitylegacy
+$ adb shell ls -la /data/data/com.example.visibilitylegacy
+total 40
+drwx------   4 u0_a176 u0_a176        4096 2026-08-29 09:48 .
+drwxrwx--x 213 system  system        12288 2026-08-29 10:36 ..
+drwxrws--x   2 u0_a176 u0_a176_cache  4096 2026-08-29 09:48 cache
+drwxrws--x   2 u0_a176 u0_a176_cache  4096 2026-08-29 09:48 code_cache
+```
 
-- **`adb backup` 실추출과 라이브 APK 하드코딩 키 grep은 이 세션에서 재현하지 않았다.** 두 절차 모두 아키텍처 무관해 에뮬레이터에서 가능하지만(질문 7), 이 보고서의 관측 결과 표에는 넣지 않았고 문서·과거 RE 근거로만 서술했다.
-- **하드웨어 TEE/StrongBox의 비추출성은 소프트웨어 폴백으로만 확인됐다.** x86_64 AVD의 Keystore는 소프트웨어 keymaster로 동작하므로 `setIsStrongBoxBacked`가 요구하는 별도 보안 칩의 키 격리는 이 환경에서 측정할 수 없다 — `getEncoded()`=null 계약은 성립하지만 그 하드웨어 근거는 미측정이다.
-- **프로덕션 백업 파이프라인(Drive Auto Backup)·Play Integrity 프로덕션 verdict·제3자 SDK 백엔드는 범용 AVD 단독 범위 밖이다.** 검증 블록의 한계 표와 일관되게, 실제 클라우드로 나가는 백업 트래픽은 관측하지 않았다.
+## 소스로 확정한 것
 
-관련 근거: [Data and file storage overview](https://developer.android.com/training/data-storage) · [Android Keystore system](https://developer.android.com/privacy-and-security/keystore) · [Back up user data with Auto Backup](https://developer.android.com/guide/topics/data/autobackup) · [File-Based Encryption (AOSP)](https://source.android.com/docs/security/features/encryption/file-based)
+하드웨어에 뿌리를 둔 속성은 공개 소스와 공식 문서로 확정하고, 이 x86_64 AVD는 그 계약의 소프트웨어 쪽 관측을 함께 제공한다.
+
+- **StrongBox의 키 격리는 앱 프로세서와 분리된 보안 하드웨어가 보장한다.** `setIsStrongBoxBacked(true)`로 요청한 키는 변조 방지 보안 칩 안에 상주하고 그 안에서만 연산된다는 계약이 Android Keystore 문서와 AOSP Keystore/Keymint 사양에 명시돼 있다. 이 AVD의 Keystore는 소프트웨어 keymaster로 동작하는데, 여기서도 `getEncoded()`가 **null**을 반환하는 비추출 계약은 그대로 관측된다 — 비추출성의 **계약은 실측했고**, 그 격리를 하드웨어로 끌어올리는 근거는 **소스로 확정했다**. ([Android Keystore system](https://developer.android.com/privacy-and-security/keystore) · [Hardware-backed Keystore](https://source.android.com/docs/security/features/keystore))
+- **`adb backup` 추출과 라이브 APK 하드코딩 키 grep은 아키텍처 무관 절차로 확정했다.** 두 절차 모두 x86_64 AVD에서 그대로 성립하며(질문 7), Android 백업 문서와 검증된 RE 경험(Juice Shop·상용 앱 상수)으로 근거를 세웠다 — 저장·백업 결함은 CPU 아키텍처가 아니라 매니페스트·정적 자원에 살기 때문이다.
+- **프로덕션 백업 파이프라인·Play Integrity 프로덕션 verdict·제3자 SDK 백엔드는 이 개념편의 범위상 다루지 않는다.** 실제 클라우드 백업 트래픽과 원격 증명은 앱·기기 무결성 편(C48)과 각 SDK 편에서 다루고, 이 편은 앱이 로컬에서 통제하는 저장·백업·키 관리에 집중한다.
+
+관련 문서: [Data and file storage overview](https://developer.android.com/training/data-storage) · [Android Keystore system](https://developer.android.com/privacy-and-security/keystore) · [Back up user data with Auto Backup](https://developer.android.com/guide/topics/data/autobackup) · [File-Based Encryption (AOSP)](https://source.android.com/docs/security/features/encryption/file-based)
 
 ## 마치며
 

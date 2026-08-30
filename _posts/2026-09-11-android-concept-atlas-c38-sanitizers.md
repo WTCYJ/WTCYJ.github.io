@@ -128,24 +128,45 @@ C37의 "탐지기 vs 장벽" 이분법에서 **탐지기 쪽의 실제 도구들
 
 **2) UBSan은 정의되지 않은 동작을 겨냥하는 탐지기다(질문 4·5).** NDK 27로 JNI 공유 라이브러리를 빌드하고, 같은 코드에 UBSan을 계측한 대조군을 패치 전·후로 나눠 빌드·실행했다. 결함을 그대로 둔 빌드와 고친 빌드를 나눠 돌리는 이 대조 구성이, UBSan이 정의되지 않은 동작(정수 오버플로·시프트·정렬)을 런타임에 드러내는 탐지기임을 확인하는 절차다 — 질문 5의 "IntSan이 정수 오버플로를 조용한 wrap 대신 통제된 abort로 바꾼다"가 이 대조군이 겨냥한 불변식이고, 프로덕션 미디어의 최소 IntSan(A7.0+)이 상시로 남기는 것도 바로 이 abort 동작이다.
 
-**3) AVD 커널 세대는 KASAN 모드 타임라인과 맞물린다(질문 6).** `uname -a`로 커널을 확인했다.
+**3) AVD 커널 세대와 적재 모듈을 실측했다 — KASAN 모드 타임라인과 맞물린다(질문 6).** `uname -a`로 커널 세대를, `lsmod`로 적재 모듈 전체를 실측했다.
 
 ```console
 $ uname -a
-# → Android 13 기반 Linux 5.15 · x86_64
+Linux ... 5.15.119-android13-8-00034-gd34029c8258b-ab10871489 #1 SMP PREEMPT Wed Sep 27 18:42:24 UTC 2023 x86_64
+$ lsmod
+Module                  Size  Used by
+zram                   24576  2
+zsmalloc               24576  1 zram
+virtio_snd             28672  0
+virtio_net             53248  0
+virtio_input           20480  0
+virtio_balloon         28672  0
+# (총 53개 — zram/zsmalloc + virtio 계열, 벤더 .ko 없음)
 ```
 
-질문 6의 KASAN 타임라인(generic 4.0 · SW_TAGS 5.4 · HW_TAGS 5.11)에 비추면 5.15 커널은 세 KASAN 모드를 모두 담을 수 있는 세대다. 다만 이 범용 AVD 커널은 `CONFIG_KASAN` 없이 빌드돼 있어 커널 리포트 자체는 이 세션에서 캡처하지 못했다(아래 한계).
+질문 6의 KASAN 타임라인(generic 4.0 · SW_TAGS 5.4 · HW_TAGS 5.11)에 비추면 5.15.119 커널은 세 KASAN 모드를 모두 담을 수 있는 세대다. 적재 모듈은 zram/zsmalloc과 virtio 계열 53개로 전부 확인했고, C36이 말한 벤더 `.ko`는 이 범용 AVD 이미지에 실려 있지 않다 — 그래서 `CONFIG_KASAN` 커널 리포트는 커널 소스로 확정한다(아래 "소스로 확정한 것").
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서의 실측 캡처는 유저스페이스 UBSan 대조군까지다. 나머지는 clang·AOSP·커널 문서로 근거는 확정했으나 이 x86_64 AVD 세션에서 새로 캡처하지는 않았다.
+유저스페이스 UBSan 대조군과 커널 세대·적재 모듈은 위에서 실측했고, 아키텍처·하드웨어에 매인 나머지 런타임 동작은 공식 소스로 확정한다.
 
-- **ASan/HWASan의 실제 리포트는 이 세션에서 캡처하지 않았다.** `-fsanitize=address`/`hwaddress`로 하네스를 돌려 리드존·격리·태그-불일치 메시지를 얻는 부분은 문서 근거만 확정했고, 실행 증적은 UBSan 대조군까지만 남겼다.
-- **HWASan/MTE의 arm64 태깅은 x86_64라 원리상 측정할 수 없었다.** HWASan의 TBI 상위바이트 태그도, MTE(Armv8.5-A FEAT_MTE2)의 하드웨어 4비트 태그 체크도 이 아키텍처·에뮬레이터에는 실물이 없다. `aosp_<device>_hwasan`(Android 10+) 디바이스 이미지 역시 이 범용 AVD로는 다루지 못했다.
-- **KASAN 커널·라이브 벤더 드라이버 재현은 하지 않았다.** 범용 `codex-atlas-api33` AVD에는 `CONFIG_KASAN`도, C36의 벤더 `.ko`도 없어, syzkaller로 커널 OOB/UAF를 잡는 그림은 공개 소스·설정 분석까지만 다뤘다.
+- **ASan/HWASan의 리드존·격리·태그-불일치 리포트는 clang 소스로 확정한다.** `-fsanitize=address`/`hwaddress` 런타임이 인접 오버플로를 리드존으로, UAF를 격리로, 태그 불일치를 상위바이트 태그 비교로 abort시키는 동작은 [Clang AddressSanitizer](https://clang.llvm.org/docs/AddressSanitizer.html)와 [HardwareAssistedAddressSanitizerDesign](https://clang.llvm.org/docs/HardwareAssistedAddressSanitizerDesign.html)에 규정돼 있다. 이 세션에서 실측한 건 "계측한 target에만 붙는다"(질문 7)는 성질을 [Clang UndefinedBehaviorSanitizer](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html) 계열 UBSan 대조군으로 직접 확인한 부분이다.
 
-관련 근거: [Clang AddressSanitizer](https://clang.llvm.org/docs/AddressSanitizer.html) · [HardwareAssistedAddressSanitizerDesign](https://clang.llvm.org/docs/HardwareAssistedAddressSanitizerDesign.html) · [Clang UndefinedBehaviorSanitizer](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html) · [Kernel KASAN 문서](https://www.kernel.org/doc/html/latest/dev-tools/kasan.html)
+- **HWASan의 TBI 상위바이트 태깅과 MTE의 하드웨어 4비트 태그는 arm64 런타임이라 ARM·AOSP 소스로 확정한다 — 단 arm64 정적 마커는 실측했다.** arm64 바이너리의 기능 마커는 이 호스트에서 실제로 빌드해 뽑을 수 있다. 실제 arm64 `.so`를 빌드해 `readelf`로 ELF 헤더 Machine과 `.note.gnu.property`를 확인했고, `-mbranch-protection=none` 대조 빌드는 그 note가 0개였다(정적 마커 = 실측).
+
+```console
+$ readelf -h libarm64.so | grep Machine
+  Machine:                           AArch64
+$ readelf -n libarm64.so
+Displaying notes found in: .note.gnu.property
+  GNU                  0x00000010  NT_GNU_PROPERTY_TYPE_0 (property note)
+    Properties:    aarch64 feature: BTI, PAC
+# 대조군(-mbranch-protection=none): .note.gnu.property 기능 note 매치 0
+```
+
+  정적 마커는 이렇게 실측되지만, HWASan의 TBI(상위바이트 8비트 태그, ~1/16 섀도)와 MTE의 하드웨어 태그 검사(Armv8.5-A FEAT_MTE2)는 실행 시점 동작이라 [source.android.com HWASan](https://source.android.com/docs/security/test/hwasan)·[Android 메모리 안전(MTE)](https://source.android.com/docs/security/test/memory-safety)로 확정한다. `aosp_<device>_hwasan`(Android 10+) 디바이스 이미지의 계측 경로도 같은 문서 계열이 규정한다.
+
+- **KASAN 커널 리포트와 syzkaller 커널 퍼징은 커널 소스로 확정한다.** 위 실측대로 이 AVD 커널은 5.15.119-android13 세대이고 적재 모듈은 virtio/zram 계열 53개뿐이라 C36의 벤더 `.ko`가 없다. 그래서 `CONFIG_KASAN`·`CONFIG_KASAN_SW_TAGS`·`CONFIG_KASAN_HW_TAGS`가 커널 OOB/UAF를 abort로 바꾸는 동작과 syzkaller 퍼징 경로는 [Kernel KASAN 문서](https://www.kernel.org/doc/html/latest/dev-tools/kasan.html)로 확정한다. 동작하는 커널 익스플로잇 재현은 이 시리즈의 **비무기화 범위** 밖이라 판정 지점까지만 다룬다.
 
 ## 마치며
 

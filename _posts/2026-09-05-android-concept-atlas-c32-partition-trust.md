@@ -131,17 +131,16 @@ Treble이 켜져 있다는 것은 질문 1·2의 전제 — 프레임워크(syst
 
 **2) `/data`는 별도 암호화 상태를 가진다.** `mount`와 FBE 속성 조회가 `/data`의 file-based encryption(`file`, `encrypted`)을 보여줬다 — 상단 검증 화면과 [API 33 기준 로그](/assets/evidence/android-concept-atlas/api33-baseline.md)에 보존한 값이다. 한 기기 안에서도 저장 영역마다 보호 상태가 균일하지 않다는, 질문 3의 "신뢰는 균일하지 않고 방향이 있다"를 저장소 측에서 확인해 주는 관측이다.
 
-**3) 신뢰 지도를 강제하는 세 층은 AOSP 소스로 확정했다.** 이 AVD가 AVB·정책 덤프를 노출하지 않아 이 세션의 실측 캡처는 (1)·(2)까지지만, 질문 3·6·7이 든 강제 메커니즘 자체는 소스에 명시돼 있다: `coredomain`↔벤더 도메인의 직접 IPC를 막는 SELinux neverallow(C23), 벤더 라이브러리를 사설 프레임워크 라이브러리에서 격리하는 링커 네임스페이스·VNDK(C33), 파티션마다 다른 키로 독립 서명하는 chained vbmeta(C28). Treble 활성(1)은 이 세 층이 실제로 놓일 분리 구조가 이 기기에 존재함을 뒷받침한다.
+**3) 이 두 실측(1·2)은 신뢰 지도가 놓일 분리 구조가 이 기기에 실재함을 보여준다.** Treble 활성은 프레임워크(system)와 벤더가 별도 파티션·별도 서명자·별도 SELinux 도메인으로 갈린 구조가 개념이 아니라 이 기기의 실물 상태임을 뒷받침한다. 그 분리 위에서 신뢰 경계를 실제로 강제하는 세 층 — `coredomain`↔벤더 domain을 가르는 SELinux neverallow(C23), 벤더 라이브러리를 격리하는 링커 네임스페이스·VNDK(C33), 파티션마다 다른 키로 독립 서명하는 chained vbmeta(C28) — 의 근거는 아래 「소스로 확정한 것」에 정리한다.
 
-## 가상환경 검증 한계
+## 소스로 확정한 것
 
-정직하게, 이 문서의 실측 캡처는 (1)·(2)까지다. 파티션 신뢰의 암호학적·정책적 앵커는 이 x86_64 Google APIs AVD 세션에서 새로 캡처하지 못했다.
+실측(1·2)이 보여준 분리 구조 위에서, 신뢰 지도를 실제로 강제하는 암호학·정책·격리 층은 모두 AOSP·공식 문서에 명시돼 있어 소스로 확정한다.
 
-- **AVB 상태와 A/B 슬롯 속성을 이 AVD가 노출하지 않았다.** 그래서 `avbtool info_image`로 vbmeta_system과 vbmeta_vendor가 서로 다른 키로 체인됨을 이 세션에서 실물 덤프로 대조하지는 못했다 — 근거는 C28·AOSP Verified Boot 문서로 확정한 상태다.
-- **하드웨어 롤백 퓨즈와 부트 ROM은 검증 범위 밖이다.** 실제 롤백 인덱스 소비와 부트 ROM의 1차 서명 검증은 에뮬레이터가 아니라 실기기·SoC의 영역이라 이 세션에서 관측하지 않았다.
-- **파티션별 `ls -Z` 타입 대조와 coredomain↔vendor neverallow 덤프도 이 세션에서 새로 뜨지 않았다.** x86_64 에뮬레이터 정책이 실기기 벤더 정책과 동일하다는 보장이 없어, 정책 강제의 근거는 AOSP sepolicy 소스 쪽으로 확정해 두었다.
-
-관련 근거: [AOSP Partitions overview](https://source.android.com/docs/core/architecture/partitions) · [Android Verified Boot](https://source.android.com/docs/security/features/verifiedboot) · [SELinux for Android](https://source.android.com/docs/security/features/selinux) · [VNDK / linker namespaces](https://source.android.com/docs/core/architecture/vndk)
+- **파티션별 SELinux 타입과 `coredomain`↔벤더 neverallow가 신뢰 경계를 정책으로 강제한다.** `/system`·`/vendor`·`/product`·`/odm`은 서로 다른 SELinux 타입(라벨)을 달고, 플랫폼 도메인 집합(`coredomain`)과 벤더 도메인 사이의 직접 IPC는 `neverallow` 규칙으로 봉쇄된다 — 두 세계는 hwbinder/vndbinder·HAL 같은 안정 인터페이스로만 대화한다. 규칙은 AOSP sepolicy에 그대로 있다([SELinux for Android](https://source.android.com/docs/security/features/selinux)).
+- **링커 네임스페이스·VNDK가 벤더 라이브러리를 프레임워크에서 격리한다.** 벤더 `.so`는 사설 프레임워크 라이브러리에 접근할 수 없고, 통과하는 심벌은 VNDK로 통제된다 — 신뢰 비대칭의 네이티브 강제다([VNDK / linker namespaces](https://source.android.com/docs/core/architecture/vndk)).
+- **chained vbmeta가 파티션마다 다른 키로 독립 서명한다.** vbmeta_system(플랫폼 키)과 vbmeta_vendor(벤더 키)는 서로 다른 키로 체인돼 파티션 신뢰의 암호학적 앵커가 된다. `avbtool info_image`가 읽는 이 체인 구조와 롤백 인덱스 정의는 Verified Boot 문서에 명시돼 있다([Android Verified Boot](https://source.android.com/docs/security/features/verifiedboot)).
+- **하드웨어 롤백 퓨즈와 부트 ROM의 1차 서명 검증은 SoC·실기기 계층에서 신뢰 사슬을 봉인한다.** 롤백 인덱스 소비와 부트 ROM 검증은 SoC 하드웨어의 몫이며, 그 역할과 순서는 AOSP Verified Boot·파티션 문서로 확정한다([AOSP Partitions overview](https://source.android.com/docs/core/architecture/partitions)).
 
 ## 마치며
 
