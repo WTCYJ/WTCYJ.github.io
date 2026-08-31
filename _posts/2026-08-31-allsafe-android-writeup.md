@@ -23,7 +23,7 @@ Allsafe 는 흔한 CTF 앱과 결이 다릅니다. 화면은 초록색 터미널
 
 ---
 
-## 0. 먼저 부딪힌 벽 — 스크린샷이 검게 나온다 (Secure Flag Bypass)
+## 0. 먼저 부딪힌 벽 (Secure Flag Bypass)
 
 앱을 깔고 `screencap` 을 찍으면 **까만 화면(23KB짜리 빈 PNG)** 만 나옵니다. 원인은 런처
 액티비티가 창을 만들 때 스크린샷·화면녹화를 막는 `FLAG_SECURE` 를 거는 것입니다.
@@ -71,9 +71,9 @@ $ frida -U -f infosecadventures.allsafe -l bypass_secureflag.js
 
 ---
 
-## 1. 정보 노출 — 앱이 스스로 흘리는 비밀
+## 1. 정보 노출
 
-### 1-1. Insecure Logging — 사용자가 친 비밀이 logcat 으로
+### 1-1. Insecure Logging
 
 가장 단순한 정보 노출입니다. 입력 필드에 값을 넣고 완료를 누르면 그대로 디버그 로그로 나갑니다.
 
@@ -93,7 +93,7 @@ D ALLSAFE : User entered secret: hunter2_MySecretPassword
 
 ![Insecure Logging 화면에 비밀을 입력한 상태 — 같은 값이 logcat 에 평문으로 남는다](/assets/img/allsafe-android/c01-insecure-logging.png)
 
-### 1-2. Hardcoded Credentials — 컴파일된 아티팩트에서 계정 추출
+### 1-2. Hardcoded Credentials
 
 이 모듈의 안내문이 스스로 "이 프래그먼트에 하드코딩된 username:password 조합이 2개 있다"
 고 알려 줍니다. 소스가 아니라 **설치된 APK 를 리버싱**해서 찾는 것이 정공법이라, base.apk 를
@@ -117,7 +117,7 @@ admin:password123@dev.infosecadventures.com
 
 ![Hardcoded Credentials 모듈 화면 — 프래그먼트에 2개의 username:password 가 박혀 있다고 안내한다](/assets/img/allsafe-android/c02-hardcoded-credentials.png)
 
-### 1-3. Insecure Shared Preferences — 평문으로 저장되는 비밀번호
+### 1-3. Insecure Shared Preferences
 
 회원가입 폼에 값을 넣으면 SharedPreferences 에 **암호화 없이** 저장됩니다.
 
@@ -141,7 +141,7 @@ $ run-as infosecadventures.allsafe cat .../shared_prefs/user.xml
 민감 정보는 `EncryptedSharedPreferences`(Keystore 기반)로 보호해야 합니다. 평문 prefs 는
 디바이스에 접근할 수 있는 누구에게나 열린 파일입니다.
 
-### 1-4. Weak Cryptography — 하드코딩 키·ECB·평문 MD5
+### 1-4. Weak Cryptography
 
 "암호화" 모듈은 세 가지 약점을 한 화면에 모아 놨습니다. 소스만 봐도 키가 박혀 있습니다.
 
@@ -179,12 +179,12 @@ bcrypt/scrypt/Argon2 같은 느린 해시를 써야 합니다.
 
 ---
 
-## 2. 클라이언트 측 검증 — 신뢰 경계를 잘못 그은 곳
+## 2. 클라이언트 측 검증
 
 이 부류의 공통점은 "판정을 클라이언트가 한다"는 것입니다. 판정 코드와 데이터가 전부 기기 안에
 있으니, 정적으로 값을 캐거나 동적으로 반환을 뒤집으면 끝납니다.
 
-### 2-1. PIN Bypass — base64 상수를 디코드하면 끝
+### 2-1. PIN Bypass
 
 `checkPin` 은 입력값을 base64 로 인코딩된 상수와 비교합니다.
 
@@ -204,7 +204,7 @@ $ echo NDg2Mw== | base64 -d
 
 ![PIN Bypass — base64 상수에서 복원한 4863 입력으로 접근 허용](/assets/img/allsafe-android/c15-pin-bypass.png)
 
-### 2-2. Root Detection — Frida 로 판정 결과를 양방향으로 조종
+### 2-2. Root Detection
 
 루팅 탐지는 RootBeer 라이브러리의 `isRooted()` 한 줄로 이뤄집니다.
 
@@ -234,7 +234,7 @@ RootBeer.isRooted.implementation = function () { return true; };
 
 ![Root Detection — 같은 판정을 false 로 뒤집어 "root is not detected" 로 우회한 결과](/assets/img/allsafe-android/c03-root-bypassed.png)
 
-### 2-3. Native Library — .so 안의 XOR 를 손으로 되돌리다
+### 2-3. Native Library
 
 비밀번호 검증을 네이티브(`libnative_library.so`)로 옮겨 놨습니다. 하지만 검증 로직은 단순 XOR
 입니다.
@@ -266,7 +266,7 @@ supersecret
 
 ![Native Library — 역산한 supersecret 입력으로 검증 통과, Frida 로그가 반환값 true 를 확인](/assets/img/allsafe-android/c12-native-library.png)
 
-### 2-4. Smali Patch — 디컴파일·수정·재서명으로 흐름을 바꾸다
+### 2-4. Smali Patch
 
 이 모듈은 방화벽 상태가 하드코딩으로 항상 비활성입니다.
 
@@ -293,12 +293,12 @@ apktool 로 디컴파일해 smali 에서 값을 로드하는 한 줄을 바꿉�
 
 ---
 
-## 3. exported 컴포넌트 — 밖으로 열린 문
+## 3. exported 컴포넌트
 
 `AndroidManifest.xml` 에서 `android:exported="true"` 로 열려 있는 컴포넌트는 다른 앱(또는 adb)이
 직접 호출할 수 있습니다. Allsafe 는 리시버·서비스·프로바이더·프록시 액티비티를 모두 열어 뒀습니다.
 
-### 3-1. Insecure Broadcast Receiver — 관리자 토큰을 공격자 서버로
+### 3-1. Insecure Broadcast Receiver
 
 `NoteReceiver` 가 exported 이고, 받은 extra 로 URL 을 조립해 요청을 보냅니다. 문제는 **서버 주소를
 호출자가 준다**는 점, 그리고 **관리자 토큰이 하드코딩**돼 있다는 점입니다.
@@ -326,7 +326,7 @@ allsafe_dev_admin_token
 만들 수 있습니다(SSRF + 비밀 유출). exported 리시버는 서명 권한으로 보호하거나 내부 전용으로
 닫아야 합니다.
 
-### 3-2. Deep Link Exploitation — 리소스에 박힌 key
+### 3-2. Deep Link Exploitation
 
 `DeepLinkTask` 가 `allsafe://infosecadventures/congrats` 스킴을 처리하고, 쿼리 `key` 를
 `R.string.key` 와 비교합니다. 그 key 는 리소스에 그대로 있습니다(`ebfb7ff0-b2f6-41c8-bef3-4fba17be410c`).
@@ -343,7 +343,7 @@ $ am start -a android.intent.action.VIEW \
 딥링크로 도달하는 화면이 인증·상태 검증 없이 열리면, 브라우저 링크 한 줄로 내부 기능이
 트리거됩니다(딥링크 CSRF).
 
-### 3-3. Insecure Service — 동의 없이 마이크 녹음
+### 3-3. Insecure Service
 
 `RecorderService` 가 exported 라, 다른 앱이 서비스를 시작하는 것만으로 마이크 녹음이 돌아갑니다.
 
@@ -357,7 +357,7 @@ $ am startservice -n infosecadventures.allsafe/.challenges.RecorderService
 호스트 앱을 대리인으로 삼아 **사용자 동의 없는 도청**이 가능합니다. 마이크처럼 민감한 동작을 하는
 서비스는 절대 exported 여선 안 됩니다.
 
-### 3-4. Data Provider — 인증 없는 ContentProvider + SQL 인젝션
+### 3-4. Data Provider
 
 `DataProvider` 가 exported 이고, 넘어온 projection/selection 을 그대로 `SQLiteQueryBuilder` 에
 꽂습니다.
@@ -387,7 +387,7 @@ Row: 2 name=sqlite_sequence
 인증 없는 데이터 접근과 SQL 인젝션이 겹친 형태입니다. 프로바이더는 권한으로 보호하고,
 selection/projection 을 신뢰하지 말고 화이트리스트·파라미터 바인딩으로 다뤄야 합니다.
 
-### 3-5. (보너스) ProxyActivity — Intent Redirection
+### 3-5. (보너스) ProxyActivity
 
 메뉴에는 없지만 매니페스트에 exported 로 열린 `ProxyActivity` 가 있습니다.
 
@@ -402,9 +402,9 @@ startActivity(getIntent().getParcelableExtra("extra_intent"));
 
 ---
 
-## 4. 주입·파싱 — 입력을 그대로 신뢰한 대가
+## 4. 주입·파싱
 
-### 4-1. SQL Injection — 로그인 쿼리 문자열 결합
+### 4-1. SQL Injection
 
 로그인 쿼리가 입력을 문자열로 이어 붙입니다.
 
@@ -425,7 +425,7 @@ SQLite 라도 웹과 똑같이 파라미터 바인딩(`?`)을 써야 합니다.
 
 ![SQL Injection — 'or'1'='1'-- 로 인증을 우회하고 사용자·해시를 덤프한 Toast](/assets/img/allsafe-android/c09-sql-injection.png)
 
-### 4-2. Vulnerable WebView — XSS 실행과 로컬 파일 읽기
+### 4-2. Vulnerable WebView
 
 WebView 가 자바스크립트와 파일 접근을 모두 켜 둡니다.
 
@@ -448,9 +448,9 @@ settings.setAllowFileAccess(true);
 
 ---
 
-## 5. 백엔드·설정 — 앱 밖에 있는 약점
+## 5. 백엔드·설정
 
-### 5-1. Firebase Database — 규칙이 열려 있으면 앱보다 더 많이 보인다
+### 5-1. Firebase Database
 
 Firebase 실시간 DB 에서 `secret` 노드를 읽는 모듈입니다. `google-services.json` 에 DB URL 이
 그대로 있습니다(`https://allsafe-8cef0.firebaseio.com`). 규칙이 공개(public read)라면 앱을 거치지
@@ -466,7 +466,7 @@ $ curl -s https://allsafe-8cef0.firebaseio.com/.json
 나옵니다. 클라이언트가 특정 노드만 읽는다고 해서 DB 가 그 노드만 준다는 뜻이 아닙니다 — 접근
 제어는 Firebase 규칙에서 해야 하고, 규칙이 열려 있으면 전체가 열린 것입니다.
 
-### 5-2. Insecure Providers (Firebase Storage) — 정책으로 죽은 벡터, 그대로 기록
+### 5-2. Insecure Providers (Firebase Storage)
 
 이 모듈은 하드코딩된 `gs://allsafe-8cef0.appspot.com/readme.txt` 를 **인증 없이** 내려받습니다.
 구조적 취약점은 "공개 스토리지 버킷을 URL 만으로 다운로드"입니다. 그런데 라이브 재현은 막혔습니다.
@@ -482,9 +482,9 @@ $ curl -s "https://firebasestorage.googleapis.com/v0/b/allsafe-8cef0.appspot.com
 
 ---
 
-## 6. 코드 로딩 — 남의 코드/데이터를 그대로 믿을 때
+## 6. 코드 로딩
 
-### 6-1. Arbitrary Code Execution — 서드파티 패키지 컨텍스트로 임의코드 실행
+### 6-1. Arbitrary Code Execution
 
 `Application.onCreate` 에 두 개의 코드 로딩 경로가 있습니다.
 
@@ -530,7 +530,7 @@ attacker=infosecadventures.allsafe.poc  host_pkg=infosecadventures.allsafe  uid=
 
 ![Arbitrary Code Execution 모듈 화면 — 실제 임의코드 실행 증거는 logcat 과 호스트 저장소의 증거 파일로 확인했다](/assets/img/allsafe-android/c04-ace.png)
 
-### 6-2. Object Serialization — 외부 저장소의 직렬화 객체를 위변조
+### 6-2. Object Serialization
 
 사용자 객체를 **외부 저장소**에 자바 직렬화로 저장하고, 불러올 때 `role` 필드로 권한을 판정합니다.
 
@@ -560,7 +560,7 @@ Toast: User{username='wtcy', password='pw123', role='ROLE_EDITOR'}
 
 ---
 
-## 7. 인증서 피닝 — 여기까지 되고, 여기서부터는 프록시가 필요하다
+## 7. 인증서 피닝
 
 Certificate Pinning 모듈은 OkHttp `CertificatePinner` 로 `httpbin.io` 를 피닝합니다. 흥미롭게도
 구현이 **자가 치유**형입니다 — 먼저 일부러 틀린 핀으로 요청해 예외 메시지에서 실제 서버 핀 해시를
@@ -583,7 +583,7 @@ Frida 로 `CertificatePinner.check` / `check$okhttp` 를 무력화하는 훅을 
 
 ---
 
-## 마치며 — 무엇을 얻었나
+## 마치며
 
 Allsafe 를 관통하는 교훈은 하나로 모입니다. **기기 안에 있는 것은 무엇도 비밀이 아니고, 밖에서
 들어오는 것은 무엇도 신뢰할 수 없다.** 로그·prefs·리소스·dex·네이티브 문자열은 전부 추출되고,
