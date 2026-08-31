@@ -59,7 +59,7 @@ $ frida -U -f infosecadventures.allsafe -l bypass_secureflag.js
 후킹이 곧 챌린지 "Secure Flag Bypass" 의 정답이면서, 동시에 이후 모든 화면 캡처의 전제 조건이
 되었습니다. 아래 홈 화면이 그 첫 증거입니다.
 
-![Frida 로 FLAG_SECURE 를 벗긴 뒤 정상적으로 캡처된 Allsafe 홈 화면 — 이전에는 같은 명령이 검은 화면만 반환했다](/assets/img/allsafe-android/allsafe-home.png)
+![Frida 로 FLAG_SECURE 를 벗긴 뒤 정상적으로 캡처된 Allsafe 홈 화면 — 이전에는 같은 명령이 검은 화면만 반환했습니다](/assets/img/allsafe-android/allsafe-home.png)
 
 `FLAG_SECURE` 는 어깨너머 훔쳐보기나 악성 접근성 서비스의 화면 캡처를 늦추는 방어일 뿐,
 디바이스를 통제하는 공격자(루팅·Frida) 앞에서는 종이 한 장입니다. 민감 화면을 가리는 UX
@@ -91,7 +91,7 @@ D ALLSAFE : User entered secret: hunter2_MySecretPassword
 `READ_LOGS` 를 가진 앱이나 ADB 접근이 가능한 상황에서 사용자가 입력한 값이 평문으로 수집됩니다.
 릴리스 빌드에서 로그를 제거하지 않으면 인증 응답·토큰·비밀번호가 그대로 새는 전형적인 실수입니다.
 
-![Insecure Logging 화면에 비밀을 입력한 상태 — 같은 값이 logcat 에 평문으로 남는다](/assets/img/allsafe-android/c01-insecure-logging.png)
+![Insecure Logging 화면에 비밀을 입력한 상태 — 같은 값이 logcat 에 평문으로 남습니다](/assets/img/allsafe-android/c01-insecure-logging.png)
 
 ### 1-2. Hardcoded Credentials
 
@@ -115,7 +115,7 @@ admin:password123@dev.infosecadventures.com
 난독화를 해도 결국 문자열 테이블이나 dex 상수 풀에 남습니다 — "숨긴다"가 아니라 "제거한다"가
 정답인 이유입니다.
 
-![Hardcoded Credentials 모듈 화면 — 프래그먼트에 2개의 username:password 가 박혀 있다고 안내한다](/assets/img/allsafe-android/c02-hardcoded-credentials.png)
+![Hardcoded Credentials 모듈 화면 — 프래그먼트에 2개의 username:password 가 박혀 있다고 안내합니다](/assets/img/allsafe-android/c02-hardcoded-credentials.png)
 
 ### 1-3. Insecure Shared Preferences
 
@@ -175,7 +175,7 @@ my-deepest-secret
 키는 서버나 Keystore 에 두고, 모드는 최소 CBC/GCM 이어야 하며, 비밀번호 저장에는 MD5 가 아니라
 bcrypt/scrypt/Argon2 같은 느린 해시를 써야 합니다.
 
-![Weak Cryptography — password 의 MD5 해시(앱은 대문자로 출력). 무솔트 MD5 라 레인보우 테이블로 즉시 역산된다](/assets/img/allsafe-android/c16-weak-crypto.png)
+![Weak Cryptography — password 의 MD5 해시(앱은 대문자로 출력). 무솔트 MD5 라 레인보우 테이블로 즉시 역산됩니다](/assets/img/allsafe-android/c16-weak-crypto.png)
 
 ---
 
@@ -441,7 +441,7 @@ settings.setAllowFileAccess(true);
 아래 한 장에 두 결과가 같이 담겼습니다 — 위쪽 JavaScript 알림창(1337)은 XSS 실행을, 뒤쪽 텍스트
 (`127.0.0.1 localhost` / `::1 ip6-localhost`)는 `file://` 로 읽어 온 `/etc/hosts` 내용입니다.
 
-![Vulnerable WebView — alert(1337) 실행 다이얼로그와, file:// 로 읽어 온 /etc/hosts 내용이 함께 보인다](/assets/img/allsafe-android/c10-webview.png)
+![Vulnerable WebView — alert(1337) 실행 다이얼로그와, file:// 로 읽어 온 /etc/hosts 내용이 함께 보입니다](/assets/img/allsafe-android/c10-webview.png)
 
 파일 접근을 켠 WebView 는 `file://` 로 앱 샌드박스·시스템 파일을 열 수 있습니다. 파일 접근은
 끄고(`setAllowFileAccess(false)`), 신뢰 못 할 입력을 WebView 에 절대 로드하지 말아야 합니다.
@@ -528,7 +528,7 @@ attacker=infosecadventures.allsafe.poc  host_pkg=infosecadventures.allsafe  uid=
 공격자에게 자기 프로세스를 통째로 내주는 것과 같습니다. 신뢰할 수 없는 출처의 dex/context 는
 절대 로드해선 안 됩니다.
 
-![Arbitrary Code Execution 모듈 화면 — 실제 임의코드 실행 증거는 logcat 과 호스트 저장소의 증거 파일로 확인했다](/assets/img/allsafe-android/c04-ace.png)
+![Arbitrary Code Execution 모듈 화면 — 실제 임의코드 실행 증거는 logcat 과 호스트 저장소의 증거 파일로 확인했습니다](/assets/img/allsafe-android/c04-ace.png)
 
 ### 6-2. Object Serialization
 
@@ -556,7 +556,7 @@ Toast: User{username='wtcy', password='pw123', role='ROLE_EDITOR'}
 이어질 수 있습니다. 민감 상태는 외부 저장소에 두지 말고, 역직렬화 시 무결성 검증과 화이트리스트가
 필요합니다.
 
-![Object Serialization — user.dat 의 role 을 ROLE_EDITOR 로 제자리 패치하자 "Good job!" 과 역직렬화된 객체가 그대로 표시된다](/assets/img/allsafe-android/c18-object-serialization.png)
+![Object Serialization — user.dat 의 role 을 ROLE_EDITOR 로 제자리 패치하자 "Good job!" 과 역직렬화된 객체가 그대로 표시됩니다](/assets/img/allsafe-android/c18-object-serialization.png)
 
 ---
 
@@ -579,14 +579,14 @@ Frida 로 `CertificatePinner.check` / `check$okhttp` 를 무력화하는 훅을 
 있어, 이 모듈은 "분석 + 기법 + 연결 성공 확인"까지로 남기고, 트래픽 가로채기는 프록시 셋업을
 전제로 별도 검증할 지점으로 표시합니다.
 
-![Certificate Pinning — 자가 치유 피너가 실서버 핀을 재유도해 HTTPS 연결에 성공한다](/assets/img/allsafe-android/c06-certificate-pinning.png)
+![Certificate Pinning — 자가 치유 피너가 실서버 핀을 재유도해 HTTPS 연결에 성공합니다](/assets/img/allsafe-android/c06-certificate-pinning.png)
 
 ---
 
 ## 마치며
 
 Allsafe 를 관통하는 교훈은 하나로 모입니다. **기기 안에 있는 것은 무엇도 비밀이 아니고, 밖에서
-들어오는 것은 무엇도 신뢰할 수 없다.** 로그·prefs·리소스·dex·네이티브 문자열은 전부 추출되고,
+들어오는 것은 무엇도 신뢰할 수 없습니다.** 로그·prefs·리소스·dex·네이티브 문자열은 전부 추출되고,
 클라이언트 판정(PIN·루트·네이티브·방화벽)은 정적 추출이나 동적 후킹으로 뒤집히며, exported
 컴포넌트와 검증 없는 입력(SQL·WebView·직렬화·패키지 컨텍스트)은 곧장 공격 표면이 됩니다.
 
