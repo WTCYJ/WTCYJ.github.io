@@ -28,7 +28,7 @@ scoped storage나 백그라운드 클립보드 제한 같은 최신 안드로이
 
 ---
 
-## 0. 환경 — 무엇으로
+## 0. 환경
 
 배포된 `AndroGoat.apk`(릴리스 v2.0.1)를 받아 확인해 보니 두 가지가 편했습니다. 첫째,
 네이티브 라이브러리가 없는 순수 Kotlin/Java라 ABI를 따질 필요 없이 어느 에뮬레이터에나
@@ -55,7 +55,7 @@ API 33 구글 API 이미지라 `adb root`도 됩니다. 두 접근권을 다 쥐
 
 ---
 
-## 1. 로컬 저장소 — 어디에 두든 평문이면 나온다
+## 1. 로컬 저장소
 
 입력한 자격증명을 앱이 SharedPreferences·SQLite·임시파일·외부저장소 어디에 넣든, 암호화가
 없으면 `run-as`나 `adb root`로 그대로 읽힙니다.
@@ -124,7 +124,7 @@ I Info: Data saved to/storage/emulated/0/Android/data/owasp.sat.agoat/files/user
 
 ---
 
-## 2. 하드코딩된 시크릿 — 코드에 박힌 열쇠
+## 2. 하드코딩된 시크릿
 
 이 앱은 시크릿을 소스에 상수로 박아 두고, 심지어 화면이나 로그로 그대로 내보냅니다. 값은
 DEX 문자열로 남아 `strings`나 jadx로도 뽑히고, 런타임에도 노출됩니다.
@@ -164,7 +164,7 @@ sk-abcdef1234567890abcdef1234567890abcdef12
 
 ---
 
-## 3. 무방비 컴포넌트 — 문을 열어 둔 IPC
+## 3. 무방비 컴포넌트
 
 이 앱은 ContentProvider·BroadcastReceiver·Service·Activity를 권한 없이 `exported=true`로
 내놔서, 아무 앱이나 `adb`가 직접 부를 수 있습니다.
@@ -242,12 +242,12 @@ PIN 7391
 
 ---
 
-## 4. WebView와 XSS — 앱 안의 브라우저를 노린다
+## 4. WebView와 XSS
 
 이 앱의 WebView는 세 화면(URL 로드·이름 표시·QR 스캔)에서 자바스크립트를 켜 놓고 입력을
 정제 없이 렌더합니다. 각각 위험도가 다른데, 하나씩 실제로 실행시켜 봤습니다.
 
-### 4-1. WebView URL — 앱 프라이빗 파일 절도
+### 4-1. WebView URL
 
 WebView URL 화면은 로드 버튼을 누르면 위험한 파일 접근 플래그를 전부 켜고 입력한 URL을
 검증 없이 로드합니다.
@@ -271,7 +271,7 @@ API 30부터 `setAllowFileAccess`의 기본값이 false로 바뀌었는데, 이 
 `setAllowUniversalAccessFromFileURLs`가 true라, 여기서 한 발 더 나가면 `file://` 페이지가
 그 파일 내용을 원격 서버로 XHR 전송하는 것(파일 절도)까지 됩니다.
 
-### 4-2. XSS — displayContent()의 document.write
+### 4-2. XSS
 
 XSS 화면은 이름 칸 입력을 `document.write(a.value)`로 DOM에 그대로 씁니다. 정제가 없어서
 HTML/JS가 그대로 실행됩니다.
@@ -291,7 +291,7 @@ JS가 실행돼 페이지를 통째로 바꾸고 UA까지 뽑아 왔습니다. �
 오리진이 `about:blank`(불투명)입니다 — 스크립트는 돌지만 쿠키나 `file://` 파일에는 못 닿습니다.
 이건 파일 절도가 아니라 JS 실행·화면 변조까지의 XSS입니다.
 
-### 4-3. QR 코드 XSS — 스캔한 QR도 사용자 입력
+### 4-3. QR 코드 XSS
 
 QR 화면은 카메라로 읽은 QR 텍스트를 HTML 문자열에 그대로 이어 붙여 `loadData`로 렌더합니다.
 QR 내용이 HTML/JS면 그대로 실행됩니다.
@@ -307,7 +307,7 @@ QR 내용이 HTML/JS면 그대로 실행됩니다.
 
 ---
 
-## 5. 주입 — 입력을 그대로 실행에 붙인다
+## 5. 주입
 
 ### 5-1. SQL 인젝션
 
@@ -346,7 +346,7 @@ Frida로 exec 싱크를 보면 주입한 인자가 그대로 도달한 게 보�
 
 ---
 
-## 6. 측면 채널과 로그 — 옆문으로 새는 값
+## 6. 측면 채널과 로그
 
 화면에 마스킹돼 있어도, 값이 로그·클립보드·키보드 캐시 같은 OS 공용 채널로 새면 그대로
 읽힙니다.
@@ -364,7 +364,7 @@ I System.out: Username: agoatuser and Password: Sup3rS3cr3t!27 are verified
 API 33에선 다른 앱이 타 앱 로그를 못 읽지만(READ_LOGS 제한), 호스트의 `adb logcat`은 제약
 없이 전부 수집하므로 개발자/adb 관측 채널에서는 그대로 샙니다.
 
-### 6-2. 클립보드 — 전역 클립보드로 OTP 복사
+### 6-2. 클립보드
 
 클립보드 화면은 카드 입력을 받으면 4자리 OTP를 만들어 전역 시스템 클립보드에 그대로 붙입니다.
 
@@ -387,7 +387,7 @@ OTP와 정확히 같았습니다.
 
 전역 클립보드에 올라간 OTP는 포그라운드에 있는 아무 앱이나 읽을 수 있습니다.
 
-### 6-3. 키보드 캐시 — 필드에 inputType이 없다
+### 6-3. 키보드 캐시
 
 키보드 캐시 화면의 아이디/비밀번호 EditText는 레이아웃에 `android:inputType`이 아예
 없습니다.
@@ -419,7 +419,7 @@ MyP4ssword9910: FOUND
 
 ---
 
-## 7. 탐지 우회 — AndroGoat의 간판
+## 7. 탐지 우회
 
 AndroGoat이 MASTG 앱과 다른 지점이 이 카테고리입니다. 루트/에뮬레이터 탐지가 전부 클라이언트
 측 판정이라, 그 판정 함수 하나만 Frida로 뒤집으면 무력화됩니다.
@@ -468,7 +468,7 @@ $ frida -U -p <pid> -l emu.js        # isEmulator() -> false
 
 ---
 
-## 8. 생체 인증 — 성공 콜백이 무엇에도 묶여 있지 않다
+## 8. 생체 인증
 
 생체 인증 화면은 화면 안내(목표 5번)부터 대놓고 "Bypass Biometric authentication using Frida"라고
 적어 놨습니다. 코드를 보면 이유가 분명합니다.
@@ -495,7 +495,7 @@ biometricPrompt.authenticate(promptInfo);        // CryptoObject 없음
 
 ---
 
-## 9. 네트워크 — 평문 전송과 피닝 우회
+## 9. 네트워크
 
 Network Intercepting 화면은 OkHttp로 평문 `http://demo.testfire.net`을 부릅니다. 프록시를
 걸어 보면 요청이 그대로 평문으로 흐릅니다.
