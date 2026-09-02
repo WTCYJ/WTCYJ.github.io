@@ -36,7 +36,6 @@ Space Alone은 그 문제집의 뼈대를 2022년 우분투 위에 다시 세운
 | 실행 가능 스택 | 10개 중 2개(2·3장)뿐, 그 둘만 32비트 |
 | 관측한 스택 ASLR 폭 | i386 프로세스에서 스택 최상단 `0xff873000`~`0xfffe5000` (약 7.4MB, 10회 실행) |
 | 확인한 uid 동작 | setuid 프로세스가 `/bin/sh`(dash)를 exec하면 `Uid: 504 504 504 504`. real uid가 euid로 올라감 |
-| 확인 못 한 것 | 커널 소스는 못 봤습니다. `READ_IMPLIES_EXEC` 관련은 `personality`가 0이었다는 관측까지만 적습니다 |
 
 ---
 
@@ -601,8 +600,6 @@ real uid도 511이라 그냥 통과합니다. `.tty`에 적힌 터미널로 결�
 ## 관련 자료
 
 - 문제집: [hspace-io/Space_Alone](https://github.com/hspace-io/Space_Alone)
-- 뿌리: [해커스쿨 The Lord of BOF](https://www.hackerschool.org/HS_Boards/zboard.php?id=HS_Notice&no=1170881885),
-  mongii. 계정 사슬과 setuid 라는 뼈대가 여기서 왔습니다.
 - 도구: [pwntools](https://docs.pwntools.com/) (`ELF`, `ROP`, `fmtstr_payload`) ·
   [ROPgadget](https://github.com/JonathanSalwan/ROPgadget) · `objdump` · `readelf`
 - 개념 참고: [Linux `personality(2)`](https://man7.org/linux/man-pages/man2/personality.2.html)
