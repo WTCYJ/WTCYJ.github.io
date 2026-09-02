@@ -3,7 +3,7 @@ layout: post
 title: "[논문 리뷰] IDFuzz: Intelligent Directed Grey-box Fuzzing (USENIX Security 2025)"
 date: 2026-04-25
 category: 논문
-author: yejunkim2000
+author: WTCY
 tags: [논문리뷰, fuzzing, DGF, 취약점분석, 머신러닝, USENIX]
 ---
 

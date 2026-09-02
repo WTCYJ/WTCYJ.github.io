@@ -20,7 +20,7 @@ Windows 11 + WSL2 입니다. 그리고 게시한 뒤에 **제 숫자를 다시 �
 자기 자신에게 적용됐습니다.
 
 > **측정 코드·원시 데이터·정정 이력**은 전부 공개돼 있습니다 —
-> [github.com/yejunkim2000/agentfence](https://github.com/yejunkim2000/agentfence).
+> [github.com/WTCYJ/agentfence](https://github.com/WTCYJ/agentfence).
 > 가장 짧은 재현이 15분입니다(`QUICKSTART.md`). **다른 숫자가 나오면 그게 이
 > 저장소에 가장 필요한 정보입니다** — 계정 축은 통제하지 못했습니다.
 

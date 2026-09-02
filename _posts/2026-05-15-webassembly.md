@@ -3,7 +3,7 @@ layout: post
 title: "WebAssembly를 직접 뜯어보며 배운 것들 — WAT 작성부터 바이너리 파싱까지"
 date: 2026-05-15
 category: 개발
-author: yejunkim2000
+author: WTCY
 tags: [WebAssembly, Wasm, WAT, JavaScript, 바이너리분석, LEB128]
 ---
 

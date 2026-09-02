@@ -64,7 +64,7 @@ timeline:
     desc: "정보보안 전공."
   - period: "2026"
     title: "기술 블로그 운영"
-    org: "yejunkim2000.github.io"
+    org: "wtcyj.github.io"
     desc: "취약점 분석, CTF 라이트업, 논문 리뷰를 기록."
 
 # ── 기술 스택 ──────────────────────────────────
@@ -79,6 +79,6 @@ skills:
 # ── 링크 ───────────────────────────────────────
 links:
   - name: "GitHub"
-    url: "https://github.com/yejunkim2000"
+    url: "https://github.com/WTCYJ"
   - name: "RSS"
     url: "/feed.xml"

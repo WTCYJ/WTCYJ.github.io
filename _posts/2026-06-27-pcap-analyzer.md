@@ -3,7 +3,7 @@ layout: post
 title: "라이브러리 없이 pcap 파일 직접 파싱하기 — 패킷 구조 분석기 만들기"
 date: 2026-06-27
 category: 개발
-author: yejunkim2000
+author: WTCY
 tags: [Network, pcap, Python, Ethernet, IP, TCP, UDP, ICMP, 패킷분석]
 excerpt: "scapy/dpkt 없이 순수 Python으로 pcap 파일을 바이트 단위로 파싱하여 Ethernet/IP/TCP/UDP/ICMP 헤더와 프로토콜별 통계를 분석하고, 트래픽이 들려주는 이야기를 해석한다."
 ---

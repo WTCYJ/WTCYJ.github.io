@@ -3,7 +3,7 @@ layout: post
 title: "기술 글쓰기를 시작하며 - 정리가 곧 공부다"
 date: 2026-04-08
 category: 블로그/기술
-author: yejunkim2000
+author: WTCY
 ---
 
 ## 왜 기록하려 하는가

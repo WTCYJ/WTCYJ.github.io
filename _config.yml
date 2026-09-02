@@ -1,13 +1,13 @@
 title: "MONKEY PATCH"
 tagline: "코드를 만들고, 뜯어보고, 끝까지 기록합니다"
 description: "개발, 웹, 시스템, 리버싱, 포렌식, 안드로이드, 논문과 기술 기록을 다루는 보안 블로그"
-url: "https://yejunkim2000.github.io"
+url: "https://wtcyj.github.io"
 baseurl: ""
 
 author:
-  name: "yejunkim2000"
+  name: "WTCY"
   email: ""
-  github: "yejunkim2000"
+  github: "WTCYJ"
 
 markdown: kramdown
 highlighter: rouge

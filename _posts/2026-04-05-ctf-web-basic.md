@@ -3,7 +3,7 @@ layout: post
 title: "CTF 입문 - 웹 해킹 기초 문제 풀이"
 date: 2026-04-05
 category: 웹
-author: yejunkim2000
+author: WTCY
 excerpt: "CTF에서 자주 출제되는 웹 해킹 유형과 기초 풀이 기법을 정리합니다."
 ---
 

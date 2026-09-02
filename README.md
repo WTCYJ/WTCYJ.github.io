@@ -1,17 +1,17 @@
-# yejunkim2000's DevLog
+# WTCY's DevLog
 
-[![Website](https://img.shields.io/badge/website-live-0f766e)](https://yejunkim2000.github.io/)
-[![GitHub stars](https://img.shields.io/github/stars/yejunkim2000/yejunkim2000.github.io?style=flat)](https://github.com/yejunkim2000/yejunkim2000.github.io/stargazers)
-[![GitHub last commit](https://img.shields.io/github/last-commit/yejunkim2000/yejunkim2000.github.io)](https://github.com/yejunkim2000/yejunkim2000.github.io/commits/main)
+[![Website](https://img.shields.io/badge/website-live-0f766e)](https://wtcyj.github.io/)
+[![GitHub stars](https://img.shields.io/github/stars/WTCYJ/WTCYJ.github.io?style=flat)](https://github.com/WTCYJ/WTCYJ.github.io/stargazers)
+[![GitHub last commit](https://img.shields.io/github/last-commit/WTCYJ/WTCYJ.github.io)](https://github.com/WTCYJ/WTCYJ.github.io/commits/main)
 [![Jekyll](https://img.shields.io/badge/Jekyll-4.3-cc0000)](https://jekyllrb.com/)
 
 보안과 개발을 공부하며 얻은 결과를 재현 가능한 형태로 정리하는 공개 기술
 블로그입니다. CTF와 Wargame 문제 풀이, 취약점 분석, Bug Bounty, 보안 도구,
 알고리즘, 시스템 개발 기록을 한국어로 공유합니다.
 
-- Website: [https://yejunkim2000.github.io](https://yejunkim2000.github.io/)
-- Posts: [전체 글 보기](https://yejunkim2000.github.io/posts/)
-- Maintainer: [@yejunkim2000](https://github.com/yejunkim2000)
+- Website: [https://wtcyj.github.io](https://wtcyj.github.io/)
+- Posts: [전체 글 보기](https://wtcyj.github.io/posts/)
+- Maintainer: [@WTCYJ](https://github.com/WTCYJ)
 
 ## 프로젝트 소개
 
@@ -49,11 +49,11 @@
 
 ## 대표 콘텐츠
 
-- [WebAssembly를 직접 뜯어보며 배운 것들](https://yejunkim2000.github.io/posts/webassembly/)
+- [WebAssembly를 직접 뜯어보며 배운 것들](https://wtcyj.github.io/posts/webassembly/)
   - WAT 작성, JavaScript 연동, LEB128과 Wasm 바이너리 구조 분석
-- [AFL++ 실습 상세 Write-up](https://yejunkim2000.github.io/posts/fuzzing101-writeup-v2/)
+- [AFL++ 실습 상세 Write-up](https://wtcyj.github.io/posts/fuzzing101-writeup-v2/)
   - Xpdf, libexif, tcpdump 퍼징과 CVE 크래시 재현
-- [침입 탐지 및 방지 시스템(IDS/IPS) 완전 정복](https://yejunkim2000.github.io/posts/ids-ips-complete-guide/)
+- [침입 탐지 및 방지 시스템(IDS/IPS) 완전 정복](https://wtcyj.github.io/posts/ids-ips-complete-guide/)
   - IDS/IPS 구조, 탐지 방식, 오픈소스 도구와 운영 전략
 
 ## 기술 스택
@@ -71,8 +71,8 @@
 Ruby와 Bundler가 설치된 환경에서 다음 명령을 실행합니다.
 
 ```bash
-git clone https://github.com/yejunkim2000/yejunkim2000.github.io.git
-cd yejunkim2000.github.io
+git clone https://github.com/WTCYJ/WTCYJ.github.io.git
+cd WTCYJ.github.io
 bundle install
 bundle exec jekyll serve
 ```
@@ -116,7 +116,7 @@ bundle exec jekyll serve
 ## 기여 방법
 
 오탈자, 깨진 링크, 재현되지 않는 명령어, 잘못된 기술 내용이나 새로운 주제에
-대한 제안은 [Issue](https://github.com/yejunkim2000/yejunkim2000.github.io/issues)
+대한 제안은 [Issue](https://github.com/WTCYJ/WTCYJ.github.io/issues)
 또는 Pull Request로 남겨 주세요.
 
 Pull Request에는 변경 목적, 검증한 환경과 결과를 함께 작성해 주시면 검토에

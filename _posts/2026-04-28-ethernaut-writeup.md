@@ -3,7 +3,7 @@ layout: post
 title: "[Wargame] Ethernaut Level 0 ~ 40 완전 풀이"
 date: 2026-04-28
 category: 웹
-author: yejunkim2000
+author: WTCY
 tags: [Ethernaut, Wargame, Solidity, 스마트컨트랙트, 블록체인보안]
 ---
 

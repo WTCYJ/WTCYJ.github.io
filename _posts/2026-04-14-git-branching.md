@@ -3,7 +3,7 @@ layout: post
 title: "Learn Git Branching 완전 정복 — 명령어 총정리"
 date: 2026-04-14
 category: 개발
-author: yejunkim2000
+author: WTCY
 tags: [git, branch, rebase, cherry-pick, remote]
 ---
 

@@ -3,7 +3,7 @@ layout: post
 title: "[보안 사고 분석 #3] 롯데카드 297만 명 개인정보 유출 사건 — 8년 된 취약점에 뚫리다 (2025)"
 date: 2026-04-18
 category: 블로그/기술
-author: yejunkim2000
+author: WTCY
 tags: [보안사고, 개인정보유출, WebLogic, CVE, 롯데카드, 금융보안]
 ---
 

@@ -3,7 +3,7 @@ layout: post
 title: "Bug Bounty를 시작하며 - 아직 아무것도 모르는 상태에서"
 date: 2026-04-08
 category: 웹
-author: yejunkim2000
+author: WTCY
 ---
 
 ## 시작 전 솔직한 상태

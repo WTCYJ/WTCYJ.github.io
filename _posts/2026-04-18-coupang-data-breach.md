@@ -3,7 +3,7 @@ layout: post
 title: "[보안 사고 분석 #1] 쿠팡 3,370만 건 개인정보 유출 사건 (2025)"
 date: 2026-04-18
 category: 블로그/기술
-author: yejunkim2000
+author: WTCY
 tags: [보안사고, 개인정보유출, 내부자위협, 인증키, 쿠팡]
 ---
 
