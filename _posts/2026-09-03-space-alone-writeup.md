@@ -13,32 +13,6 @@ excerpt: "hspace-io의 Space Alone은 해커스쿨 The Lord of BOF의 뼈대를 
 > 호스트: Windows 11 + WSL2 · QEMU 8.2.2 + KVM (VirtualBox 미설치)
 > 결과: 열 챕터 전부 셸 획득, `epilogue`(uid 511)까지 도달해 엔딩 재생
 
-해커스쿨 The Lord of BOF를 처음 풀던 때는 gdb로 스택 주소를 찍어 그대로 박아 넣으면 됐습니다.
-Space Alone은 그 문제집의 뼈대를 2022년 우분투 위에 다시 세운 것입니다. 챕터를 깨면 다음 계정의
-비밀번호가 나오고 그 계정 홈에 다음 setuid 바이너리가 놓여 있는 얼개는 그대로인데, 밑바닥은
-완전히 다릅니다. ASLR이 켜져 있고, 카나리가 있고, NX가 있고, 뒤로 갈수록 Full RELRO에 PIE까지
-붙습니다.
-
-먼저 결론부터 적습니다. 기법 자체는 전부 교과서에 있는 것들이었습니다. 저를 붙잡은 건 기법이
-아니라 예전에는 맞았던 문장 두 개였습니다. 2장에서는 실행 가능 스택 바이너리인데도 `.bss`에서
-셸코드가 안 돌았고, 3장에서는 `setreuid` 없이도 계정이 통째로 넘어왔습니다. 둘 다 제가 알고
-있던 것과 반대였고, 확인하는 데 시간을 제일 많이 썼습니다.
-
-아래는 이 글이 실제로 관측한 것만 추린 메타입니다. 문제 풀이보다 이 표에 적힌 환경이 결론을
-좌우한 대목이 많아서 앞에 둡니다.
-
-| 항목 | 값 |
-|---|---|
-| 문제집 | Space Alone. 해커스쿨 LOB(mongii)의 얼개를 물려받았고, 출제는 Arkea·156·finder·Osori·yosimich·circler |
-| 계정 사슬 | uid 500 `chall` → 501 … → 510 `The_Cure_Within_Reach` → 511 `epilogue` |
-| 진행 방식 | 각 계정 홈의 setuid 바이너리를 터뜨려 셸 획득 → `status`가 다음 챕터 비밀번호 출력 |
-| 기법 흐름 | 인접 변수 덮어쓰기 → 스택 셸코드 → ret2win → ret2libc → 카나리 유출 → 프레임 위조 → GOT 덮어쓰기 → 포맷 스트링 → 스택 피벗 → libc GOT 덮어쓰기 |
-| 실행 가능 스택 | 10개 중 2개(2·3장)뿐, 그 둘만 32비트 |
-| 관측한 스택 ASLR 폭 | i386 프로세스에서 스택 최상단 `0xff873000`~`0xfffe5000` (약 7.4MB, 10회 실행) |
-| 확인한 uid 동작 | setuid 프로세스가 `/bin/sh`(dash)를 exec하면 `Uid: 504 504 504 504`. real uid가 euid로 올라감 |
-
----
-
 ## 환경 만들기
 
 README는 VirtualBox에 `SpaceAlone.ova`를 가져오라고 합니다. 그런데 이 노트북에는 VirtualBox가
