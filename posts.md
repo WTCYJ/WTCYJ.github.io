@@ -25,7 +25,7 @@ permalink: /posts/
     {% endfor %}
   </div>
 
-  {% assign atlas_posts = site.posts | where: "series", "Android Security Concept Atlas" | sort_natural: "title" %}
+  {% assign atlas_posts = site.posts | where: "series", "Android Security Concept Atlas" | sort: "date" | reverse %}
   {% assign regular_posts = site.posts | where_exp: "post", "post.series != 'Android Security Concept Atlas'" %}
   {% assign ordered_posts = atlas_posts | concat: regular_posts %}
 

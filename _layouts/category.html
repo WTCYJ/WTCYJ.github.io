@@ -3,7 +3,7 @@ layout: default
 ---
 
 {% assign filtered = site.posts | where: "category", page.cat_key %}
-{% assign atlas_filtered = filtered | where: "series", "Android Security Concept Atlas" | sort_natural: "title" %}
+{% assign atlas_filtered = filtered | where: "series", "Android Security Concept Atlas" | sort: "date" | reverse %}
 {% assign regular_filtered = filtered | where_exp: "post", "post.series != 'Android Security Concept Atlas'" %}
 {% assign ordered_filtered = atlas_filtered | concat: regular_filtered %}
 {% assign category_data = site.data.categories | where: "key", page.cat_key | first %}
