@@ -1,11 +1,11 @@
 ---
 layout: post
-title: "Space Alone, LOB의 계승작을 2022년 우분투에서 끝까지 밀어봤다"
+title: "Space Alone, 2022년 우분투로 옮겨온 LOB 열 챕터"
 date: 2026-09-03 21:00:00 +0900
 category: 시스템
 author: WTCY
 tags: [SpaceAlone, LOB, pwnable, BOF, ROP, FSB, GOT, StackPivot, ASLR, 카나리, 워게임, 시스템해킹, 학습기록]
-excerpt: "hspace-io의 Space Alone은 해커스쿨 LOB를 Ubuntu 22.04로 옮긴 문제집입니다. VirtualBox가 없는 노트북에서 OVA를 QEMU로 띄우는 것부터 시작해 열 챕터를 순서대로 붙었습니다. 기법 자체는 교과서에 다 있는데, 옛 풀이가 지금은 안 되는 자리가 두 군데 나왔습니다. 실행 가능 스택인데 .bss가 실행이 안 됐고, dash가 setuid 프로세스의 real uid를 떨어뜨리는 게 아니라 올려놨습니다."
+excerpt: "hspace-io의 Space Alone은 해커스쿨 The Lord of BOF의 뼈대를 Ubuntu 22.04 위에 다시 세운 문제집입니다. VirtualBox가 없는 노트북에서 OVA를 QEMU로 띄우는 것부터 시작해 열 챕터를 순서대로 풀었습니다. 기법 자체는 교과서에 다 있는데, 예전 풀이가 지금은 통하지 않는 자리가 두 군데 나왔습니다. 실행 가능 스택인데 .bss가 실행이 안 됐고, dash가 setuid 프로세스의 real uid를 떨어뜨리는 게 아니라 올려놨습니다."
 ---
 
 > 대상: [hspace-io/Space_Alone](https://github.com/hspace-io/Space_Alone) — Chapter 1 ~ 10 및 에필로그
@@ -13,14 +13,14 @@ excerpt: "hspace-io의 Space Alone은 해커스쿨 LOB를 Ubuntu 22.04로 옮긴
 > 호스트: Windows 11 + WSL2 · QEMU 8.2.2 + KVM (VirtualBox 미설치)
 > 결과: 열 챕터 전부 셸 획득, `epilogue`(uid 511)까지 도달해 엔딩 재생
 
-해커스쿨 The Lord of BOF를 처음 붙었을 때는 gdb로 스택 주소를 찍어서 그대로 박아 넣으면
-됐습니다. Space Alone은 그 문제집을 2022년 우분투로 옮겨 놓은 물건입니다. 챕터를 깨면 다음 계정의
-비밀번호가 나오고 그 계정 홈에 다음 setuid 바이너리가 놓여 있는 구조는 그대로인데, 밑바닥은
+해커스쿨 The Lord of BOF를 처음 풀던 때는 gdb로 스택 주소를 찍어 그대로 박아 넣으면 됐습니다.
+Space Alone은 그 문제집의 뼈대를 2022년 우분투 위에 다시 세운 것입니다. 챕터를 깨면 다음 계정의
+비밀번호가 나오고 그 계정 홈에 다음 setuid 바이너리가 놓여 있는 얼개는 그대로인데, 밑바닥은
 완전히 다릅니다. ASLR이 켜져 있고, 카나리가 있고, NX가 있고, 뒤로 갈수록 Full RELRO에 PIE까지
 붙습니다.
 
 먼저 결론부터 적습니다. 기법 자체는 전부 교과서에 있는 것들이었습니다. 저를 붙잡은 건 기법이
-아니라 옛날에는 맞았던 문장 두 개였습니다. 2장에서는 실행 가능 스택 바이너리인데도 `.bss`에서
+아니라 예전에는 맞았던 문장 두 개였습니다. 2장에서는 실행 가능 스택 바이너리인데도 `.bss`에서
 셸코드가 안 돌았고, 3장에서는 `setreuid` 없이도 계정이 통째로 넘어왔습니다. 둘 다 제가 알고
 있던 것과 반대였고, 확인하는 데 시간을 제일 많이 썼습니다.
 
@@ -29,7 +29,7 @@ excerpt: "hspace-io의 Space Alone은 해커스쿨 LOB를 Ubuntu 22.04로 옮긴
 
 | 항목 | 값 |
 |---|---|
-| 문제집 | Space Alone. LOB(mongii)의 정신적 계승작, 출제 Arkea·156·finder·Osori·yosimich·circler |
+| 문제집 | Space Alone. 해커스쿨 LOB(mongii)의 얼개를 물려받았고, 출제는 Arkea·156·finder·Osori·yosimich·circler |
 | 계정 사슬 | uid 500 `chall` → 501 … → 510 `The_Cure_Within_Reach` → 511 `epilogue` |
 | 진행 방식 | 각 계정 홈의 setuid 바이너리를 터뜨려 셸 획득 → `status`가 다음 챕터 비밀번호 출력 |
 | 기법 흐름 | 인접 변수 덮어쓰기 → 스택 셸코드 → ret2win → ret2libc → 카나리 유출 → 프레임 위조 → GOT 덮어쓰기 → 포맷 스트링 → 스택 피벗 → libc GOT 덮어쓰기 |
@@ -226,7 +226,7 @@ p.sendline(b'A'*(0x18+4) + p32(0x080491a6))
 여기서 확인하고 싶은 게 있었습니다. `stage3`는 `Scavening_for_Survival`(504) 소유 setuid이고
 실행하는 쪽은 `Breaking_Through_for_Survival`(503)입니다. 보통 이러면 프로세스 안에서 real uid는
 503, effective uid는 504입니다. bash라면 `-p` 없이 실행될 때 권한을 real uid로 떨어뜨리기
-때문에, 옛 LOB 풀이들이 셸코드에 `setreuid`를 꼭 넣었습니다. 그래서 셸 안에서 uid 네 개를 전부
+때문에, 그 시절 LOB 풀이들은 셸코드에 `setreuid`를 꼭 넣었습니다. 그래서 셸 안에서 uid 네 개를 전부
 찍어 봤습니다.
 
 ![게스트 콘솔 화면. /bin/sh가 dash 심볼릭 링크이고 stage3이 Scavening_for_Survival 소유 setuid임을 보여 준 뒤, 실행자 id가 503인데 shell()이 띄운 셸 안에서 /proc/self/status의 Uid가 504 504 504 504, Gid가 503 503 503 503으로 나온다](/assets/img/space-alone/ch03-uid.png)
@@ -571,25 +571,10 @@ real uid도 511이라 그냥 통과합니다. `.tty`에 적힌 터미널로 결�
 
 ![게스트 콘솔에 뜬 엔딩 화면. 별이 반짝이는 배경 위에 컬러 아스키 아트가 그려지고 왼쪽에 [Environment Developer] Arkea, Osori와 [Special Thanks] mongii(LOB), Thank you for playing 크레딧이 올라간다](/assets/img/space-alone/ending.png)
 
-Special Thanks에 `mongii(LOB)`가 있습니다. 원작에 대한 예의를 저렇게 남겨 뒀습니다.
+엔딩 크레딧 Special Thanks 자리에 `mongii(LOB)`가 올라갑니다. 이 문제집이 어디서 왔는지를
+마지막 화면에 적어 둔 셈입니다.
 
 ---
-
-## 여기서 멈춘 것
-
-커널 소스는 안 봤습니다. 2장의 `READ_IMPLIES_EXEC` 이야기는 `personality`가 0이었고 `.bss`에서
-실행이 안 됐다는 관측까지입니다. 어느 커밋이 언제 판정을 바꿨는지는 확인하지 않았으므로 이 글에
-커밋 해시나 버전 표를 적지 않았습니다.
-
-dash 소스도 안 봤습니다. `Uid: 504 504 504 504`는 `/proc/self/status`에서 읽은 값입니다. dash가
-정확히 어느 코드에서 그렇게 하는지는 이 글의 근거에 포함되지 않습니다.
-
-문제 밖으로도 나가지 않았습니다. `knight`(sudo 계정)와 root는 건드리지 않았고, `/home/setting`
-아래의 정답 파일도 열지 않았습니다. 문제집 규칙이 그렇게 정해 뒀고, 그 선을 넘으면 풀이가 아니라
-그냥 열람이 됩니다.
-
-비밀번호를 다 적지도 않았습니다. 화면에 찍힌 것은 그대로 뒀지만, 아직 풀지 않은 사람이 검색으로
-답만 주워 가는 글은 되지 않게 각 장의 어떻게 갔는가에 분량을 뒀습니다.
 
 ## 남는 것
 
@@ -615,10 +600,9 @@ dash 소스도 안 봤습니다. `Uid: 504 504 504 504`는 `/proc/self/status`�
 
 ## 관련 자료
 
-- 문제집: [hspace-io/Space_Alone](https://github.com/hspace-io/Space_Alone) — OVA 배포 링크와 챕터별
-  기법 표(스포일러 접힘)가 README에 있습니다.
-- 원작: [해커스쿨 The Lord of BOF](https://www.hackerschool.org/HS_Boards/zboard.php?id=HS_Notice&no=1170881885) —
-  mongii. Space Alone이 계승한 구조(계정 사슬과 setuid)의 출처.
+- 문제집: [hspace-io/Space_Alone](https://github.com/hspace-io/Space_Alone)
+- 뿌리: [해커스쿨 The Lord of BOF](https://www.hackerschool.org/HS_Boards/zboard.php?id=HS_Notice&no=1170881885),
+  mongii. 계정 사슬과 setuid 라는 뼈대가 여기서 왔습니다.
 - 도구: [pwntools](https://docs.pwntools.com/) (`ELF`, `ROP`, `fmtstr_payload`) ·
   [ROPgadget](https://github.com/JonathanSalwan/ROPgadget) · `objdump` · `readelf`
 - 개념 참고: [Linux `personality(2)`](https://man7.org/linux/man-pages/man2/personality.2.html)
