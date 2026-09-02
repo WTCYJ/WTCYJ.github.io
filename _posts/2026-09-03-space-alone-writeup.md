@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Space Alone, 2022년 우분투로 옮겨온 LOB 열 챕터"
+title: "Space Alone"
 date: 2026-09-03 21:00:00 +0900
 category: 시스템
 author: WTCY
