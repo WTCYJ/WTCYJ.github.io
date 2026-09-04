@@ -1,0 +1,6 @@
+# hardcoded credentials in classes.dex (no login needed)
+grep -a shopuser|ns3csh0p classes.dex:
+!ns3csh0p
+shopuser
+offsets: shopuser=0x5ab774, ns3csh0p=0x45768a
+source: com/insecureshop/util/Util.getUserCreds() -> map.put("shopuser","!ns3csh0p")

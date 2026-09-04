@@ -1,0 +1,15 @@
+# com.insecureshop internal storage tree (Fri Sep  4 22:16:26     2026)
+total 64
+drwx------   7 u0_a174 u0_a174        4096 2026-09-04 12:44 .
+drwxrwx--x 208 system  system        12288 2026-09-04 12:37 ..
+drwxrwx--x   2 u0_a174 u0_a174        4096 2026-09-04 12:44 app_textures
+drwx------   3 u0_a174 u0_a174        4096 2026-09-04 12:45 app_webview
+drwxrws--x   4 u0_a174 u0_a174_cache  4096 2026-09-04 13:14 cache
+drwxrws--x   2 u0_a174 u0_a174_cache  4096 2026-09-04 12:37 code_cache
+drwxrwx--x   2 u0_a174 u0_a174        4096 2026-09-04 13:14 shared_prefs
+--- databases ---
+ls: /data/data/com.insecureshop/databases/: No such file or directory
+--- files ---
+ls: /data/data/com.insecureshop/files/: No such file or directory
+--- external ---
+ls: /sdcard/Android/data/com.insecureshop/: No such file or directory
