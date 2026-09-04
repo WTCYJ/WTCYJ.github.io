@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:compileSdkVersion="29" android:compileSdkVersionCodename="10" package="com.insecureshop" platformBuildVersionCode="29" platformBuildVersionName="10">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <permission android:name="com.insecureshop.permission.READ"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <application android:allowBackup="true" android:appComponentFactory="androidx.core.app.CoreComponentFactory" android:debuggable="true" android:icon="@mipmap/ic_launcher" android:label="@string/app_name" android:name="com.insecureshop.InsecureShopApp" android:roundIcon="@mipmap/ic_launcher_round" android:supportsRtl="true" android:theme="@style/AppTheme" android:usesCleartextTraffic="true">
+        <activity android:excludeFromRecents="true" android:name="com.insecureshop.ChooserActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/*"/>
+                <data android:mimeType="audio/*"/>
+                <data android:mimeType="image/*"/>
+                <data android:mimeType="text/*"/>
+                <data android:mimeType="video/*"/>
+            </intent-filter>
+            <meta-data android:name="android.service.chooser.chooser_target_service" android:value=".ConversationChooserTargetService"/>
+        </activity>
+        <activity android:exported="true" android:name="com.insecureshop.AboutUsActivity"/>
+        <activity android:name="com.insecureshop.CartListActivity"/>
+        <activity android:name="com.insecureshop.ProductListActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <activity android:name="com.insecureshop.LoginActivity"/>
+        <activity android:name="com.insecureshop.WebViewActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:host="com.insecureshop" android:scheme="insecureshop"/>
+            </intent-filter>
+        </activity>
+        <activity android:name="com.insecureshop.WebView2Activity">
+            <intent-filter>
+                <action android:name="com.insecureshop.action.WEBVIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+            </intent-filter>
+        </activity>
+        <activity android:exported="false" android:name="com.insecureshop.PrivateActivity"/>
+        <activity android:name="com.insecureshop.SendingDataViaActionActivity"/>
+        <activity android:exported="true" android:name="com.insecureshop.ResultActivity"/>
+        <provider android:authorities="com.insecureshop.provider" android:exported="true" android:name="com.insecureshop.contentProvider.InsecureShopProvider" android:readPermission="com.insecureshop.permission.READ"/>
+        <provider android:authorities="com.insecureshop.file_provider" android:exported="false" android:grantUriPermissions="true" android:name="androidx.core.content.FileProvider">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/provider_paths"/>
+        </provider>
+        <service android:enabled="true" android:exported="true" android:name="net.gotev.uploadservice.UploadService"/>
+    </application>
+</manifest>
