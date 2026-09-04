@@ -1,0 +1,5 @@
+   112095  1981-01-01 01:01   META-INF/CERT.SF
+     8568  1981-01-01 01:01   AndroidManifest.xml
+  7251624  1981-01-01 01:01   classes.dex
+   483140  1981-01-01 01:01   resources.arsc
+      765  1981-01-01 01:01   META-INF/CERT.RSA

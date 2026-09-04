@@ -1,0 +1,5 @@
+# InsecureShop.apk integrity (Fri Sep  4 21:38:12     2026)
+size_bytes=4754534
+sha256=a83298ae4a37fcab8101e8b41e513dd2199af71a94ea537d556a318e07d4d1bd
+sha1=eb665e44de4b6cf94786bb056996ab40fe32ed7e
+md5=c5d872355e43322f1692288e2c4e6f00
