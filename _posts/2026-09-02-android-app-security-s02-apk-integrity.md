@@ -187,21 +187,9 @@ S02는 앱을 공격하는 편이 아니라, 검증에서 드러난 성격을 �
 
 ---
 
-## 확인하지 못한 항목
-
-- v4 서명은 별도 `.apk.idsig` 파일이 있어야 검증되는데, 이 APK에는 없어 v4는 false로만 확인했습니다(정상).
-- 업스트림 저장소의 정확한 라이선스 문구는 이 글에서 별도로 대조하지 않았습니다. 공개 교육용 앱이라는 성격만 밝혀 둡니다.
-
----
-
 ## 참고 자료
 
 - Android Developers — `apksigner` 및 APK Signature Scheme v1~v4
 - Android Developers — `aapt2 dump badging`
 - InsecureShop 프로젝트 (`github.com/hax0rgb/InsecureShop`)
 
----
-
-## 다음 챕터
-
-S03에서는 이 APK를 정적으로 뜯습니다. `AndroidManifest.xml`을 제대로 펼쳐 exported 컴포넌트·intent-filter·deep link·backup/cleartext 설정을 확인하고, jadx와 apktool의 결과를 비교합니다. S02에서 잡아 둔 `com.insecureshop`·targetSdk 29·`debuggable`이 그 분석의 출발점이 됩니다.

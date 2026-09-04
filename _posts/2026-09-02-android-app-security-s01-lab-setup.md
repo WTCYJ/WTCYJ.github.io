@@ -234,21 +234,9 @@ emulator -avd aas-api33 -wipe-data -no-snapshot-load
 
 ---
 
-## 확인하지 못한 항목
-
-- 동적 트래픽 도구(Burp / mitmproxy)와 Objection은 이번에 설치하지 않았습니다. 네트워크·동적 분석 편에서 설치하고 그때 버전을 기록합니다. 지금 상태에서 프록시는 "설정과 해제가 되는 것"까지만 확인했고, 실제 트래픽 가로채기는 리스너를 띄우는 편에서 실증합니다.
-- Cuttlefish는 이 호스트(Windows)에서 다루지 않고, 리눅스 호스트를 붙이는 편에서 별도로 시도할 예정입니다.
-
----
-
 ## 참고 자료
 
 - Android Developers — Create and manage virtual devices (`avdmanager`, `emulator`)
 - Android Developers — `adb` 명령 레퍼런스
 - Android Emulator Networking (호스트 루프백 `10.0.2.2`)
 
----
-
-## 다음 챕터
-
-S02에서는 실습에 쓸 교육용 APK를 수집하고 무결성을 검증합니다. 출처와 라이선스를 밝히고, SHA-256을 기록하고, `apksigner`로 서명을, `aapt`로 package name과 인증서를 확인합니다. 여기서 다지지 않은 "대상 앱과 SHA-256" 칸이 그때부터 채워집니다.

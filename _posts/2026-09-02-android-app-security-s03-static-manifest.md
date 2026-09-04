@@ -206,21 +206,9 @@ Starting: Intent { cmp=com.insecureshop/.AboutUsActivity }
 
 ---
 
-## 확인하지 못한 항목
-
-- 딥링크로 여는 `WebViewActivity`의 실제 화면은 URL 파라미터가 있어야 의미가 있어(파라미터 없이 호출하면 즉시 닫힘) 이 편에서는 캡처하지 않았습니다. 임의 URL 로드 문제는 S09(WebView)에서 파라미터를 갖춰 다룹니다.
-- jadx 디컴파일 중 메서드 3개가 실패했습니다. 매니페스트 분석과는 무관하며, 해당 코드는 필요 시 smali로 대조합니다.
-
----
-
 ## 참고 자료
 
 - Android Developers — `android:exported` 기본값 변경(API 31)과 컴포넌트 노출
 - Android Developers — 커스텀 권한과 `protectionLevel`
 - Apktool / jadx 문서
 
----
-
-## 다음 챕터
-
-S04에서는 이 앱이 데이터를 어디에 어떻게 저장하는지 봅니다. `debuggable`을 지렛대 삼아 `run-as`로 SharedPreferences·SQLite·내부/외부 파일을 직접 열고, 하드코딩된 키나 토큰이 있는지 확인합니다. 이번에 잡아 둔 exported ContentProvider도 그 저장소로 이어지는 통로로 다시 등장합니다.
