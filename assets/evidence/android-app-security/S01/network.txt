@@ -1,0 +1,6 @@
+# emulator network (captured Fri Sep  4 20:10:04     2026)
+    inet 127.0.0.1/8 scope host lo
+    inet 10.0.2.15/8 brd 10.255.255.255 scope global eth0
+    inet 10.0.2.16/24 brd 10.0.2.255 scope global wlan0
+host_loopback=10.0.2.2 (maps to host 127.0.0.1)
+toybox=toybox 0.8.6-android

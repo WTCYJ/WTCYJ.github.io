@@ -1,0 +1,7 @@
+    Name: aas-api33
+  Device: pixel_6 (Google)
+    Path: C:\Users\yejun\.android\avd\aas-api33.avd
+  Target: Google APIs (Google Inc.)
+          Based on: Android 13.0 ("Tiramisu") Tag/ABI: google_apis/x86_64
+  Sdcard: 512 MB
+---------

@@ -1,0 +1,13 @@
+# host tool versions (captured Fri Sep  4 20:10:01     2026)
+java=java version "26.0.1" 2026-04-21
+python=Python 3.11.0
+adb=Android Debug Bridge version 1.0.41
+emulator=Android emulator version 36.5.11.0 (build_id 15261927) (CL:N/A)
+build-tools=36.0.0
+aapt2=Android Asset Packaging Tool (aapt) 2.20-13193326
+jadx=C:\Users\yejun\android-sec-tools\bin\jadx.bat (1.5.5)
+apktool=C:\Users\yejun\android-sec-tools\bin\apktool.bat (3.0.2)
+frida=17.17.0
+frida-python=17.17.0
+objection=NOT INSTALLED (예정: pip install objection)
+mitmproxy=NOT INSTALLED (대안: Burp Suite / 예정: pip install mitmproxy)
