@@ -1,0 +1,10 @@
+# App's plaintext HTTP request captured by the intercept server (no TLS)
+GET /s10.html HTTP/1.1
+Host: 10.0.2.2:8010
+Connection: keep-alive
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (Linux; Android 4.1.1; Galaxy Nexus Build/JRO03C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.65 Mobile Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
+X-Requested-With: com.insecureshop
+
+# static: usesCleartextTraffic=true, no res/xml network_security_config, no OkHttp cert pinning
