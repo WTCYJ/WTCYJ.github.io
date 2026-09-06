@@ -1,0 +1,7 @@
+# OAuth 2.0 Authorization Code + PKCE — client app on-screen result (mock server http://10.0.2.2:8011)
+[PKCE]  verifier=Kn15uBm-DkgP6jNQ…  challenge=9mjyUdYrDaHpiLpN… (S256)
+[/authorize]  code=mXpJslPqW9hXpV0BqbxVZg   state sent==returned? OK
+[/token correct verifier]  access_token=at_RUP4qOyxXq3h55aH
+  id_token claims = {"sub":"user-42","name":"Test User","iss":"aas-mock","aud":"aas-client","iat":...}
+[/token WRONG verifier = stolen-code reuse]  error=invalid_grant  reason=PKCE verifier mismatch  => blocked
+[/authorize malicious redirect_uri]  error=invalid_redirect_uri  (exact-match only)
