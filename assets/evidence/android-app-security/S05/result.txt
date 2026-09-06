@@ -1,0 +1,10 @@
+# KeystoreDemo on aas-api33 (Android 13, x86_64 emulator) — on-screen output
+[1] AES-256 key generated in AndroidKeyStore (alias=demoKey)
+[2] key.getEncoded() = null  -> RAW KEY NOT EXTRACTABLE
+[3] plaintext  = MY_SECRET_42
+    iv         = 84ef2b53e82c79470eac6a19
+    ciphertext = 83e4cb048ed34f54eb7e30def5052bfc…
+    decrypted  = MY_SECRET_42   (round-trip OK)
+[4] isInsideSecureHardware() = false
+    getSecurityLevel()     = SOFTWARE
+# Note: emulator has no hardware TEE -> AndroidKeyStore is software-backed here.
