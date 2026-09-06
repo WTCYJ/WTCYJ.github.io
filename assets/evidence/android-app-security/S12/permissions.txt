@@ -1,0 +1,12 @@
+=== 요청 권한 vs 실제 사용 ===
+READ_CONTACTS: 선언됨, 코드에서 ContactsContract 사용 0건 (over-privilege)
+
+=== runtime 권한 revoke ===
+before: READ_CONTACTS = android.permission.READ_CONTACTS: granted=true, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+after revoke: READ_CONTACTS = android.permission.READ_CONTACTS: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+
+=== AppOps (권한 위 별도 제어층) ===
+appops READ_CONTACTS = Uid mode: READ_CONTACTS: ignore
+appops READ_EXTERNAL_STORAGE = No operations.
+set appops READ_EXTERNAL_STORAGE -> ignore:
+재확인 = No operations.
