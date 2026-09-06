@@ -1,0 +1,7 @@
+-keep class com.aas.obf.MainActivity {
+    <init>();
+    protected void onCreate(android.os.Bundle);
+}
+-dontoptimize
+-dontwarn **
+-allowaccessmodification

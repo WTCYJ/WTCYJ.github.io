@@ -1,0 +1,9 @@
+# R8 obfuscation before/after (com.aas.obf.MainActivity)
+## method NAMES via runtime reflection (getDeclaredMethods):
+v1 (d8, unobfuscated): buildSignatureHash(), getApiKey(), onCreate(), verifyIntegrity()
+v2 (R8, obfuscated):   a(), b(), c(), onCreate()      <- 3 methods renamed; onCreate kept (keep rule)
+## secret STRING in both dexes (R8 does NOT encrypt strings by default):
+v1 classes.dex: APIKEY-9f3c-SECRET
+v2 classes.dex: APIKEY-9f3c-SECRET
+# note: label literals like "getApiKey() 반환값" also survive as strings; only identifiers are renamed.
+# dex size: v1=2636B  v2=2588B
