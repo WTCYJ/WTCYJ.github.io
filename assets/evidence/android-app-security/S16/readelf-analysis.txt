@@ -1,0 +1,15 @@
+# libaasnative.so (x86_64, NDK r27) analysis — llvm-readelf / strings
+## ELF type
+Type: DYN (Shared object)   -> PIE (ASLR-capable)
+## exported dynamic symbols (JNI)
+Java_com_aas_jni_MainActivity_getNativeSecret   FUNC GLOBAL   <- name-convention method: visible as a symbol
+JNI_OnLoad                                      FUNC GLOBAL
+# nativeFlag / native_flag : NOT exported (registered via RegisterNatives inside JNI_OnLoad)
+#   -> hidden from the symbol table; recoverable only by reversing JNI_OnLoad (Ghidra/objdump)
+## security mitigations
+GNU_RELRO present + FLAGS BIND_NOW / FLAGS_1 NOW   -> Full RELRO
+GNU_STACK  RW (not RWX)                            -> NX (non-exec stack)
+__stack_chk_*  : NONE                              -> NO stack canary  (compiled without -fstack-protector)
+## strings in the .so (native does NOT hide plaintext)
+N4T1V3_S3CR3T_x9
+flag{registered_via_JNI_OnLoad}
