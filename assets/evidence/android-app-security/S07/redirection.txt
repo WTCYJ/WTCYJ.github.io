@@ -1,0 +1,5 @@
+# Intent redirection via WebView2Activity extra_intent
+## vulnerable sink (WebView2Activity.onCreate):
+Intent extraIntent = getIntent().getParcelableExtra("extra_intent"); if(extraIntent!=null){ startActivity(extraIntent); finish(); }
+## after attacker app launched, top activity = the non-exported PrivateActivity:
+topResumedActivity=ActivityRecord{76d25f1 u0 com.insecureshop/.PrivateActivity} t18}
