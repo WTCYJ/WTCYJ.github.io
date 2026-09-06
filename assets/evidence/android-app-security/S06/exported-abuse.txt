@@ -1,0 +1,7 @@
+# exported ContentProvider abuse
+## adb content query (shell):
+Row: 0 username=shopuser, password=!ns3csh0p
+## attacker app auto-granted the normal custom permission:
+com.insecureshop.permission.READ: granted=true
+## exported service start:
+Starting service: Intent { cmp=com.insecureshop/net.gotev.uploadservice.UploadService }
