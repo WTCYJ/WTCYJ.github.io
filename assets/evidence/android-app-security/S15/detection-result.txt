@@ -1,0 +1,12 @@
+# client-side root/debug detection demo (com.aas.rootdetect) on aas-api33 emulator (dev-keys, userdebug)
+device = sdk_gphone64_x86_64 / TAGS = dev-keys
+[X] su binary on known paths        <- flagged (planted /data/local/su)
+[ ] Build.TAGS = test-keys (dev-keys)
+[ ] ro.debuggable = 1               <- MISSED though getprop ro.debuggable=1  (false negative: app-context getprop exec failed)
+[ ] ro.secure = 0                   (ro.secure=1)
+[ ] debugger attached
+[ ] frida in /proc/self/maps
+=> flagged 1/6  -> verdict: COMPROMISED (client-side)
+# false positive: benign emulator flagged as compromised
+# false negative: ro.debuggable=1 real signal missed
+# and each check is bypassable by flipping its return (see S14)
