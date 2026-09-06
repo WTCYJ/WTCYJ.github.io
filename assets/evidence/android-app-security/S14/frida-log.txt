@@ -1,0 +1,7 @@
+# Frida on owned app com.insecureshop — Util.verifyUserNamePassword hook
+[*] frida-server 17.17.0 on device (/data/local/tmp/frida-server), host frida 17.17.0
+[*] hook installed on com.insecureshop.util.Util.verifyUserNamePassword
+# logged in with a WRONG password (shopuser / WRONGPASS999):
+[OBSERVE] verifyUserNamePassword(username="shopuser", password="WRONGPASS999") -> false   (real check rejects it)
+[BYPASS]  forcing return = true  (client-side auth neutralized on owned app)
+# result: app proceeded to ProductListActivity despite the wrong password.
