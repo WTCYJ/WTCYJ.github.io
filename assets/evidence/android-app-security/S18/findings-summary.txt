@@ -1,0 +1,17 @@
+# InsecureShop (com.insecureshop v1.0, SHA-256 a83298...d1bd) — comprehensive assessment
+# capstone: attacker app com.aas.loot stole live credentials via exported ContentProvider:
+#   STOLEN username = shopuser / STOLEN password = !ns3csh0p
+| # | Finding | Severity | Chapter |
+|---|---------|----------|---------|
+| 1 | WebView ignores all SSL errors (onReceivedSslError->proceed), MITM | Critical | S09 |
+| 2 | exported ContentProvider returns credentials, custom perm = normal | Critical | S06 |
+| 3 | hardcoded credentials in DEX (shopuser/!ns3csh0p)                  | High     | S04 |
+| 4 | credentials stored in plaintext SharedPreferences                 | High     | S04 |
+| 5 | intent redirection (extra_intent->startActivity) to non-exported  | High     | S07 |
+| 6 | deep link loads arbitrary URL in WebView (no validation)          | High     | S08 |
+| 7 | cleartext HTTP, no Network Security Config, no pinning            | High     | S10 |
+| 8 | FileProvider root-path="/" exposes filesystem root               | High     | S13 |
+| 9 | client-side authentication, bypassable at runtime (Frida)         | High     | S14 |
+| 10| debuggable=true + debug-signed + allowBackup=true                | Medium   | S02/S03 |
+| 11| insecure logging (password to logcat)                            | Medium   | S04 |
+| 12| over-privilege: READ_CONTACTS declared but unused                | Low      | S12 |
