@@ -1,0 +1,8 @@
+# Package visibility (API 30+) — getInstalledPackages filtering, com.aas.pkgvis (targetSdk 33)
+## v1: NO <queries>
+getInstalledPackages(0) total = 75,  non-system visible = 1 (self only: com.aas.pkgvis)
+getPackageInfo("com.insecureshop") = NOT visible (NameNotFoundException)
+## v2: <queries><package android:name="com.insecureshop"/></queries>
+getInstalledPackages(0) total = 76,  non-system visible = 2 (com.insecureshop, com.aas.pkgvis)
+getPackageInfo("com.insecureshop") = VISIBLE
+# InsecureShop FileProvider: provider_paths.xml <root-path name="root" path="/"/>  -> exposes filesystem ROOT
