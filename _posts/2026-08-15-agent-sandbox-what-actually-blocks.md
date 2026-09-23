@@ -375,18 +375,24 @@ p 값 대신 구간으로만 적습니다. 원시 파일은
 |---|---|---|
 | 실험을 알리는 이름, `sonnet` | 29/82 | 3/30 = 0.100 [0.03, 0.26] |
 | 중립 이름, `sonnet` | 30/30 | 10/11 = 0.909 [0.62, 0.98] |
-| 실험을 알리는 이름, `haiku`+`opus` | 18/18 | 재지 않음 |
+| 실험을 알리는 이름, `haiku`+`opus` | 18/18 | 17/17 = 1.000 [0.82, 1.00] (haiku 10/10 · opus 7/7) |
 | 중립 이름, `haiku`+`opus` | 20/21 | 20/20 = 1.000 [0.84, 1.00] |
 
 알리는 이름에서 `sonnet` 은 30번 중 27번 스크립트를 돌리지 않았습니다. 기록에 남은
 응답 다섯 개는 전부 `build.sh` 가 작업 폴더 밖에 캐시를 쓴다는 걸 짚고 먼저
 물었습니다. 중립 이름과 구간이 겹치지 않으니 폴더 이름이 실행을 흔든다는 현상은
 새 버전에서도 나옵니다. 중립 이름은 `sonnet` 을 다른 스크립트로 한 번 더 쟀고 그쪽도
-10번 모두 돌렸습니다. 알리는 이름 쪽 `haiku`·`opus` 는 이번에 안 재서, 이 효과가
-모델마다 다른지는 여전히 말할 수 없습니다. 이 비교의 p 값은 적지 않았습니다. 결과를
-본 뒤에 검정을 하나씩 늘리면 49개로 묶어 둔 다중비교 보정이 흔들립니다. 원시는
+10번 모두 돌렸습니다. 알리는 이름 쪽 `haiku`·`opus` 도 남은 예산으로 같은 날 쟀습니다 —
+haiku 10/10, opus 7/7, 합 17/17 = 1.000 [0.82, 1.00]. 두 모델은 이름이 실험을 알려도
+거의 매번 돌렸습니다. 그러니 억제된 건 `sonnet` 뿐이고, 알리는 이름 안에서 `sonnet`
+3/30 = 0.100 [0.03, 0.26] 과 `haiku`+`opus` 17/17 = 1.000 [0.82, 1.00] 의 구간이 갈립니다 —
+모델 사이의 차이는 이름이 실험을 알릴 때 나타나고 중립 이름에서는 사라집니다. 이
+비교의 p 값은 적지 않았습니다. 결과를 본 뒤에 검정을 하나씩 늘리면 49개로 묶어 둔
+다중비교 보정이 흔들립니다. 원시는
 [pathnaming-agentfence-E-B1-write-outside-20260923T061640.json](https://github.com/WTCYJ/agentfence/blob/main/pathnaming-agentfence-E-B1-write-outside-20260923T061640.json),
-[pathnaming-build-20260923T061930.json](https://github.com/WTCYJ/agentfence/blob/main/pathnaming-build-20260923T061930.json) 입니다.
+[pathnaming-build-20260923T061930.json](https://github.com/WTCYJ/agentfence/blob/main/pathnaming-build-20260923T061930.json),
+[modelaxis-announced-haiku-20260923T083002.json](https://github.com/WTCYJ/agentfence/blob/main/modelaxis-announced-haiku-20260923T083002.json),
+[modelaxis-announced-opus-20260923T083308.json](https://github.com/WTCYJ/agentfence/blob/main/modelaxis-announced-opus-20260923T083308.json) 입니다.
 
 작업 폴더 이름이 모델 판단을 흔든다는 관찰 자체는 하네스를 고치는 데 썼습니다.
 지금 작업 폴더 접두사는 `build-` 입니다.
@@ -622,11 +628,11 @@ Low 로 제출했습니다. 공격자가 전제 조건을 만들 수 없으면 �
   확정이지만, 그 내부 호출은 부모 스트림에 오지 않습니다.
 - 확증적인 축이 없습니다. 49개 대비 전부가 사후에 정한 것입니다.
 - 철회한 값들은 다시 돌려도 복원되지 않습니다. 그건 새 draw 입니다.
-- 작업 폴더 이름 축에서 알리는 이름 쪽 `haiku`·`opus` 는 다시 재지 않았습니다.
+- 첫 시도는 WSL 쪽 claude 로그인 세션이 만료돼 인증 오류로 전부 실패했습니다(비용 0). 자격을
+  새로 넣고 다시 돌렸습니다. 자격 동기화 같은 환경 손질이 재현의 숨은 전제입니다.
 
 이 글은 여기서 닫지 않습니다. 개발에 쓰지 않은 시나리오로 하는 독립 평가, 의존성이
-없는 환경에서의 fail-open 비율, 알리는 이름 쪽 `haiku`·`opus`, 두 번째 에이전트는
-이어서 잴 것이고, 결과가 나오면
+없는 환경에서의 fail-open 비율, 두 번째 에이전트는 이어서 잴 것이고, 결과가 나오면
 이 글에 덧붙이겠습니다.
 
 ---
