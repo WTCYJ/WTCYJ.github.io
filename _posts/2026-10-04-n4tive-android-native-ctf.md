@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "N4TIVE - 소스가 공개된 안드로이드 네이티브 CTF를, 빌드해서 에뮬레이터에서 직접 풀어 보다"
+title: "N4TIVE 안드로이드 네이티브 CTF 풀기"
 date: 2026-10-04 09:00:00 +0900
 category: 안드로이드
 author: WTCY
