@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "CodeQL 원리와 실습: 쿼리 하나로 U-Boot NFS 취약점 다시 찾기"
+title: "CodeQL 원리와 실습"
 date: 2026-10-06 12:00:00 +0900
 category: 블로그/기술
 author: WTCY
@@ -89,7 +89,7 @@ C로 된 작은 예제부터 데이터베이스를 만들어 봤다. 길이 필�
 
 ### 1.2 TRAP 파일과 dbscheme
 
-`database create` 는 중간 산출물을 지워 버리기 때문에, 이번에는 단계를 쪼개서 돌렸다. `codeql database init` 으로 빈 데이터베이스를 만들고 `codeql database trace-command` 로 gcc를 한 번 실행한 뒤, 마무리(`finalize`)를 하기 전에 `trap/` 디렉터리를 열어 봤다. TRAP은 zstd로 압축한 tar 안에 소스 파일과 헤더마다 하나씩 들어 있었다.
+`database create` 는 중간 산출물을 지워 버리기 때문에, 이번에는 단계를 쪼개서 돌렸다. `codeql database init` 으로 빈 데이터베이스를 만들고 `codeql database trace-command` 로 gcc를 한 번 실행한 뒤, 마무리(`finalize`)를 하기 전에 `trap/` 디렉터리를 열어 봤다. TRAP 파일은 소스 파일과 헤더마다 하나씩 만들어져 zstd로 압축한 tar 안에 들어 있었다.
 
 ![handle_echo 함수의 소스 네 줄과, 그 함수에 해당하는 TRAP 튜플. functions(#153, "handle_echo", 1), params 두 줄, 각 위치를 적은 locations_default 줄들, localvariables(#1ff, #11d, "len"), exprs(#201, 97, #loc_201), funbind(#201, #202) 가 보인다. #loc_201 은 14번 줄 20열부터 24열, 즉 ntohl 이 적힌 자리다](/assets/img/codeql-study/02-trap.png)
 
@@ -128,11 +128,11 @@ class NetworkByteSwap extends Expr {
 
 `getName() = "memcpy"` 라는 조건이 "memcpy 한 행짜리 상수 관계를 만들고, 그것을 함수 이름 테이블과 조인하라"로 바뀌었다. 모든 함수 호출을 돌면서 이름을 비교하는 게 아니라, 이름이 memcpy인 함수를 먼저 찾고 그 함수를 호출하는 식을 조인으로 붙인다. 조건 순서는 최적화기가 정한다.
 
-[평가 방식 문서](https://codeql.github.com/docs/ql-language-reference/evaluation-of-ql-programs/)를 보면 술어는 의존 관계에 따라 층으로 나뉘고, 아래층부터 차례로 계산된다. 재귀 술어는 새 튜플이 더 이상 나오지 않을 때까지, 즉 최소 고정점에 닿을 때까지 반복한다. 같은 RA 덤프 안에 `EVALUATE RECURSIVE LAYER` 블록이 있었는데, 거기에는 `BASE CASE` 와 `SEMINAIVE VARIANT` 가 따로 적혀 있었다. 매 반복마다 전체를 다시 조인하지 않고 직전 반복에서 새로 생긴 튜플(`#prev_delta`)만 조인하는 준순진(semi-naive) 평가다. 결과는 항상 유한한 집합이어야 해서, 변수 하나가 무한히 많은 값을 가질 수 있으면 컴파일 단계에서 오류가 난다.
+[평가 방식 문서](https://codeql.github.com/docs/ql-language-reference/evaluation-of-ql-programs/)를 보면 술어는 의존 관계에 따라 층으로 나뉘고, 아래층부터 차례로 계산된다. 재귀 술어는 새 튜플이 더 이상 나오지 않을 때까지, 즉 최소 고정점에 닿을 때까지 반복한다. 같은 RA 덤프 안에 `EVALUATE RECURSIVE LAYER` 블록이 있었는데, 거기에는 `BASE CASE` 와 `SEMINAIVE VARIANT` 가 따로 적혀 있었다. 매 반복마다 전체를 다시 조인하지 않고 직전 반복에서 새로 생긴 튜플(`#prev_delta`)만 조인하는 semi-naive 평가 방식이다. 결과는 항상 유한한 집합이어야 해서, 변수 하나가 무한히 많은 값을 가질 수 있으면 컴파일 단계에서 오류가 난다.
 
 ### 1.5 데이터 흐름과 오염 추적
 
-보안 쿼리에서 제일 많이 쓰는 기능은 데이터 흐름이다. "이 값이 저기까지 흘러가는가"를 묻는다. CodeQL은 함수 안에서만 보는 지역 흐름과, 함수 호출을 넘나드는 전역 흐름을 구분한다. 오염 추적(taint tracking)은 여기에 "값이 그대로 전달되지는 않아도 영향을 준다"는 단계를 더한 것이다. `len - 4` 는 `len` 과 다른 값이지만 `len` 에 오염돼 있다고 본다.
+보안 쿼리에서 제일 많이 쓰는 기능은 데이터 흐름이다. "이 값이 저기까지 흘러가는가"를 묻는다. CodeQL은 함수 안에서만 보는 지역 흐름과, 함수 호출을 넘나드는 전역 흐름을 구분한다. 오염 추적(taint tracking)은 값이 그대로 전달되지 않고 계산을 거쳐도 영향이 이어진다고 보는 방식이다. `len - 4` 는 `len` 과 다른 값이지만 `len` 에 오염돼 있다고 본다.
 
 [C/C++ 데이터 흐름 문서](https://codeql.github.com/docs/codeql-language-guides/analyzing-data-flow-in-cpp/)에 나온 대로, 전역 흐름은 설정 모듈을 하나 만들어 쓴다. 출발점(`isSource`), 도착점(`isSink`), 흐름을 끊는 지점(`isBarrier`)을 술어로 적어 `TaintTracking::Global<...>` 에 넘기면, 라이브러리가 출발점에서 도착점까지 가는 경로를 계산한다. 경로 계산도 결국 재귀 술어라서 위에서 본 고정점 반복으로 돌아간다.
 
@@ -153,7 +153,7 @@ dependencies:
   codeql/cpp-all: "*"
 ```
 
-번들 배포판에는 표준 라이브러리와 표준 쿼리가 이미 들어 있어서 `codeql pack install` 이 따로 내려받는 것은 없었다. 쿼리를 돌리는 방법은 두 가지를 썼다. 결과를 표로 바로 보고 싶을 때는 `codeql query run` 으로 BQRS를 만들어 `codeql bqrs decode` 로 풀었다. 위치 정보까지 필요할 때는 `codeql database analyze` 로 SARIF를 뽑고, 짧은 파이썬 스크립트로 "도착점 위치 ← 출발점 위치"를 한 줄씩 찍었다. 이후 화면의 결과는 모두 이 스크립트 출력이다.
+번들 배포판에는 표준 라이브러리와 표준 쿼리가 이미 들어 있어서 `codeql pack install` 로 따로 내려받을 것이 없었다. 쿼리를 돌리는 방법은 두 가지를 썼다. 결과를 표로 바로 보고 싶을 때는 `codeql query run` 으로 BQRS를 만들어 `codeql bqrs decode` 로 풀었다. 위치 정보까지 필요할 때는 `codeql database analyze` 로 SARIF를 뽑고, 짧은 파이썬 스크립트로 "도착점 위치 ← 출발점 위치"를 한 줄씩 찍었다. 이후 화면의 결과는 모두 이 스크립트 출력이다.
 
 처음에 `codeql resolve qlpacks` 가 2분이 넘도록 끝나지 않았다. CodeQL 배포판을 홈 디렉터리 바로 아래(`~/codeql`)에 풀어 뒀더니, 팩을 찾느라 홈 디렉터리 전체를 뒤지고 있었다. CLI도 홈 디렉터리 설치는 성능 문제가 생길 수 있다고 경고한다. `~/tools/codeql` 로 옮기자 바로 끝났다.
 
@@ -161,7 +161,7 @@ dependencies:
 
 ### 3.1 예제 프로그램
 
-처음부터 U-Boot에 쿼리를 돌리면 결과가 맞는지 판단하기 어렵다. 그래서 정답을 아는 작은 프로그램을 먼저 만들었다. 패킷 첫 바이트로 처리기를 고르고, 처리기마다 길이 필드를 읽어 `memcpy` 한다.
+처음부터 U-Boot에 쿼리를 돌리면 결과가 맞는지 판단하기 어렵다. 그래서 정답을 아는 작은 프로그램을 먼저 만들었다. 패킷 첫 바이트로 핸들러를 고르고, 핸들러마다 길이 필드를 읽어 `memcpy` 한다.
 
 ```c
 static char buf[256];
@@ -200,7 +200,7 @@ void handle_data(const unsigned char *pkt, size_t n)
 
 ### 3.2 ntohl은 함수인가
 
-첫 쿼리는 `memcpy` 호출을 전부 찾는 문법 수준의 쿼리였다. 세 곳이 그대로 나왔다. 두 번째로 출발점이 될 `ntohl` 을 찾으려는데, 처음 오염 추적 결과를 보니 출발점이 `call to __bswap_32` 로 찍혀 있었다. 소스에는 그런 함수를 쓴 적이 없다. 그래서 함수 호출과 매크로 전개를 따로 세는 쿼리를 만들고, 같은 소스를 `-O0` 로 빌드한 데이터베이스를 하나 더 만들어 비교했다.
+첫 쿼리는 `memcpy` 호출을 전부 찾는 구문 수준의 쿼리였다. 세 곳이 그대로 나왔다. 두 번째로 출발점이 될 `ntohl` 을 찾으려는데, 처음 오염 추적 결과를 보니 출발점이 `call to __bswap_32` 로 찍혀 있었다. 소스에는 그런 함수를 쓴 적이 없다. 그래서 함수 호출과 매크로 전개를 따로 세는 쿼리를 만들고, 같은 소스를 `-O0` 로 빌드한 데이터베이스를 하나 더 만들어 비교했다.
 
 ![02-ntoh.ql 쿼리와 두 데이터베이스에서의 결과. gcc -O0 로 빌드한 DB 에서는 call to ntohs 두 개와 call to ntohl 하나가 모두 함수 호출로 나오고, gcc -O2 로 빌드한 DB 에서는 ntohs(x) 두 개와 ntohl(x) 하나가 모두 매크로 전개로 나온다](/assets/img/codeql-study/04-ntoh.png)
 
@@ -268,9 +268,9 @@ predicate boundedAbove(Expr e) {
 
 하나는 변수가 비교식에 그대로 놓이지 않고 `offset + rlen > len` 처럼 식 안에 들어간 경우다. 그래서 비교문의 작은 쪽 하위 식(`getAChild*`) 가운데 지금 보는 식과 모양이 같은 것(`hashCons`)이 있으면 인정하도록 바꿨다. 다른 하나는 부호다. 음수는 상한 검사를 그대로 통과한 뒤 `memcpy` 에서 거대한 크기로 바뀐다. 그래서 범위 분석 라이브러리(`SimpleRangeAnalysis`)의 `lowerBound` 로 값이 음수가 될 수 없는 경우에만 검사를 인정했다.
 
-![pktd 데이터베이스에 03번 쿼리와 05번 쿼리를 돌린 결과와 ASan 재현. 03번은 handle_echo, handle_name, copy_payload 세 건, 05번은 handle_echo 와 copy_payload 두 건이다. poc.sh 는 E 처리기에 길이 0x1000 을 보내면 AddressSanitizer stack-buffer-overflow in memcpy, N 처리기에 같은 길이를 보내면 정상 종료, D 처리기에 길이 2 를 보내 2-4 언더플로를 일으키면 다시 stack-buffer-overflow 가 난다](/assets/img/codeql-study/05-pktd.png)
+![pktd 데이터베이스에 03번 쿼리와 05번 쿼리를 돌린 결과와 ASan 재현. 03번은 handle_echo, handle_name, copy_payload 세 건, 05번은 handle_echo 와 copy_payload 두 건이다. poc.sh 는 E 핸들러에 길이 0x1000 을 보내면 AddressSanitizer stack-buffer-overflow in memcpy, N 핸들러에 같은 길이를 보내면 정상 종료, D 핸들러에 길이 2 를 보내 2-4 언더플로를 일으키면 다시 stack-buffer-overflow 가 난다](/assets/img/codeql-study/05-pktd.png)
 
-결과가 맞는지는 실행으로 확인했다. ASan을 붙여 빌드하고 처리기마다 길이 필드만 큰 패킷을 보냈다. 쿼리가 남긴 두 곳은 실제로 `memcpy` 에서 터졌고, 쿼리가 뺀 `handle_name` 은 정상 종료했다. ASan이 stack-buffer-overflow로 보고한 것은 복사 원본인 `main` 의 2048바이트 스택 배열을 넘어 읽은 쪽이 먼저 걸렸기 때문이다. 처음 `-O1 -fsanitize=address` 로 빌드했을 때는 ASan 보고 대신 `*** buffer overflow detected ***` 가 먼저 떴다. Ubuntu의 gcc가 최적화 빌드에서 기본으로 켜는 `_FORTIFY_SOURCE` 가 `memcpy` 를 크기 검사 버전으로 바꿔 놓았기 때문이다. `-U_FORTIFY_SOURCE` 로 끄고 다시 빌드했다.
+결과가 맞는지는 실행으로 확인했다. ASan을 붙여 빌드하고 핸들러마다 길이 필드만 큰 패킷을 보냈다. 쿼리가 남긴 두 곳은 실제로 `memcpy` 에서 터졌고, 쿼리가 뺀 `handle_name` 은 정상 종료했다. ASan이 stack-buffer-overflow로 보고한 것은 복사 원본인 `main` 의 2048바이트 스택 배열을 넘어 읽은 쪽이 먼저 걸렸기 때문이다. 처음 `-O1 -fsanitize=address` 로 빌드했을 때는 ASan 보고 대신 `*** buffer overflow detected ***` 가 먼저 떴다. Ubuntu의 gcc가 최적화 빌드에서 기본으로 켜는 `_FORTIFY_SOURCE` 가 `memcpy` 를 크기 검사 버전으로 바꿔 놓았기 때문이다. `-U_FORTIFY_SOURCE` 로 끄고 다시 빌드했다.
 
 ## 4. 실습 2: U-Boot 2019.07
 
@@ -284,7 +284,7 @@ codeql database create ~/codeql-study/db-uboot --language=c-cpp --threads=0 \
     --command="make -j10 NO_SDL=1 HOSTCFLAGS=-fcommon"
 ```
 
-`NO_SDL=1` 은 SDL 개발 패키지 없이 빌드하려고 넣었다. `-fcommon` 은 gcc 10부터 기본값이 바뀌어서 필요했다. 2019년 코드에는 헤더에서 전역 변수를 정의하는 곳이 있어서, 최신 gcc로는 링크 단계에서 `multiple definition` 오류가 난다. 2019.07은 호스트 도구 쪽에서만 문제가 생겨 `HOSTCFLAGS` 로 충분했지만, 2019.10은 본체 쪽 헤더(`include/cbfs.h`)에서도 같은 오류가 나서 `KCFLAGS=-fcommon` 까지 넘겨야 했다. 빌드와 추출은 합쳐서 43초쯤 걸렸고 데이터베이스는 116MB가 됐다.
+`NO_SDL=1` 은 SDL 개발 패키지 없이 빌드하려고 넣었다. `-fcommon` 은 gcc 10부터 기본값이 바뀌어서 필요했다. 2019년 코드에는 헤더에서 전역 변수를 정의하는 곳이 있어서, 최신 gcc로는 링크 단계에서 `multiple definition` 오류가 난다. 2019.07은 호스트 도구 쪽에서만 문제가 생겨 `HOSTCFLAGS` 로 충분했지만, 2019.10은 U-Boot 본체가 쓰는 헤더(`include/cbfs.h`)에서도 같은 오류가 나서 `KCFLAGS=-fcommon` 까지 넘겨야 했다. 빌드와 추출은 합쳐서 43초쯤 걸렸고 데이터베이스는 116MB가 됐다.
 
 ### 4.2 결과와 CVE 대조
 
@@ -316,7 +316,7 @@ codeql database create ~/codeql-study/db-uboot --language=c-cpp --threads=0 \
 UDP 길이에서 시작하는 결과가 많은 이유는 흐름을 그려 보면 보인다.
 
 <figure style="margin: 0 0 1.6rem">
-<svg viewBox="0 0 760 250" role="img" aria-label="U-Boot UDP 길이의 흐름. net_process_received_packet 이 len 을 ntohs(udp_len) 빼기 8 로 계산해 udp_packet_handler 함수 포인터로 넘긴다. udp_len 이 8 보다 작으면 언더플로가 난다. NFS 처리기 nfs_handler 는 이 len 을 다섯 개의 응답 처리 함수로 넘기고, 각 함수는 memcpy(&rpc_pkt.u.data[0], pkt, len) 으로 스택 버퍼에 복사한다. 2019.10 패치는 net_process_received_packet 에 udp_len 이 8 이상이고 ip_len 이하인지 보는 검사를, nfs_handler 에 len 이 sizeof(struct rpc_t) 이하인지 보는 검사를 넣었다">
+<svg viewBox="0 0 760 250" role="img" aria-label="U-Boot UDP 길이의 흐름. net_process_received_packet 이 len 을 ntohs(udp_len) 빼기 8 로 계산해 udp_packet_handler 함수 포인터로 넘긴다. udp_len 이 8 보다 작으면 언더플로가 난다. NFS 핸들러 nfs_handler 는 이 len 을 다섯 개의 응답 처리 함수로 넘기고, 각 함수는 memcpy(&rpc_pkt.u.data[0], pkt, len) 으로 스택 버퍼에 복사한다. 2019.10 패치는 net_process_received_packet 에 udp_len 이 8 이상이고 ip_len 이하인지 보는 검사를, nfs_handler 에 len 이 sizeof(struct rpc_t) 이하인지 보는 검사를 넣었다">
   <style>
     .ub-box { fill: var(--surface); stroke: var(--rule-dark); stroke-width: 1.4; }
     .ub-hot { fill: var(--surface); stroke: var(--red); stroke-width: 2; }
@@ -354,9 +354,9 @@ UDP 길이에서 시작하는 결과가 많은 이유는 흐름을 그려 보면
 </svg>
 </figure>
 
-UDP 헤더의 길이 필드에서 8을 빼서 함수 포인터로 넘기는데, 길이 필드가 8보다 작으면 큰 양수가 된다(CVE-2019-14199). NFS 처리기는 이 값을 응답 처리 함수 다섯 개에 넘기고, 각 함수가 그 길이만큼 스택 버퍼로 복사한다(CVE-2019-14200부터 14204). 하나의 출발점이 여러 CVE로 갈라지는 구조라서 쿼리 결과도 같은 출발점이 여러 번 찍혔다.
+UDP 헤더의 길이 필드에서 8을 뺀 값을 함수 포인터로 등록된 핸들러에 넘기는데, 길이 필드가 8보다 작으면 큰 양수가 된다(CVE-2019-14199). NFS 핸들러는 이 값을 응답 처리 함수 다섯 개에 넘기고, 각 함수가 그 길이만큼 스택 버퍼로 복사한다(CVE-2019-14200부터 14204). 하나의 출발점이 여러 CVE로 갈라지는 구조라서 쿼리 결과도 같은 출발점이 여러 번 찍혔다.
 
-### 4.3 표준 쿼리는 이걸 잡았을까
+### 4.3 표준 쿼리로도 찾을 수 있을까
 
 직접 짠 쿼리와 비교하려고 CodeQL이 기본으로 제공하는 C/C++ 보안 쿼리 묶음(`cpp-security-extended`)도 같은 데이터베이스에 돌렸다.
 
@@ -386,7 +386,7 @@ if (ntohs(ip->udp_len) < UDP_HDR_SIZE || ntohs(ip->udp_len) > ntohs(ip->ip_len))
 
 ### 5.2 넓혔더니 진짜 버그를 놓칠 뻔했다
 
-고치고 나서 다시 보니 이번에는 너무 많이 지울 것 같았다. 남은 결과 중 `nfs_lookup_reply` 의 `filefh3_length` 를 확인하러 U-Boot 이력을 뒤지다가 [bdbf7a05e2](https://github.com/u-boot/u-boot/commit/bdbf7a05e26f3c5fd437c99e2755ffde186ddc80) 커밋을 찾았다. 2022년에 들어간 이 커밋의 메시지에는 CVE-2019-14196의 2019년 수정이 무력했다고 적혀 있다. `filefh3_length` 가 `static int` 라서, 서버가 보낸 값이 음수면 `offset + filefh3_length > len` 검사를 그대로 통과한다. 이 문제는 [CVE-2022-30767](https://nvd.nist.gov/vuln/detail/CVE-2022-30767)로 다시 등록됐고 변수를 `unsigned int` 로 바꿔서 고쳤다.
+그런데 이렇게 넓히자 이번에는 남겨야 할 결과까지 지울 위험이 생겼다. 남은 결과 중 `nfs_lookup_reply` 의 `filefh3_length` 를 확인하러 U-Boot 이력을 뒤지다가 [bdbf7a05e2](https://github.com/u-boot/u-boot/commit/bdbf7a05e26f3c5fd437c99e2755ffde186ddc80) 커밋을 찾았다. 2022년에 들어간 이 커밋의 메시지에는 CVE-2019-14196의 2019년 수정이 무력했다고 적혀 있다. `filefh3_length` 가 `static int` 라서, 서버가 보낸 값이 음수면 `offset + filefh3_length > len` 검사를 그대로 통과한다. 이 문제는 [CVE-2022-30767](https://nvd.nist.gov/vuln/detail/CVE-2022-30767)로 다시 등록됐고 변수를 `unsigned int` 로 바꿔서 고쳤다.
 
 비교식 안쪽까지 인정하도록 넓힌 상태라면 이 검사도 통과로 처리돼서 결과가 사라졌을 것이다. 상한 검사는 값이 음수가 될 수 없을 때만 의미가 있다. 처음에는 "부호 없는 타입이면 인정"으로 조건을 붙였다. 그랬더니 이번에는 UDP 길이 검사가 인정되지 않았다. 디버그용 쿼리로 확인해 보니 U-Boot의 `ntohs` 는 `__builtin_constant_p(x) ? ___swab16(x) : __fswab16(x)` 형태의 조건식으로 전개되고, 정수 승격 때문에 이 식의 타입이 `int` 로 잡혀 있었다. 16비트 값을 뒤집은 결과라 음수일 수 없는데 타입만 보면 부호가 있다. 그래서 타입 대신 범위 분석의 `lowerBound(e) >= 0` 을 쓰는 지금의 05번 쿼리가 됐다.
 
@@ -439,7 +439,7 @@ netconsole, EFI, 응답 처리 함수 다섯 개처럼 2019.10에서 실제로 �
 
 이번에는 비교할 수정 이력이 없으니 코드를 직접 읽어 하나씩 판정했다. 읽어 본 범위에서 위험한 것은 없었다. 오탐이 남은 이유는 각각 달랐다.
 
-`nfs-common.c` 의 일곱 건은 파일 핸들 길이(`filefh3_length`, `dirfh3_length`)에서 출발한다. 지금은 둘 다 `unsigned int` 이고, `if (filefh3_length > NFS3_FHSIZE) filefh3_length = NFS3_FHSIZE;` 로 값을 64로 깎은 뒤 복사한다. 비교문이 `memcpy` 를 막아서는 대신 값을 대입으로 바꾸는 형태라서, 비교문이 지키는 블록만 보는 내 차단 조건이 알아보지 못했다.
+`nfs-common.c` 의 일곱 건은 파일 핸들 길이(`filefh3_length`, `dirfh3_length`)에서 출발한다. 지금은 둘 다 `unsigned int` 이고, `if (filefh3_length > NFS3_FHSIZE) filefh3_length = NFS3_FHSIZE;` 로 값을 64 이하로 제한한 뒤 복사한다. 비교문이 `memcpy` 실행을 막는 게 아니라 값을 덮어쓰는 형태라서, 비교문이 지키는 블록만 보는 내 차단 조건이 알아보지 못했다.
 
 `__net_defragment` 와 `ping_receive` 는 2022년 수정 이후의 코드다. 함수 첫머리에 `if (ntohs(ip->ip_len) <= IP_HDR_SIZE) return NULL;` 이 생겼고, 그 다음 줄들에서 `len = ntohs(ip->ip_len) - IP_HDR_SIZE` 를 계산한 뒤 `start + len > IP_MAXUDP` 로 상한도 본다. 그런데 범위 분석은 앞의 검사가 뒤에서 새로 계산한 `len` 에도 적용된다는 것을 연결하지 못해서 `len` 의 하한을 음수로 본다. 그래서 상한 검사가 인정되지 않았다.
 
