@@ -199,7 +199,124 @@ def reached_target(self):
 
 문제 설명에 있던 "변수가 항상 있는 것은 아니다" 라는 주의 사항도 실제로 겪었다. `quote` 를 감시하다가 다른 함수에 들어가면 `quote` 가 없으니 평가가 실패한다. 이걸 값의 변화로 치면 함수에 들어갈 때마다 멈춘다. 그래서 평가가 실패한 이벤트는 건너뛰고, 아직 정의되지 않은 변수를 감시하기 시작한 경우에만 `<undefined> -> False` 처럼 처음 값이 생기는 순간을 변화로 보고 멈추게 했다.
 
-## 5. 메뉴얼을 먼저 쓰고 기능 더하기
+## 5. 이벤트 하나가 처리되는 전체 흐름
+
+지금까지는 기능을 하나씩 설명했다. 이 기능들은 모두 같은 함수 안에서 정해진 순서로 검사된다. 인터프리터가 이벤트 하나를 보냈을 때 디버거가 프로그램을 계속 실행할지, 멈추고 명령을 받을지 정하는 과정을 처음부터 끝까지 따라가 보면 이렇다. 3절의 그림을 판단 순서까지 펼쳐 그린 것이다.
+
+<figure style="margin: 0 0 1.6rem">
+<svg viewBox="0 0 760 482" role="img" aria-label="이벤트 하나의 처리 흐름. _traceit 가 호출되면 디버거 자신의 프레임인지 보고, 맞으면 바로 반환한다. 아니면 traceit 가 상태를 저장하고, 감시와 중단점 검사에 걸리면 멈춘다. 걸리지 않았는데 exception 이벤트면 catch 가 켜져 있을 때만 멈춘다. 그 외에는 reached_target 이 step, continue, next, until, finish 에 따라 멈출지 정한다. 멈추면 interaction_loop 가 명령을 받고, 실행 명령이 mode 를 정하면 반환해 실행이 이어진다">
+  <style>
+    .pf-box { fill: var(--surface); stroke: var(--rule-dark); stroke-width: 1.4; }
+    .pf-go { fill: var(--surface); stroke: var(--forest); stroke-width: 2; }
+    .pf-stop { fill: var(--surface); stroke: var(--blue); stroke-width: 2; }
+    .pf-t { fill: var(--ink); font-family: var(--mono); font-size: 13px; text-anchor: middle; }
+    .pf-s { fill: var(--ink-soft); font-family: var(--sans); font-size: 12px; text-anchor: middle; }
+    .pf-a { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
+    .pf-ag { stroke: var(--forest); stroke-width: 1.5; fill: none; }
+    .pf-ab { stroke: var(--blue); stroke-width: 1.5; fill: none; }
+    .pf-r { stroke: var(--forest); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .pf-l { fill: var(--ink-faint); font-family: var(--sans); font-size: 11.5px; text-anchor: middle; }
+    .pf-h { fill: var(--ink-soft); }
+    .pf-hg { fill: var(--forest); }
+    .pf-hb { fill: var(--blue); }
+  </style>
+  <defs>
+    <marker id="pf-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="pf-h" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="pf-mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="pf-hg" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="pf-mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="pf-hb" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+
+  <rect class="pf-box" x="196" y="16" width="320" height="52" rx="6"/>
+  <text class="pf-t" x="356" y="37">① _traceit(frame, event, arg)</text>
+  <text class="pf-s" x="356" y="59">인터프리터가 이벤트마다 호출</text>
+  <rect class="pf-box" x="196" y="88" width="320" height="52" rx="6"/>
+  <text class="pf-t" x="356" y="109">② 디버거 자신의 프레임인가</text>
+  <text class="pf-s" x="356" y="131">co_filename 이 debugger.py 인지 비교</text>
+  <rect class="pf-box" x="196" y="160" width="320" height="52" rx="6"/>
+  <text class="pf-t" x="356" y="181">③ traceit(): 상태 저장</text>
+  <text class="pf-s" x="356" y="203">frame, event, arg 저장, f_locals 는 한 번만 읽기</text>
+  <rect class="pf-box" x="196" y="232" width="320" height="52" rx="6"/>
+  <text class="pf-t" x="356" y="253">④ 감시와 중단점</text>
+  <text class="pf-s" x="356" y="275">watch 값 변화, 줄·함수 중단점과 조건</text>
+  <rect class="pf-box" x="196" y="304" width="320" height="52" rx="6"/>
+  <text class="pf-t" x="356" y="325">⑤ exception 이벤트인가</text>
+  <text class="pf-s" x="356" y="347">맞으면 catch 설정만 보고 결정</text>
+  <rect class="pf-box" x="196" y="376" width="320" height="52" rx="6"/>
+  <text class="pf-t" x="356" y="397">⑥ reached_target()</text>
+  <text class="pf-s" x="356" y="419">step 멈춤, continue 계속, 그 외 기준 프레임 비교</text>
+
+  <line class="pf-a" x1="356" y1="68" x2="356" y2="85" marker-end="url(#pf-m)"/>
+  <line class="pf-a" x1="356" y1="140" x2="356" y2="157" marker-end="url(#pf-m)"/>
+  <line class="pf-a" x1="356" y1="212" x2="356" y2="229" marker-end="url(#pf-m)"/>
+  <line class="pf-a" x1="356" y1="284" x2="356" y2="301" marker-end="url(#pf-m)"/>
+  <line class="pf-a" x1="356" y1="356" x2="356" y2="373" marker-end="url(#pf-m)"/>
+  <text class="pf-l" x="382" y="154">아니오</text>
+  <text class="pf-l" x="384" y="298">안 걸림</text>
+  <text class="pf-l" x="382" y="370">아니오</text>
+
+  <rect class="pf-go" x="16" y="88" width="140" height="340" rx="6"/>
+  <text class="pf-t" x="86" y="230">계속 실행</text>
+  <text class="pf-s" x="86" y="252">self._traceit 반환</text>
+  <text class="pf-s" x="86" y="270">다음 이벤트까지</text>
+  <text class="pf-s" x="86" y="288">프로그램이 진행</text>
+  <line class="pf-ag" x1="196" y1="114" x2="159" y2="114" marker-end="url(#pf-mg)"/>
+  <text class="pf-l" x="177" y="107">예</text>
+  <line class="pf-ag" x1="196" y1="330" x2="159" y2="330" marker-end="url(#pf-mg)"/>
+  <text class="pf-l" x="177" y="323">off</text>
+  <line class="pf-ag" x1="196" y1="402" x2="159" y2="402" marker-end="url(#pf-mg)"/>
+  <text class="pf-l" x="177" y="395">아님</text>
+
+  <rect class="pf-stop" x="556" y="232" width="188" height="196" rx="6"/>
+  <text class="pf-t" x="650" y="262">interaction_loop()</text>
+  <text class="pf-s" x="650" y="288">스택 수집, 상태 출력</text>
+  <text class="pf-s" x="650" y="308">명령 입력 → NAME_command</text>
+  <text class="pf-s" x="650" y="334">조회 명령이면 다시 입력</text>
+  <text class="pf-s" x="650" y="360">실행 명령이면 mode, target</text>
+  <text class="pf-s" x="650" y="380">설정 후 루프 종료</text>
+  <line class="pf-ab" x1="516" y1="258" x2="553" y2="258" marker-end="url(#pf-mb)"/>
+  <text class="pf-l" x="535" y="251">걸림</text>
+  <line class="pf-ab" x1="516" y1="330" x2="553" y2="330" marker-end="url(#pf-mb)"/>
+  <text class="pf-l" x="535" y="323">on</text>
+  <line class="pf-ab" x1="516" y1="402" x2="553" y2="402" marker-end="url(#pf-mb)"/>
+  <text class="pf-l" x="535" y="395">도달</text>
+
+  <path class="pf-r" d="M650,428 L650,450 L86,450 L86,431" marker-end="url(#pf-mg)"/>
+  <text class="pf-l" x="368" y="470">실행 명령이 정한 mode 를 가지고 반환하면 프로그램이 다시 진행된다</text>
+</svg>
+</figure>
+
+단계별로 보면 다음과 같다.
+
+1. 인터프리터가 `call`, `line`, `return`, `exception` 이벤트마다 `_traceit(frame, event, arg)` 를 호출한다.
+2. 프레임의 `co_filename` 이 `debugger.py` 면 디버거 자신의 코드이므로 아무것도 하지 않고 바로 반환한다.
+3. `traceit()` 이 `frame`, `event`, `arg` 를 저장하고 `frame.f_locals` 를 한 번만 읽어 `self.local_vars` 에 둔다(이유는 7.1절).
+4. `stop_here()` 가 먼저 감시 식을 모두 평가하고, `line` 이벤트면 줄 중단점, `call` 이벤트면 함수 중단점과 그 조건을 확인한다. 하나라도 걸리면 그 이유를 모아 두고 멈춘다. 감시와 중단점은 지금 어떤 실행 명령 중이든 가장 먼저 본다. `next` 로 함수 호출을 건너뛰는 중이라도 그 함수 안에서 감시하는 값이 바뀌면 멈춘다.
+5. 걸린 것이 없는데 `exception` 이벤트라면 `catch` 가 켜져 있을 때만 멈추고, 꺼져 있으면 아래 단계를 보지 않고 계속 실행한다.
+6. 나머지 경우는 `reached_target()` 이 직전 실행 명령(`self.mode`)으로 정한다. `step` 이면 항상 멈추고, `continue` 면 항상 계속한다. `next`, `until`, `finish` 는 명령을 받을 때 기억해 둔 기준 프레임과 지금 프레임을 비교한다(4.2절).
+7. 멈추기로 했으면 `interaction_loop()` 가 호출 스택을 모으고, 멈춘 이유와 현재 줄, `display` 식을 출력한 뒤 명령을 기다린다. `print`, `where`, `up`, `break`, `watch` 같은 조회·설정 명령은 실행한 뒤 다시 입력을 받는다.
+8. `step`, `next`, `until`, `finish`, `continue`, `quit` 같은 실행 명령은 `mode` 와 기준 프레임을 정하고 `interact` 를 `False` 로 바꿔 입력 루프를 끝낸다. 그러면 추적 함수가 반환하고 프로그램이 다음 이벤트까지 진행한다. 다음 이벤트가 오면 1번부터 다시 시작하는데, 이때 방금 정한 `mode` 가 6번의 판단에 쓰인다.
+
+코드로는 아래 두 함수가 이 흐름의 중심이다. 2번은 7.4절에서 다룬 `_traceit` 에, 6번은 4.2절의 `reached_target()` 에 있다.
+
+```python
+def traceit(self, frame, event, arg):
+    self.frame, self.event, self.arg = frame, event, arg
+    self.local_vars = frame.f_locals          # 3번: 한 번만 읽는다
+    if self.stop_here():
+        self.interaction_loop()               # 7, 8번: 명령을 받고 mode 를 정한다
+
+def stop_here(self):
+    self.reasons = self.watch_changes() + self.breakpoint_hits()   # 4번
+    if self.reasons:
+        return True
+    if self.event == 'exception':             # 5번
+        return self.catch
+    return self.reached_target()              # 6번
+```
+
+이 순서는 일부러 정한 것이다. 감시를 `catch` 보다 먼저 보는 이유는 6절에서 설명한다. 실행 명령은 "다음에 어디서 멈출지" 를 정하기만 하고 실제 판단은 다음 이벤트들이 들어올 때마다 6번에서 이루어진다는 점도 이 흐름에서 드러난다. 예를 들어 `next` 는 명령을 친 순간 무언가를 실행하는 것이 아니라, 앞으로 오는 이벤트마다 기준 프레임과 비교할 수 있게 `target` 을 남겨 두는 명령이다.
+
+## 6. 메뉴얼을 먼저 쓰고 기능 더하기
 
 과제는 추가할 명령을 구현하기 전에 메뉴얼에 먼저 적으라고 한다. 그래서 저장소의 첫 커밋은 코드 없이 `MANUAL.md` 만 들어 있다. 이름, 문법, 동작을 먼저 정해 두니 구현하다 애매한 부분이 생길 때마다 메뉴얼을 보고 결정할 수 있었다. 반대로 구현하면서 메뉴얼에 빠진 내용을 찾기도 했다. 초안에는 "예외 이벤트에서는 `catch` 가 켜져 있을 때만 멈춘다" 고만 적었는데, 변수를 바꾼 줄에서 바로 예외가 나면 그 변화가 처음 보이는 이벤트가 `exception` 이다. 여기서 감시를 확인하지 않으면 변화를 놓친다. 그래서 감시와 중단점에 걸리지 않았을 때만 이 규칙을 적용한다고 문장을 고쳤다. 감시 값을 `repr` 로 비교한다는 것, `for` 줄로 `jump` 하면 루프가 처음부터 다시 돈다는 것도 구현해 보고 나서야 메뉴얼에 적을 수 있었다.
 
@@ -207,7 +324,7 @@ def reached_target(self):
 
 - 조건부 중단점 `break 17 if c == 'o'`: 루프 안 중단점은 조건이 없으면 쓸 수가 없다.
 - `display EXPR`: 멈출 때마다 보고 싶은 식을 매번 `print` 하지 않아도 되게 한다.
-- `jump LINE`: 다음에 실행할 줄을 바꾼다. 아래 6.3절에서 따로 다룬다.
+- `jump LINE`: 다음에 실행할 줄을 바꾼다. 아래 7.3절에서 따로 다룬다.
 - `catch on`, `catch off`: 예외가 발생하는 순간 멈춘다. `try`/`except` 로 처리되는 예외에서도 멈춘다.
 - `info`: 중단점, 감시, 자동 표시, `catch` 상태를 한 번에 본다.
 - 스크립트 모드 `python debugger.py script.py`: `with` 로 감싸지 않아도 파일 하나를 통째로 디버깅한다.
@@ -217,11 +334,11 @@ def reached_target(self):
 
 ![추가 기능 시연. break 17 if c == 'o' 로 조건부 중단점을 걸고 continue 하자 out = 'f' 일 때 17번 줄에서 멈춘다. display out 을 등록하고 jump 9 로 for 줄로 이동한 뒤 delete 17, until 17 을 하자 19번 줄 return out 에서 out = 'ffoo' 로 멈춘다. assign out = out.upper() 후 finish 하자 'FFOO' 가 반환되고, catch on 과 info 로 상태를 확인한다](/assets/img/python-debugger/04-extras.png)
 
-## 6. 구현하면서 알게 된 파이썬 실행 방식
+## 7. 구현하면서 알게 된 파이썬 실행 방식
 
 디버거를 만드는 시간의 상당 부분은 코드를 쓰는 데가 아니라, 파이썬이 예상과 다르게 동작하는 이유를 확인하는 데 들었다. Python 3.11과 3.13을 둘 다 깔아 두고 같은 코드를 돌려 봤다.
 
-### 6.1 `f_locals` 는 3.12까지 사본이었다
+### 7.1 `f_locals` 는 3.12까지 사본이었다
 
 Exercise 1의 `assign` 은 추적 함수 안에서 `frame.f_locals[var] = value` 로 지역 변수를 바꾼다. 책은 "`f_locals` 는 접근할 때마다 다시 채워지니 한 번 읽은 별칭에 대입하라" 고 주의를 준다. 정말 그런지 실험했다. 추적 함수에서 `x` 를 99로 바꾼 뒤, 한 번은 그대로 두고 한 번은 `frame.f_locals` 를 한 번 더 읽기만 했다.
 
@@ -231,7 +348,7 @@ Exercise 1의 `assign` 은 추적 함수 안에서 `frame.f_locals[var] = value`
 
 디버거에서는 이벤트마다 `frame.f_locals` 를 딱 한 번 읽어 `self.local_vars` 에 두고, 현재 프레임에 대한 읽기와 쓰기는 전부 이 별칭으로 한다. 되돌려 쓰기가 현재 프레임에만 일어난다는 점도 중요하다. 3.12 이하에서 `up` 으로 고른 바깥 프레임에 `assign` 하면 화면에는 바뀐 것처럼 보여도 프로그램에는 반영되지 않는다. 그래서 그 경우는 거부하고 메시지를 띄우게 했다. 테스트도 버전에 따라 기대값을 나눴는데, 3.13에서는 바깥 프레임의 리스트를 바꾸는 것까지 실제로 반영되는 것을 확인했다.
 
-### 6.2 `eval` 속 컴프리헨션이 지역 변수를 못 본다
+### 7.2 `eval` 속 컴프리헨션이 지역 변수를 못 본다
 
 `print` 는 사용자가 친 식을 `eval(식, 전역, 지역)` 으로 평가한다. 그런데 3.11에서 `print [x for x in s if x != c]` 를 치면 `NameError: name 'c' is not defined` 가 난다.
 
@@ -242,7 +359,7 @@ Exercise 1의 `assign` 은 추적 함수 안에서 `frame.f_locals[var] = value`
 
 3.11까지 리스트 컴프리헨션은 내부적으로 별도 함수로 컴파일된다. `eval` 에 지역 딕셔너리를 따로 넘기면 그 함수 안에서는 이 딕셔너리가 보이지 않고 전역만 보인다. 맨 앞의 `s` 는 바깥에서 평가되어 넘어가니 괜찮지만 조건식의 `c` 는 찾지 못한다. 3.12의 [PEP 709](https://peps.python.org/pep-0709/)가 컴프리헨션을 감싼 쪽 코드에 인라인하면서 이 차이가 사라졌고, 3.13에서는 실제로 잘 된다. 디버거에서는 평가용으로만 `{**f_globals, **지역 변수}` 를 합친 딕셔너리를 전역으로 넘겨 두 버전에서 같은 결과가 나오게 했다.
 
-### 6.3 `jump` 는 줄이 아니라 바이트코드로 간다
+### 7.3 `jump` 는 줄이 아니라 바이트코드로 간다
 
 `frame.f_lineno` 는 읽기 전용처럼 보이지만, [추적 함수 안의 `line` 이벤트에서는 대입할 수 있다](https://docs.python.org/3/reference/datamodel.html#frame.f_lineno). 대입하면 다음에 실행할 줄이 바뀐다. `jump` 명령은 이 한 줄로 구현했다. 루프 안으로 뛰어드는 것처럼 CPython이 허용하지 않는 점프는 `ValueError` 가 나므로 메시지만 보여 준다.
 
@@ -258,13 +375,13 @@ Exercise 1의 `assign` 은 추적 함수 안에서 `frame.f_locals[var] = value`
 
 9번 줄에는 `s` 로 새 반복자를 만드는 `GET_ITER` 와, 반복자에서 다음 값을 꺼내는 `FOR_ITER` 가 함께 들어 있다. 반복할 때 되돌아오는 곳은 `FOR_ITER`(오프셋 18)지만, `jump 9` 는 그 줄의 첫 명령인 `LOAD_FAST s`(오프셋 14)로 간다. 그래서 반복자를 새로 만들고 문자열을 처음부터 다시 읽었다. 소스 코드 한 줄은 바이트코드 여러 개로 이루어져 있고, 디버거가 말하는 "줄" 은 실제로는 바이트코드 위치를 줄 번호로 묶어 부르는 것이라는 걸 이 실험으로 알게 됐다.
 
-### 6.4 디버거는 자기 자신을 추적하면 안 된다
+### 7.4 디버거는 자기 자신을 추적하면 안 된다
 
 추적 함수는 전역이라, 디버거가 명령을 처리하면서 부르는 파이썬 함수도 전부 이벤트를 만든다. `Tracer._traceit` 에서 프레임의 `co_filename` 이 디버거 파일과 같으면 아무것도 하지 않고 넘기는 이유다. 비교할 파일 이름은 `(lambda: None).__code__.co_filename` 으로 얻었다. 디버거 파일 안에서 만든 코드 객체의 `co_filename` 이므로, 이벤트로 들어오는 프레임의 `f_code.co_filename` 과 같은 방식으로 만들어진 값끼리 비교하게 된다. 직접 실행할 때와 `import` 할 때 모두 `__file__` 과 같은 절대 경로가 나오는 것도 확인했다.
 
 `quit` 은 반대로 추적을 완전히 끈다. 책의 `quit` 은 중단점만 지우고 계속 실행하게 하는데, 그러면 프로그램이 끝날 때까지 이벤트마다 추적 함수가 불려서 계속 느리다. 책의 측정에서도 추적 중 실행은 수백 배 느렸다. 그래서 `sys.settrace(None)` 까지 불러 주었다.
 
-## 7. 만든 디버거로 버그 찾기
+## 8. 만든 디버거로 버그 찾기
 
 이제 1절의 버그를 직접 잡아 볼 차례다. `"foo"` 에서 따옴표가 사라지니, 따옴표 안인지를 나타내는 `quote` 가 언제 뒤집히는지 보면 된다. `clean_all()` 이 페이지 세 개를 차례로 처리하므로 조건부 중단점으로 두 번째 호출에서만 멈추고 `watch quote` 를 걸었다.
 
@@ -274,13 +391,13 @@ Exercise 1의 `assign` 은 추적 함수 안에서 `frame.f_locals[var] = value`
 
 따옴표 처리 코드를 짐작으로 고치지 않고, 잘못된 출력에서 시작해 값이 틀어진 변수(`quote`)를 찾고, 그 값이 처음 잘못 바뀐 줄(14번)까지 거슬러 올라갔다. 1절에서 책이 설명한 디버깅 과정을 직접 만든 도구로 해 본 것이다.
 
-## 8. 테스트
+## 9. 테스트
 
-명령이 늘수록 하나를 고치면 다른 게 깨지기 쉬워서 `test_debugger.py` 를 두었다. `Debugger(commands=[...], file=StringIO())` 로 명령을 미리 넣고, 출력에 기대한 문자열이 있는지와 함수의 반환값이 바뀌었는지를 본다. `assign` 은 출력이 아니라 반환값으로 확인했다. 디버거 안에서 바뀐 것처럼 보이는 것과 프로그램이 실제로 바뀐 것은 6.1절에서 봤듯이 다른 문제이기 때문이다. 스크립트 모드와 `-x` 는 하위 프로세스로 띄워 확인했고, 표준 입력을 닫아 두어서 명령 파일이 끝나면 `quit` 으로 처리되는 경우도 함께 확인한다.
+명령이 늘수록 하나를 고치면 다른 게 깨지기 쉬워서 `test_debugger.py` 를 두었다. `Debugger(commands=[...], file=StringIO())` 로 명령을 미리 넣고, 출력에 기대한 문자열이 있는지와 함수의 반환값이 바뀌었는지를 본다. `assign` 은 출력이 아니라 반환값으로 확인했다. 디버거 안에서 바뀐 것처럼 보이는 것과 프로그램이 실제로 바뀐 것은 7.1절에서 봤듯이 다른 문제이기 때문이다. 스크립트 모드와 `-x` 는 하위 프로세스로 띄워 확인했고, 표준 입력을 닫아 두어서 명령 파일이 끝나면 `quit` 으로 처리되는 경우도 함께 확인한다.
 
 ![test_debugger.py 를 Python 3.11.0 과 3.13.13 에서 각각 실행한 화면. 3.11 에서는 assign in caller frame refused (<3.13), 3.13 에서는 assign in caller frame (3.13+) 항목이 ok 로 나오고 두 버전 모두 all passed 로 끝난다](/assets/img/python-debugger/07-tests.png)
 
-## 9. 한계
+## 10. 한계
 
 `sys.settrace` 는 부른 스레드에만 걸린다. 다른 스레드는 디버거가 멈춰 있는 동안에도 계속 실행된다. `len` 이나 `sorted` 처럼 C로 구현된 함수 안은 파이썬 이벤트가 생기지 않아 들어갈 수 없다. `print`, `watch`, `display`, 중단점 조건은 모두 실제로 `eval` 되므로 함수 호출이 들어간 식은 부작용까지 일으킨다. 감시 식은 늘 지금 실행 중인 프레임에서 평가하기 때문에, GDB처럼 특정 프레임에 묶인 감시는 아직 없다.
 
