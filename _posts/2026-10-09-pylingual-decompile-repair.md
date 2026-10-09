@@ -8,13 +8,15 @@ tags: [리버싱, 디컴파일, PyLingual, pyc, 바이트코드, Python, 논문�
 excerpt: "ACM CCS 2025 Walking The Last Mile 과제. PyLingual이 복원한 .py가 그럴듯해 보여도 컴파일조차 안 된다. 잘린 딕셔너리와 루프 밖 break를 원본 .pyc 바이트코드로 되짚어 고치고, '토큰 일치율' 같은 지표가 왜 분석가를 속이는지 짚는다."
 ---
 
+## 1. 시작하며
+
 디컴파일러가 뱉은 코드는 대체로 멀쩡해 보인다. 들여쓰기도 맞고 변수명도 그럴듯하고, 주석까지 붙어 있으니 그냥 믿고 넘어가기 쉽다. 그런데 보기에 멀쩡한 코드가 실제로도 맞는지는 돌려 봐야 안다.
 
 ACM CCS 2025 논문 [Walking The Last Mile](https://github.com/syssec-utd/CCS25-WalkingTheLastMile-Supplementary)이 공개한 과제를 하나 풀어 봤다. [PyLingual](https://pylingual.io)이라는 LLM 기반 디컴파일러가 복원한 `decomp.py`를 원본 `original.pyc`의 바이트코드와 맞대 보면서 틀린 곳을 찾아 고치는 과제다. 샘플 네 개 중에서 틀린 양상이 서로 가장 다른 두 개를 골랐다. 하나는 데이터가 중간에 뭉텅 잘려 나갔고, 다른 하나는 제어 흐름이 아예 엉뚱하게 복원됐다.
 
 이 글에서 보려는 건 악성코드가 하는 일이 아니라 디컴파일러가 틀린 지점이다. 고친 `fixed.py`와 수정 근거는 [WTCYJ/ccs25-walking-last-mile-repair](https://github.com/WTCYJ/ccs25-walking-last-mile-repair)에 올려 뒀다.
 
-## 기준을 어떻게 잡았나
+## 2. 기준 잡기
 
 세 샘플의 바이트코드 버전이 3.9, 3.10, 3.11로 제각각이라, 로컬 3.11 인터프리터의 `dis`로는 구버전을 직접 못 읽는다. 버전을 가리지 않는 `xdis`로 디스어셈블해 상수 테이블과 옵코드 스트림을 기준으로 삼았다.
 
@@ -25,7 +27,7 @@ python -c "from xdis.disasm import disassemble_file; import sys; disassemble_fil
 
 고친 다음에는 컴파일되는 선에서 멈추지 않았다. `fixed.py`를 다시 컴파일해 결과 코드 객체의 상수와 제어 흐름을 원본 `.pyc`와 되짚어 비교했다. 복원이 추측이 아니라 바이트코드와 같다는 걸 확인하기 위해서다.
 
-## 잘린 딕셔너리
+## 3. 잘린 딕셔너리
 
 첫 샘플 `dc_token`(바이트코드 3.9)에서 PyLingual은 브라우저 프로필 경로를 담은 딕셔너리를 중간에 끊어 버렸다. 출력 끝이 이렇게 매달려 있다.
 
@@ -95,13 +97,15 @@ python -c "import ast; ast.parse(open('decomp.py', encoding='utf-8').read())"
 
 누락된 11개를 복원한 뒤, 재컴파일한 `fixed.py`에서 `leveldb\`로 끝나는 경로 문자열 상수를 뽑아 원본 `.pyc`의 상수와 집합 비교했다. 양쪽 차집합이 모두 공집합, 27 대 27로 바이트 단위까지 같았다.
 
-복원된 키가 사람이 추측할 법한 긴 이름이 아니라 `Chrome1`부터 `Chrome5`, `Microsoft Edge`, `Uran` 같은 짧은 식별자라는 점도 중요하다. 이게 실제 소스의 이름이다. 보기 좋게 다듬는 순간 그건 복원이 아니라 창작이 된다.
+![복원한 fixed.py의 extract(). 16번째 Chrome에서 PyLingual 출력이 끝난 자리 아래로, 바이트코드에서 되살린 Chrome1~Iridium 열한 개가 이어진다](/assets/img/pylingual-repair/01-paths-fixed.jpg)
 
-PyLingual은 딕셔너리만 망가뜨린 게 아니라, 임포트보다 앞선 모듈 최상단에 `global pcuser`라는 줄을 `# inserted` 태그와 함께 끼워 넣었다. `global` 문은 바이트코드를 전혀 남기지 않으니 `.pyc`에서 그 존재를 되읽을 수 없고, 애초에 임포트 앞에 놓인 모듈 레벨 `global`은 사람이 쓰는 코드가 아니다. 그래서 지웠다. 반면 같은 태그가 붙은 함수 내부의 `global pcuser`는 정반대다. 그 함수 본문에 `STORE_GLOBAL pcuser`가 있어서, 소스에 선언이 없으면 애초에 그 옵코드가 나올 수 없다. 즉 반드시 있어야 하는 줄이다. 같은 `# inserted` 태그가 불필요한 줄과 필수인 줄에 똑같이 붙어 있다 — 디컴파일러가 스스로 단 표시를 그대로 믿으면 안 되는 이유다.
+복원된 키는 사람이 추측할 법한 긴 이름이 아니라 `Chrome1`부터 `Chrome5`, `Microsoft Edge`, `Uran` 같은 짧은 식별자였다. 이게 실제 소스의 이름이라, 보기 좋게 다듬는 순간 복원이 아니라 창작이 된다.
+
+PyLingual은 딕셔너리만 망가뜨린 게 아니라, 임포트보다 앞선 모듈 최상단에 `global pcuser`라는 줄을 `# inserted` 태그와 함께 끼워 넣었다. `global` 문은 바이트코드를 전혀 남기지 않으니 `.pyc`에서 그 존재를 되읽을 수 없고, 애초에 임포트 앞에 놓인 모듈 레벨 `global`은 사람이 쓰는 코드가 아니다. 그래서 지웠다. 반면 같은 태그가 붙은 함수 내부의 `global pcuser`는 정반대다. 그 함수 본문에 `STORE_GLOBAL pcuser`가 있어서, 소스에 선언이 없으면 애초에 그 옵코드가 나올 수 없다. 즉 반드시 있어야 하는 줄이다. 같은 `# inserted` 태그가 지워야 할 줄과 남겨야 할 줄에 똑같이 붙어 있는 셈이라, 디컴파일러가 스스로 단 표시는 믿을 게 못 된다.
 
 전체 수정 내역은 [option02_dc_token/repair_notes.md](https://github.com/WTCYJ/ccs25-walking-last-mile-repair/blob/master/option02_dc_token/repair_notes.md)에, 고친 결과는 [fixed.py](https://github.com/WTCYJ/ccs25-walking-last-mile-repair/blob/master/option02_dc_token/fixed.py)에 있다.
 
-## 루프 밖의 break
+## 4. 루프 밖의 break
 
 두 번째 샘플 `ZARNET`(바이트코드 3.10)은 더 교묘하다. 문제의 함수는 이렇게 생겼다.
 
@@ -197,11 +201,13 @@ python -c "compile(open('decomp.py', encoding='utf-8').read(), 'x', 'exec')"
 
 `and` 가드는 토큰이 자리표시자면 챗아이디를 아예 비교하지 않는다. 바이트코드가 첫 비교 직후 `JUMP_FORWARD`로 두 번째 비교를 건너뛰는 것과 정확히 같다. 재컴파일해 보면 `post_to`는 Telegram 전송을 가드하는 `!=` 비교 2개, 그다음 `== 'WEBHOOK URL'` 비교 1개와 전송 호출 2개로 나온다. 원본과 구조가 같다.
 
+![고친 post_to. break 두 개를 단락 평가 and 가드로 바꿔, 두 값이 자리표시자가 아닐 때만 Telegram으로 보내고 그 뒤 웹훅 전송으로는 계속 간다](/assets/img/pylingual-repair/02-post-to-fixed.jpg)
+
 여기서 `break`를 `return`으로 바꾸고 끝내고 싶어질 수 있다. 깔끔하게 컴파일되고, 세 줄 아래에 이미 `return`이 있으니 자연스러워 보인다. 그런데 틀렸다. `break`의 점프 목적지는 Telegram 블록 바로 뒤지 함수 끝이 아니다. `return`으로 바꾸면 마지막 웹훅 전송까지 건너뛰어 동작이 달라진다. 컴파일된다고 맞는 게 아니다. 점프 목적지를 바이트코드에서 직접 읽어야만 보이는 차이고, "일단 컴파일만 되게" 식으로 LLM에 맡기면 바로 이 함정에 빠진다.
 
 전체 수정 내역은 [option04_zarnet/repair_notes.md](https://github.com/WTCYJ/ccs25-walking-last-mile-repair/blob/master/option04_zarnet/repair_notes.md)에, 고친 결과는 [fixed.py](https://github.com/WTCYJ/ccs25-walking-last-mile-repair/blob/master/option04_zarnet/fixed.py)에 있다.
 
-## AI 디컴파일러를 얼마나 믿을까
+## 5. AI 디컴파일러를 얼마나 믿을까
 
 PyLingual은 논문과 자사 소개에서 높은 토큰 단위 일치율과 정확 일치율을 내세운다. 숫자 자체는 인상적이다. 그런데 이 두 샘플이 그 헤드라인 뒤의 간극을 그대로 드러낸다.
 
@@ -211,7 +217,7 @@ PyLingual은 논문과 자사 소개에서 높은 토큰 단위 일치율과 정
 
 셋째, 그럴듯한 오답을 유혹한다. `post_to`의 `return` 함정처럼, 컴파일만 통과시키는 수정은 동작을 바꿔 놓고도 멀쩡해 보인다.
 
-## 참고
+## 참고 자료
 
 - 복원 결과 저장소: [WTCYJ/ccs25-walking-last-mile-repair](https://github.com/WTCYJ/ccs25-walking-last-mile-repair)
 - 논문 보조 저장소: [CCS25-WalkingTheLastMile-Supplementary](https://github.com/syssec-utd/CCS25-WalkingTheLastMile-Supplementary)
