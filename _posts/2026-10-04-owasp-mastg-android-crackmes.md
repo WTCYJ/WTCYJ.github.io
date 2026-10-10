@@ -3,7 +3,7 @@ layout: post
 title: "OWASP MASTG 안드로이드 크랙미 L1~L4"
 date: 2026-10-04 13:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [안드로이드, 리버싱, UnCrackable, r2pay, OWASP, MASTG, Frida, JNI, 루트탐지, 안티디버깅, 화이트박스암호, DCA, 실기기, 학습기록]
 excerpt: "OWASP MASTG의 안드로이드 UnCrackable 네 문제를 순서대로 풀었습니다. L1~L3은 루트·디버거 탐지를 걷어내고 Java와 JNI 속에 숨은 secret을 꺼내는 전형적인 흐름이라 에뮬레이터로 끝났는데, L4(r2pay)는 달랐습니다. 네이티브 RASP가 Frida의 gum을 감지하면 그 자리에서 프로세스를 죽여서, 에뮬레이터에서는 계측이든 Gadget이든 전부 막혔습니다. 그래서 제 갤럭시 S24 FE를 USB로 꽂았습니다. 실기기에서는 안티에뮬레이터·안티프리다가 자연히 통과해 네이티브 검증이 멀쩡히 돌았고, 4자리 PIN을 브루트포스해 초록 r2coin을 띄웠습니다. 두 번째 플래그인 화이트박스 AES 마스터키까지 정리합니다."
 ---

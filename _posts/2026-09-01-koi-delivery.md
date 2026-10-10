@@ -3,7 +3,7 @@ layout: post
 title: "[KOI] 맛집 배달"
 date: 2026-09-01 21:00:00 +0900
 category: 개발
-author: WTCY
+author: SeiKa
 tags: [KOI, 정보올림피아드, 트리, DP, 트리DP, C++, PS, 알고리즘]
 ---
 

@@ -3,7 +3,7 @@ layout: post
 title: "Allsafe - 의도적으로 취약한 안드로이드 앱 정공법 분석"
 date: 2026-08-31 09:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, Allsafe, Frida, jadx, apktool, 정적분석, 동적분석, 취약점재현, 학습기록]
 excerpt: "안드로이드 공부하다가 yd1ng님이 링크를 줘서 Allsafe라는 연습용 취약 앱을 처음부터 끝까지 풀어봤습니다. 로그 유출·하드코딩 자격증명부터 exported 컴포넌트, ContentProvider SQL 인젝션, WebView 로컬 파일 읽기, 네이티브 라이브러리 역산, DexClassLoader 임의코드 실행, 직렬화 객체 위변조까지 에뮬레이터에서 하나하나 직접 시도하며 화면과 로그로 확인한 기록입니다. 잘 된 것만이 아니라 처음에 막힌 것, 요즘 안드로이드에선 아예 안 되던 것까지 그대로 적었습니다."
 ---

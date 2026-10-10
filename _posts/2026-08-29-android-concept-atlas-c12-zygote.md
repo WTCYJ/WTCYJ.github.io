@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C12 | 가상 실습 보고서 — Zygote, 앱 프로세스가 태어나고 권한을 버리는 곳"
 date: 2026-08-29 23:06:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

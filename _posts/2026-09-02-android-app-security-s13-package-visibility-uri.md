@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S13] 패키지 가시성과 URI 권한"
 date: 2026-09-02 21:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 패키지가시성, queries, FileProvider, URI권한, InsecureShop, 학습기록]
 excerpt: "다른 앱을 볼 수 있는가, 그리고 파일을 어디까지 내줄 수 있는가. 최신 안드로이드는 다른 앱의 존재를 기본으로 숨깁니다. 직접 만든 앱으로, queries 없이는 자기 자신밖에 못 보다가 한 줄을 넣으면 InsecureShop이 보이는 걸 확인했습니다. 그리고 InsecureShop의 FileProvider가 파일시스템 루트 전체를 노출하도록 설정돼 있다는 것도 함께 정리했습니다."
 ---

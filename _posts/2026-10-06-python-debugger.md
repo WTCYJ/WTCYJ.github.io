@@ -3,7 +3,7 @@ layout: post
 title: "Python 디버거를 직접 만들며 배운 것"
 date: 2026-10-06 10:00:00 +0900
 category: 개발
-author: WTCY
+author: SeiKa
 tags: [Python, 디버거, sys.settrace, frame, f_locals, 바이트코드, The Debugging Book]
 excerpt: "The Debugging Book 세 장을 읽고 sys.settrace 위에 명령줄 디버거를 만들었다. Exercise 2의 명령들과 조건부 중단점, jump, catch 를 구현하면서 프레임, f_locals, 바이트코드 줄 번호가 실제로 어떻게 움직이는지 Python 3.11과 3.13에서 확인한 기록."
 ---

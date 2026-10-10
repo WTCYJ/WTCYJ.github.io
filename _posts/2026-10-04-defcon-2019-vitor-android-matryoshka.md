@@ -3,7 +3,7 @@ layout: post
 title: "DEF CON 2019 Vitor, 안드로이드 6겹 매트료시카 벗기기"
 date: 2026-10-04 10:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [리버싱, CTF, DEFCON, 안드로이드, JNI, 쉘코드, ROP, 자바스크립트, AES, 난독화]
 excerpt: "o-o-overflow가 낸 DEF CON 2019 예선 Android 문제 Vitor를 풀었습니다. 앱 안에 암호화된 스테이지가 러시아 인형처럼 여섯 겹 들어 있고, 각 겹이 자바에서 DEX로, 네이티브 .so로, 쉘코드로, ROP로, 마지막엔 자바스크립트로 실행 형태를 계속 갈아탑니다. 게다가 복호 키가 전부 플래그에서 파생되도록 묶여 있어서, 키를 거꾸로 캐내면 플래그가 통째로 떨어집니다. 두 겹은 AES를 브루트포스로, 나머지는 알려진 평문으로 벗겼고, 32비트 x86 하네스로 쉘코드를 직접 돌린 뒤 복원한 플래그를 공식 APK에 넣어 Valid flag까지 확인했습니다."
 ---

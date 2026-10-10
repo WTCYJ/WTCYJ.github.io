@@ -3,7 +3,7 @@ layout: post
 title: "DFC 2026 분석 기록 — 열 개 문제, 열 개의 다른 증거"
 date: 2026-07-19 21:00:00 +0900
 category: 포렌식
-author: WTCY
+author: SeiKa
 series: DFC 2026
 tags: [DFC2026, 디지털포렌식, 침해사고분석, 메모리포렌식, 모바일포렌식, 클라우드포렌식, 블록체인포렌식, 컨테이너, 인덱스]
 excerpt: "EVTX 두 개짜리 파일리스 사건부터 RAM에만 존재하던 LUKS2 볼륨 키, CRIU 체크포인트, Nile TRON 다중서명 함정까지 — 증거 형태가 전부 다른 열 개 문제를 풀며 반복적으로 걸렸던 함정과 판단 기준을 모았다."

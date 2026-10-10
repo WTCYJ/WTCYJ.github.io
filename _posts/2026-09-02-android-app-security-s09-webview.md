@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S09] WebView 보안"
 date: 2026-09-02 17:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, WebView, SSL, onReceivedSslError, MITM, JavaScript, InsecureShop, 학습기록]
 excerpt: "S08에서 딥링크로 임의 URL을 앱 WebView에 넣었습니다. 그 WebView가 어떻게 설정돼 있느냐가 피해 크기를 정합니다. InsecureShop의 WebView는 자바스크립트를 켜 두고, 파일 URL의 교차오리진 접근까지 허용하며, 결정적으로 모든 SSL 인증서 오류를 무시하고 그냥 진행합니다. 자체 서명 인증서로 HTTPS를 띄워, 경고 하나 없이 로드되는 걸 확인했습니다."
 ---

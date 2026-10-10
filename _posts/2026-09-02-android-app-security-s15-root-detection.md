@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S15] 루팅·디버깅 탐지의 한계"
 date: 2026-09-02 23:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 루팅탐지, 디버깅탐지, PlayIntegrity, 방어설계, 학습기록]
 excerpt: "많은 앱이 루팅·디버깅을 탐지해 자신을 지키려 합니다. 그런데 그 판정이 전부 앱 안에서 난다면, 얼마나 믿을 수 있을까요. 직접 만든 탐지 데모로 흔한 체크들을 돌려 보니, 평범한 에뮬레이터가 COMPROMISED로 찍히고(false positive) 정작 켜져 있는 신호는 놓쳤습니다(false negative). 우회 경쟁이 아니라, 왜 클라이언트 측 탐지가 방어가 될 수 없는지를 정리했습니다."
 ---

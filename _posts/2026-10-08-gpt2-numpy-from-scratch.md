@@ -3,7 +3,7 @@ layout: post
 title: "NumPy로 구현한 GPT-2"
 date: 2026-10-08 00:30:00 +0900
 category: 개발
-author: WTCY
+author: SeiKa
 tags: [LLM, GPT-2, Transformer, NumPy, Self-attention, BPE, 샘플링, SFT, RLHF, DPO, GRPO, RoPE, MoE]
 excerpt: "GPT-2 small을 NumPy 행렬 연산만으로 구현하고 공개 가중치를 올려 Hugging Face와 logits를 비교했다. float32 최대 오차 2.8e-3, float64로 올리면 1.1e-11. 그 위에서 토크나이저, 어텐션 맵, √d_k, causal mask, 잔차 연결, temperature, SFT·DPO·GRPO를 숫자로 확인하고, 2026년에 공개된 모델들의 토크나이저와 config.json을 받아 무엇이 달라졌는지 비교했다."
 ---

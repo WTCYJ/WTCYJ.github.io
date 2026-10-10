@@ -3,7 +3,7 @@ layout: post
 title: "Android 앱 보안 분석 11~12주차 - InsecureShop 미니 모의진단"
 date: 2026-08-09 12:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 모의진단, MASVS, MASTG, OWASP, InsecureShop, 딥링크, WebView, ContentProvider, protectionLevel, 하드코딩자격증명, 취약점진단, 보고서, 학습기록]
 excerpt: "지금까지는 답을 아는 제 앱이 대상이었습니다. 이번에는 처음 보는 훈련 앱을 MASVS 기준으로 진단해 12건을 정리했습니다. 딥링크 한 번으로 앱이 자기 자격증명 저장소를 화면에 렌더한 경로, 보호된 것처럼 보이지만 사실상 열려 있던 커스텀 권한, 그리고 기기에서 확증한 8건과 코드로 확정한 4건을 갈라 적어 보고서의 신뢰를 세운 방법을 정리했습니다."
 ---

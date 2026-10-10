@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S12] 앱 권한과 AppOps"
 date: 2026-09-02 20:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 권한, permission, AppOps, 최소권한, runtime, InsecureShop, 학습기록]
 excerpt: "쇼핑 앱이 왜 연락처를 요구할까요. InsecureShop은 READ_CONTACTS를 선언해 두고 코드 어디에서도 쓰지 않습니다. 요청한 권한과 실제로 필요한 권한을 맞대 보고, adb로 런타임 권한을 revoke하고, 권한 위에 한 겹 더 있는 AppOps로 접근을 끄는 것까지 확인했습니다. 설정 화면엔 쇼핑 앱이 연락처를 '허용됨'으로 쥐고 있는 그림이 그대로 남았습니다."
 ---

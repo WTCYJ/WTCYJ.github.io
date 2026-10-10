@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas Tier 1 | 학습 로드맵 — 앱·패키징"
 date: 2026-08-29 23:05:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: learning-roadmap
 verification_date: 2026-08-29

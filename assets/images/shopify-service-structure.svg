@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" font-family="'Segoe UI','Malgun Gothic',sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrRed" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#dc2626"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="620" fill="#f8fafc"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#0f172a">Shopify 서비스 구조 (멀티테넌트) 와 신뢰 경계</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">하나의 플랫폼이 수백만 머천트(테넌트)를 격리해 호스팅한다. 공격자는 "무료 가입"만으로 *.myshopify.com 테넌트가 된다.</text>
+
+  <!-- SSO / accounts -->
+  <rect x="24" y="86" width="220" height="78" rx="10" fill="#fff" stroke="#6366f1" stroke-width="2"/>
+  <text x="38" y="112" font-size="14" font-weight="700" fill="#3730a3">accounts.shopify.com</text>
+  <text x="38" y="132" font-size="12" fill="#475569">통합 인증(SSO)</text>
+  <text x="38" y="150" font-size="12" fill="#475569">로그인·세션 발급</text>
+
+  <!-- Admin -->
+  <rect x="280" y="86" width="220" height="78" rx="10" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="294" y="112" font-size="14" font-weight="700" fill="#0369a1">admin.shopify.com</text>
+  <text x="294" y="132" font-size="12" fill="#475569">머천트 관리 콘솔(스태프)</text>
+  <text x="294" y="150" font-size="12" fill="#475569">주문·고객·상품 관리</text>
+
+  <!-- Admin GraphQL API -->
+  <rect x="536" y="86" width="220" height="78" rx="10" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="550" y="112" font-size="14" font-weight="700" fill="#0369a1">Admin GraphQL API</text>
+  <text x="550" y="132" font-size="12" fill="#475569">node(id) 전역 객체 접근</text>
+  <text x="550" y="150" font-size="12" fill="#475569">객체+필드 단위 인가</text>
+
+  <!-- App Bridge / embedded apps -->
+  <rect x="792" y="86" width="144" height="78" rx="10" fill="#fff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="806" y="112" font-size="13" font-weight="700" fill="#6d28d9">App Bridge</text>
+  <text x="806" y="132" font-size="11" fill="#475569">임베드 앱</text>
+  <text x="806" y="150" font-size="11" fill="#475569">세션토큰(JWT)</text>
+
+  <!-- Tenant boundary box -->
+  <rect x="24" y="210" width="912" height="210" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="40" y="234" font-size="13" font-weight="700" fill="#047857">테넌트 영역 — *.myshopify.com (각 머천트별 격리)</text>
+
+  <!-- tenant A (mine) -->
+  <rect x="48" y="252" width="270" height="150" rx="10" fill="#fff" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="64" y="278" font-size="14" font-weight="700" fill="#b91c1c">my-lab-store.myshopify.com</text>
+  <text x="64" y="298" font-size="12" fill="#7f1d1d">★ 내 무료 개발 스토어 (발판)</text>
+  <text x="64" y="320" font-size="12" fill="#475569">• 내 JS·Liquid·테마를 합법 실행</text>
+  <text x="64" y="340" font-size="12" fill="#475569">• Storefront/Admin API 키 보유</text>
+  <text x="64" y="360" font-size="12" fill="#475569">• "나는 *.myshopify.com 이다"</text>
+  <text x="64" y="384" font-size="11.5" font-style="italic" fill="#b91c1c">→ 외부인이 갖기 어려운 '내부' 발판을 가입으로 획득</text>
+
+  <!-- tenant B, C (others) -->
+  <rect x="340" y="252" width="270" height="150" rx="10" fill="#fff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="356" y="278" font-size="14" font-weight="700" fill="#334155">victim-shop.myshopify.com</text>
+  <text x="356" y="298" font-size="12" fill="#64748b">다른 머천트 테넌트</text>
+  <text x="356" y="320" font-size="12" fill="#475569">• 고객 PII·주문·매출 보유</text>
+  <text x="356" y="340" font-size="12" fill="#475569">• 격리로 내 접근 차단(정상)</text>
+  <text x="356" y="384" font-size="11.5" font-style="italic" fill="#475569">→ 격리가 깨지면 여기로 횡단(목표)</text>
+
+  <rect x="632" y="252" width="280" height="150" rx="10" fill="#fff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="648" y="278" font-size="13" font-weight="700" fill="#334155">공유 인프라</text>
+  <text x="648" y="300" font-size="12" fill="#475569">• cdn.shopify.com (정적 자원)</text>
+  <text x="648" y="320" font-size="12" fill="#475569">• checkout.shopify.com</text>
+  <text x="648" y="340" font-size="12" fill="#475569">• apps.shopify.com (앱스토어)</text>
+  <text x="648" y="360" font-size="12" fill="#475569">• partners.shopify.com</text>
+
+  <!-- arrows from SSO/admin to tenant -->
+  <line x1="134" y1="164" x2="160" y2="250" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="390" y1="164" x2="430" y2="250" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- the core question banner -->
+  <rect x="24" y="440" width="912" height="64" rx="10" fill="#fff7ed" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="40" y="468" font-size="14" font-weight="700" fill="#b45309">핵심 질문</text>
+  <text x="40" y="490" font-size="13.5" fill="#7c2d12">"어디가 *.myshopify.com(=나)을 '내부'로 착각하는가? 그 경계의 검증을 어떻게 우회하는가?"</text>
+
+  <!-- trust crossing arrow (red) -->
+  <line x1="318" y1="327" x2="338" y2="327" stroke="#dc2626" stroke-width="2.5" marker-end="url(#arrRed)"/>
+  <text x="200" y="528" font-size="12" fill="#475569">신뢰 경계: 같은 *.myshopify.com 부모도메인을 '내부'로 보는 CORS·postMessage·OAuth·Liquid·GraphQL 검증 한 줄이 핵심 표적이다.</text>
+  <text x="24" y="556" font-size="11" fill="#94a3b8">© 모의침투 학습 시나리오 — 모든 테스트는 본인 소유 개발 스토어와 HackerOne 규정 범위 내에서만 수행.</text>
+</svg>

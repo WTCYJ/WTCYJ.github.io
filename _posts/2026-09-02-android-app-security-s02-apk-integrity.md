@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S02] APK 수집과 무결성 검증"
 date: 2026-09-02 10:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, APK, apksigner, aapt, SHA256, 코드서명, InsecureShop, 학습기록]
 excerpt: "실습을 시작하기 전에, 손에 쥔 APK가 정말 내가 생각한 그 앱인지부터 못 박습니다. InsecureShop APK 하나를 놓고 SHA-256으로 지문을 뜨고, apksigner로 서명 체계와 서명 인증서를 확인하고, aapt로 package name·타깃 SDK·권한을 뽑고, 압축을 열어 split 여부까지 봤습니다. 서명 인증서가 디버그 키였다는, 작지만 분명한 사실 하나가 이 앱의 성격을 그대로 말해 줍니다."
 ---

@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S01] 재현 가능한 실습 환경 구축"
 date: 2026-09-02 09:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, AVD, 에뮬레이터, adb, Frida, jadx, apktool, 실습환경, 학습기록]
 excerpt: "Android 앱 보안을 처음부터 체계적으로 다시 밟아 보려고 합니다. 그 첫 글은 화려한 취약점이 아니라, 언제 다시 켜도 똑같은 상태로 돌아오는 실습 환경을 만드는 일입니다. AVD를 새로 만들고 부팅해서 API·ABI·빌드 타입·SELinux·adb root를 실제로 확인하고, 스냅샷과 초기화 절차, 네트워크 구성, 도구 버전까지 실행 결과로 남깁니다."
 ---

@@ -3,7 +3,7 @@ layout: post
 title: "PyLingual 출력을 바이트코드로 복원하기"
 date: 2026-10-09 09:00:00 +0900
 category: 리버싱
-author: WTCY
+author: SeiKa
 tags: [리버싱, 디컴파일, PyLingual, pyc, 바이트코드, Python, 논문재현, CCS2025]
 excerpt: "ACM CCS 2025 Walking The Last Mile 과제. PyLingual이 복원한 .py가 그럴듯해 보여도 컴파일조차 안 된다. 잘린 딕셔너리와 루프 밖 break를 원본 .pyc 바이트코드로 되짚어 고치고, '토큰 일치율' 같은 지표가 왜 분석가를 속이는지 짚는다."
 ---

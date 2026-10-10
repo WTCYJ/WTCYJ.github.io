@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C13 | 가상 실습 보고서 — ART: DEX→OAT→VDEX, 리버서가 무엇을 분석해야 하나"
 date: 2026-08-29 23:07:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

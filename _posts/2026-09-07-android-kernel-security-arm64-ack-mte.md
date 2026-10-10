@@ -3,7 +3,7 @@ layout: post
 title: "Android Kernel Security 02 - Android Common Kernel을 ARM64로 올리고, MTE 태그로 UAF를 잡다"
 date: 2026-09-07
 category: 시스템
-author: WTCY
+author: SeiKa
 tags: [AndroidKernel, ACK, GKI, ARM64, MTE, KASAN, HW_TAGS, QEMU, UseAfterFree, 커널빌드, 학습기록]
 excerpt: "지난 글에서 x86 제네릭 커널로 익힌 루프를, 이번엔 진짜 Android Common Kernel(android15-6.6) 소스를 받아 ARM64로 크로스빌드해 QEMU에 올렸습니다. 같은 use-after-free 드라이버를 다시 넣었더니, 이번엔 소프트웨어 섀도가 아니라 MTE 하드웨어 태그가 포인터 태그와 메모리 태그의 불일치로 잡아냈습니다. 실제 안드로이드 기기가 쓰는 바로 그 방식입니다."
 ---

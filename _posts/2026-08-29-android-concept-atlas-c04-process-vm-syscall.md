@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C04 | 가상 실습 보고서 — 프로세스·가상메모리·시스템 콜, 모든 격리가 딛고 선 밑변"
 date: 2026-08-29 22:56:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

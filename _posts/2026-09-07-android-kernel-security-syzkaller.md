@@ -3,7 +3,7 @@ layout: post
 title: "Android Kernel Security 04 - 손으로 만든 KCOV 퍼저에서 syzkaller로, 진짜 규모의 커버리지 퍼징"
 date: 2026-09-07 12:00:00 +0900
 category: 시스템
-author: WTCY
+author: SeiKa
 tags: [AndroidKernel, LinuxKernel, syzkaller, KCOV, KASAN, 커널퍼징, QEMU, KVM, coverage, 학습기록]
 excerpt: "1편에서 KCOV로 손수 짠 작은 퍼저는 스물다섯 번 만에 제가 심어둔 버그 하나를 찾았습니다. 이번엔 그걸 진짜 도구로 갈아탑니다 — syzkaller를 우리 커널에 붙여 KVM 가상머신 여러 대에서 돌렸습니다. 붙이는 과정에서 세 번 넘어졌고(파이프라인이 프로세스를 죽이고, NIC 이름이 바뀌고, 커널에 없는 파일시스템을 이미지가 마운트하려다 응급모드로 빠지고), 고치고 나니 10분 만에 2,357개 시스템콜을 넘나들며 4만 3천 엣지의 커버리지를 쌓았습니다."
 ---

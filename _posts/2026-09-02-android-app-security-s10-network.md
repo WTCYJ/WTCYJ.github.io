@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S10] 네트워크 보안"
 date: 2026-09-02 18:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 네트워크, cleartext, NetworkSecurityConfig, TLS, pinning, InsecureShop, 학습기록]
 excerpt: "앱이 무엇을 어떻게 전송하는지 봤습니다. InsecureShop은 usesCleartextTraffic=true에 Network Security Config도 없어서, HTTP를 그냥 평문으로 보냅니다. 앱이 로드한 요청을 로컬 인터셉트 서버로 받아, 헤더와 앱 식별 정보까지 그대로 읽히는 걸 확인했습니다. S09의 SSL 무시와 겹치면 HTTPS마저 방어가 되지 못한다는 것도 정리했습니다."
 ---

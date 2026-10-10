@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" font-family="'Segoe UI','Malgun Gothic',sans-serif">
+  <defs>
+    <marker id="ac" markerWidth="12" markerHeight="12" refX="6" refY="8" orient="auto">
+      <path d="M0,0 L6,8 L12,0 Z" fill="#dc2626"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="640" fill="#f8fafc"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#0f172a">심화 체인 — 약한 검증 4개를 하나의 격리 횡단 흐름으로</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">가설 시나리오: 모든 전제가 동시에 성립할 때. 각 단계는 컷셋(아래 빨간 자물쇠) 한 곳만 막아도 끊긴다.</text>
+
+  <!-- lanes -->
+  <text x="150" y="86" font-size="12" font-weight="700" fill="#64748b" text-anchor="middle">고객 컨텍스트</text>
+  <text x="480" y="86" font-size="12" font-weight="700" fill="#64748b" text-anchor="middle">머천트/스태프 컨텍스트</text>
+  <text x="820" y="86" font-size="12" font-weight="700" fill="#64748b" text-anchor="middle">플랫폼 격리</text>
+  <line x1="300" y1="94" x2="300" y2="600" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <line x1="660" y1="94" x2="660" y2="600" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+  <!-- step 1 -->
+  <rect x="30" y="104" width="250" height="74" rx="10" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="44" y="128" font-size="13.5" font-weight="700" fill="#b91c1c">[1] Liquid 저장형 주입 (3-D)</text>
+  <text x="44" y="148" font-size="11.5" fill="#475569">고객으로 주문 메모에 Liquid 삽입</text>
+  <text x="44" y="166" font-size="11.5" fill="#475569">→ 머천트 admin/이메일에서 서버 렌더</text>
+
+  <!-- step 2 -->
+  <rect x="335" y="200" width="290" height="74" rx="10" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="349" y="224" font-size="13.5" font-weight="700" fill="#b91c1c">[2] App Bridge 토큰 탈취 (3-B)</text>
+  <text x="349" y="244" font-size="11.5" fill="#475569">postMessage origin 부분매칭 우회로</text>
+  <text x="349" y="262" font-size="11.5" fill="#475569">세션 토큰(JWT)을 내 origin으로 유출</text>
+
+  <!-- step 3 -->
+  <rect x="335" y="300" width="290" height="74" rx="10" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="349" y="324" font-size="13.5" font-weight="700" fill="#b91c1c">[3] Admin GraphQL 인증 (3-E)</text>
+  <text x="349" y="344" font-size="11.5" fill="#475569">탈취 토큰으로 인증 + 필드 수준</text>
+  <text x="349" y="362" font-size="11.5" fill="#475569">인가 누락 필드로 권한 밖 데이터 조회</text>
+
+  <!-- step 4 -->
+  <rect x="685" y="400" width="250" height="74" rx="10" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="699" y="424" font-size="13.5" font-weight="700" fill="#b91c1c">[4] node() 전역 접근 (3-E)</text>
+  <text x="699" y="444" font-size="11.5" fill="#475569">전역 객체 인터페이스로</text>
+  <text x="699" y="462" font-size="11.5" fill="#475569">교차테넌트 객체에 도달</text>
+
+  <!-- step 5 -->
+  <rect x="685" y="500" width="250" height="74" rx="10" fill="#fef2f2" stroke="#991b1b" stroke-width="2.5"/>
+  <text x="699" y="524" font-size="13.5" font-weight="700" fill="#7f1d1d">[5] 격리 붕괴</text>
+  <text x="699" y="544" font-size="11.5" fill="#7f1d1d">다른 머천트의 고객 PII·주문·매출</text>
+  <text x="699" y="562" font-size="11.5" fill="#7f1d1d">→ 멀티테넌트 최상위 심각도</text>
+
+  <!-- arrows between steps (cross-boundary) -->
+  <path d="M155,178 C155,190 360,190 400,198" fill="none" stroke="#dc2626" stroke-width="2" marker-end="url(#ac)"/>
+  <line x1="480" y1="274" x2="480" y2="298" stroke="#dc2626" stroke-width="2" marker-end="url(#ac)"/>
+  <path d="M625,337 C660,337 760,360 770,398" fill="none" stroke="#dc2626" stroke-width="2" marker-end="url(#ac)"/>
+  <line x1="810" y1="474" x2="810" y2="498" stroke="#dc2626" stroke-width="2" marker-end="url(#ac)"/>
+
+  <!-- cutset locks -->
+  <g font-size="11" fill="#047857">
+    <text x="36" y="196">🔒 컷셋[1]: 고객 필드는 평문 강제(Liquid 렌더 금지)</text>
+    <text x="341" y="292">🔒 컷셋[2]: postMessage origin === 정확비교</text>
+    <text x="500" y="492">🔒 컷셋[3·4]: GraphQL 객체+필드 이중 인가 · node() 소유권 검사</text>
+  </g>
+
+  <text x="24" y="620" font-size="11" fill="#94a3b8">컷셋 사고: 다중 경계(Liquid·postMessage·GraphQL) 중 하나만 견고해도 체인 전체가 끊긴다 — 방어자에게 유리한 구조.</text>
+</svg>

@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C03 | 가상 실습 보고서 — 최소권한·완전중재·심층방어, Atlas가 실증해온 설계 원칙"
 date: 2026-08-29 22:55:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

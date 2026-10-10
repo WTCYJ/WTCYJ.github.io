@@ -3,7 +3,7 @@ layout: post
 title: "What's in my container? — 이미지 레이어와 런타임 파일시스템의 차집합으로 봇넷 찾기"
 date: 2026-07-16 21:00:00 +0900
 category: 포렌식
-author: WTCY
+author: SeiKa
 series: DFC 2026
 tags: [DFC2026, 디지털포렌식, 컨테이너, Docker, OCI, ELF, 봇넷, Mirai, capstone, ChaCha20]
 excerpt: "정상 빌드가 끝나고 13개월 뒤에 붙은 레이어가 시크릿을 평문 ENV로 심었고, 런타임에는 이미지에 없던 ELF 하나가 떨어져 있었다. C&C 포트를 '찾지 못했다'가 아니라 '바이너리에 없다'로 결론 내리기까지 세 갈래로 검증한 기록."

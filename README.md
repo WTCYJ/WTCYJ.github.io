@@ -1,4 +1,4 @@
-# WTCY's DevLog
+# SeiKa's DevLog
 
 [![Website](https://img.shields.io/badge/website-live-0f766e)](https://wtcyj.github.io/)
 [![GitHub stars](https://img.shields.io/github/stars/WTCYJ/WTCYJ.github.io?style=flat)](https://github.com/WTCYJ/WTCYJ.github.io/stargazers)

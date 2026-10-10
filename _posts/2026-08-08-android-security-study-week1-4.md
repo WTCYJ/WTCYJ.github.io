@@ -3,7 +3,7 @@ layout: post
 title: "Android 앱 보안 분석 1~4주차 - 구조 실측과 분석 대상 앱 제작"
 date: 2026-08-08 21:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 학습기록, APK, DEX, AndroidManifest, Sandbox, SELinux, UID, 앱수명주기, Kotlin, adb, 에뮬레이터, AVD, aapt2, apkanalyzer, 취약점분석, exported, ScopedStorage, SharedPreferences, 정적분석, 동적분석]
 excerpt: "24주 로드맵의 첫 4주를 진행한 기록입니다. Android 앱 격리가 DAC와 SELinux 두 겹이라는 것을 명령 출력으로 확인하고, DEX 헤더를 손으로 디코딩해 ZIP 엔트리 크기와 교차 검증했습니다. 이어서 5주차부터 분석 대상이 될 테스트 앱을 직접 작성하면서, 통과하던 단위 테스트가 덮고 있던 배선 버그를 잡아내고 외부 저장소 노출 범위를 권한 비트까지 파고들어 정확히 규정했습니다."
 ---

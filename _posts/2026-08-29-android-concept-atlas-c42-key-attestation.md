@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C42 | 가상 실습 보고서 — Key Attestation과 신뢰의 뿌리, 앱을 믿지 않고 키를 증명하기"
 date: 2026-08-29 23:41:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

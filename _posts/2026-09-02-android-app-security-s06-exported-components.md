@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S06] 컴포넌트 노출 실증"
 date: 2026-09-02 14:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, ContentProvider, exported, 커스텀권한, 패키지가시성, IPC, InsecureShop, 학습기록]
 excerpt: "S03에서 지도로만 봤던 exported 컴포넌트를 이번엔 실제로 두드려 봤습니다. InsecureShop의 exported ContentProvider는 로그인한 사용자의 아이디·비밀번호를 그대로 돌려줍니다. 그걸 '보호'한다는 커스텀 권한이 normal이라, 직접 만든 공격 앱이 설치만으로 그 권한을 받아 자격증명을 통째로 훔쳐 화면에 찍었습니다. 대신 최신 안드로이드의 패키지 가시성이라는 문턱 하나를 넘어야 했습니다."
 ---

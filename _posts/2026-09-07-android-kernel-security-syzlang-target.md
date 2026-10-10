@@ -3,7 +3,7 @@ layout: post
 title: "Android Kernel Security 05 - 내 드라이버를 syzkaller에 가르치기, syzlang 기술서로 내 버그를 되찾다"
 date: 2026-09-07 15:00:00 +0900
 category: 시스템
-author: WTCY
+author: SeiKa
 tags: [AndroidKernel, LinuxKernel, syzkaller, syzlang, KCOV, KASAN, 커널퍼징, 커널드라이버, ioctl, 학습기록]
 excerpt: "4편에서 syzkaller를 커널에 붙여 규모 있게 돌렸지만, 그건 커널이 원래 가진 시스템콜을 훑은 것이었습니다. 이번엔 syzkaller에게 우리 드라이버가 어떻게 생겼는지 syzlang으로 기술해, 우리 ioctl을 정확히 겨냥하게 했습니다. 그러자 1편에서 손수 짠 퍼저가 스물다섯 번 만에 찾던 그 heap out-of-bounds를, syzkaller가 기술서만 보고 첫 스무 번 실행 안에 되찾았습니다."
 ---

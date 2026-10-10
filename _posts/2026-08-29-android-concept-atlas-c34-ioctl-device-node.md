@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C34 | 가상 실습 보고서 — ioctl과 device node, 앱이 커널에 명령하는 채널"
 date: 2026-08-29 23:32:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C23 | 가상 실습 보고서 — SELinux 정책 언어, 라벨을 보던 데서 규칙을 읽는 데로"
 date: 2026-08-29 23:19:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

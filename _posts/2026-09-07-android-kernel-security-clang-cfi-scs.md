@@ -3,7 +3,7 @@ layout: post
 title: "Android Kernel Security 03 - clang으로 다시 빌드해 CFI와 SCS를 켜고, 정말 도는지 확인하다"
 date: 2026-09-07 09:00:00 +0900
 category: 시스템
-author: WTCY
+author: SeiKa
 tags: [AndroidKernel, ACK, ARM64, clang, LLVM, KCFI, CFI, ShadowCallStack, DynamicSCS, PAC, 커널하드닝, 학습기록]
 excerpt: "지난 글의 ARM64 커널은 gcc로 빌드해서 CFI와 SCS가 꺼져 있었습니다. 이번엔 clang/LLVM로 다시 빌드해 둘을 켰습니다. 타입이 안 맞는 함수 포인터 호출로 KCFI가 실제로 패닉을 내는 걸 확인했고, SCS는 처음 해석이 틀렸다가 검증으로 바로잡았습니다. config에 y가 적혀 있다고 그 방어가 런타임에 도는 건 아니라는 걸, 특히 하드웨어에 기대는 기능에서 배웠습니다."
 ---

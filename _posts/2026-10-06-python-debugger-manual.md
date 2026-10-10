@@ -3,7 +3,7 @@ layout: post
 title: "debugger.py 사용 메뉴얼"
 date: 2026-10-06 09:50:00 +0900
 category: 개발
-author: WTCY
+author: SeiKa
 tags: [Python, 디버거, 메뉴얼, sys.settrace, The Debugging Book]
 excerpt: "직접 만든 파이썬 명령줄 디버거 debugger.py 의 실행 방법과 명령어 전체. 만든 과정과 배운 내용은 본문 글에 따로 정리했다."
 ---

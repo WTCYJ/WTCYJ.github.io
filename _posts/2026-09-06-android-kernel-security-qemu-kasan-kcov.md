@@ -3,7 +3,7 @@ layout: post
 title: "Android Kernel Security 01 - QEMU에 내 커널을 올리고 KASAN·KCOV로 버그를 잡다"
 date: 2026-09-06
 category: 시스템
-author: WTCY
+author: SeiKa
 tags: [AndroidKernel, LinuxKernel, QEMU, KVM, WSL2, KASAN, KCOV, UseAfterFree, 커널퍼징, 커널빌드, 학습기록]
 excerpt: "개념으로만 알던 커널 보안을 손으로 돌려봤습니다. WSL2 안에서 커널을 직접 빌드해 QEMU-KVM으로 부팅하고, 첫 커널 모듈을 올리고, KASAN으로 use-after-free를 잡아 근본 원인까지 따라간 다음 고쳐서 회귀를 확인하고, 마지막엔 KCOV 커버리지로 안내되는 작은 퍼저가 스스로 heap out-of-bounds를 찾아내게 했습니다. 모든 로그는 제 랩에서 실제로 나온 출력입니다."
 ---

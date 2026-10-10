@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S04] 앱 데이터 저장소 분석"
 date: 2026-09-02 12:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, SharedPreferences, run-as, 하드코딩, 자격증명, 저장소, InsecureShop, 학습기록]
 excerpt: "앱이 자격증명을 어디에 두는지 봅니다. InsecureShop은 로그인 성공값을 SharedPreferences에 평문으로 저장하고, 애초에 그 자격증명 자체가 코드에 하드코딩돼 있었습니다. 정적으로 DEX에서 아이디·비밀번호를 그대로 뽑고, debuggable을 지렛대 삼아 run-as로 저장된 평문을 열어 확인했습니다. SQLite도 외부 저장도 쓰지 않아, 저장소 지도는 오히려 단순하고 분명했습니다."
 ---

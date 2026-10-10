@@ -3,7 +3,7 @@ layout: post
 title: "Ghost in the Shell — 파일리스 PowerShell 로더를 레지스트리 조각에서 되살리기"
 date: 2026-07-18 21:00:00 +0900
 category: 포렌식
-author: WTCY
+author: SeiKa
 series: DFC 2026
 tags: [DFC2026, 디지털포렌식, PowerShell, Sysmon, EVTX, 파일리스, 난독화, 레지스트리, XOR, ATT&CK]
 excerpt: "디스크에 아무것도 남기지 않은 3단계 PowerShell 로더가 HKCU 레지스트리를 임시 저장소로 썼다. 문제는 같은 키 아래에 미끼 값이 잔뜩 깔려 있었다는 것 — 진짜 조각을 고르는 기준은 값의 이름이 아니라 그 값을 쓴 PID였다."

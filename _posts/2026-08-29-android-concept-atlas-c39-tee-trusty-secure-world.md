@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C39 | 가상 실습 보고서 — TEE·Trusty·시큐어 월드, 같은 코어 위의 두 세계"
 date: 2026-08-29 23:38:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

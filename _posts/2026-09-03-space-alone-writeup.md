@@ -3,7 +3,7 @@ layout: post
 title: "Space Alone"
 date: 2026-09-03 21:00:00 +0900
 category: 시스템
-author: WTCY
+author: SeiKa
 tags: [SpaceAlone, LOB, pwnable, BOF, ROP, FSB, GOT, StackPivot, ASLR, 카나리, 워게임, 시스템해킹, 학습기록]
 excerpt: "hspace-io의 Space Alone은 해커스쿨 The Lord of BOF의 뼈대를 Ubuntu 22.04 위에 다시 세운 문제집입니다. VirtualBox가 없는 노트북에서 OVA를 QEMU로 띄우는 것부터 시작해 열 챕터를 순서대로 풀었습니다. 기법 자체는 교과서에 다 있는데, 예전 풀이가 지금은 통하지 않는 자리가 두 군데 나왔습니다. 실행 가능 스택인데 .bss가 실행이 안 됐고, dash가 setuid 프로세스의 real uid를 떨어뜨리는 게 아니라 올려놨습니다."
 ---

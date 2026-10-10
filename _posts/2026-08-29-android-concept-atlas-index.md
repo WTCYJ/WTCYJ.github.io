@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas | 전체 학습 지도·가상 검증 현황"
 date: 2026-08-29 23:59:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: series-index
 verification_date: 2026-08-29

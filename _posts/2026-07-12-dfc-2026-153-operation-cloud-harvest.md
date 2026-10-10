@@ -3,7 +3,7 @@ layout: post
 title: "Operation Cloud Harvest — CloudTrail 11,562건에서 진짜 침해만 골라내기"
 date: 2026-07-12 21:00:00 +0900
 category: 포렌식
-author: WTCY
+author: SeiKa
 series: DFC 2026
 tags: [DFC2026, 디지털포렌식, 클라우드포렌식, AWS, CloudTrail, GuardDuty, VPCFlowLog, S3, IAM, 오탐]
 excerpt: "GuardDuty 알림 11건 중 7건이 오탐이었다. 가장 이른 '악성 IP' 알림은 정상 컴플라이언스 스캐너였고, 진짜 최초 침투는 그 나흘 뒤 Tor에서 왔다. 시각순으로 읽으면 틀리는 사건."

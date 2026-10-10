@@ -3,7 +3,7 @@ layout: post
 title: "CodeQL 원리와 실습"
 date: 2026-10-06 12:00:00 +0900
 category: 블로그/기술
-author: WTCY
+author: SeiKa
 tags: [CodeQL, 정적 분석, QL, Datalog, taint tracking, U-Boot, variant analysis, CVE-2019-14192]
 excerpt: "CodeQL이 코드를 어떻게 데이터베이스로 바꾸고 쿼리를 어떻게 평가하는지 TRAP 파일과 관계 대수 덤프로 직접 확인했다. 그다음 네트워크 길이 값이 memcpy 크기로 흘러가는 경로를 찾는 쿼리를 만들어 U-Boot 2019.07, 패치된 2019.10, 2026년 최신 소스에 차례로 돌려 봤다."
 ---

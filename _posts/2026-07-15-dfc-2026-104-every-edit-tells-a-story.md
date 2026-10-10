@@ -3,7 +3,7 @@ layout: post
 title: "Every Edit Tells a Story — 안드로이드 아티팩트로 AI 생성 영상의 출처를 되짚기"
 date: 2026-07-15 21:00:00 +0900
 category: 포렌식
-author: WTCY
+author: SeiKa
 series: DFC 2026
 tags: [DFC2026, 디지털포렌식, 모바일포렌식, Android, WebView, HTTP캐시, SQLite, MHTML, MediaStore, AI]
 excerpt: "생성형 AI로 만든 영상이 남의 작품을 베낀 것인지 물어보는 문제. WebView HTTP 캐시에서 프롬프트 원문이 그대로 나왔지만, 요청 필드의 referenceBlobs 는 비어 있었다 — '정황은 강하지만 직접 첨부는 미확인'으로 답을 끊은 이유."

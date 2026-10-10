@@ -3,7 +3,7 @@ layout: post
 title: "Who stole my Honeypot? — CRIU 체크포인트에서 프로세스 트리와 랜섬 노트 복원하기"
 date: 2026-07-11 21:00:00 +0900
 category: 포렌식
-author: WTCY
+author: SeiKa
 series: DFC 2026
 tags: [DFC2026, 디지털포렌식, 컨테이너, Kubernetes, CRIU, PostgreSQL, XMRig, 메모리포렌식, protobuf]
 excerpt: "쿠버네티스 Pod의 CRIU 체크포인트 하나가 증거의 전부. protobuf 이미지를 직접 파싱해 프로세스 트리를 복원하고, PostgreSQL 프로세스 메모리에서 COPY FROM PROGRAM으로 실행된 셸 스크립트와 랜섬 노트를 그대로 꺼냈다."

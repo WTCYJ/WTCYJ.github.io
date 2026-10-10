@@ -3,7 +3,7 @@ layout: post
 title: "OWASP MASTG Hacking Playground - 취약한 안드로이드 앱 정공법 실습"
 date: 2026-09-01 20:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, OWASP, MASTG, MASVS, Frida, adb, jadx, 정적분석, 동적분석, 취약점실습, 학습기록]
 excerpt: "안드로이드 실습 자료를 찾다가 깃허브에서 OWASP MASTG Hacking Playground를 발견해, 안드로이드 취약 앱을 Windows 에뮬레이터에 올려 처음부터 끝까지 실제로 뜯어봤습니다. 평문 저장·자작 암호·로그 유출·SQL 인젝션·WebView 브릿지·거꾸로 된 SSL 핀·/sdcard에서 코드 로딩까지, 각 테스트 케이스를 기기에서 직접 발화시키고 run-as·logcat·sqlite·Frida로 값을 뽑아 확인한 기록입니다. 되는 것만이 아니라, 배포 APK가 소스보다 오래돼 아예 안 열리던 것, 요즘 안드로이드가 API를 없애 크래시나던 것까지 그대로 적었습니다."
 ---

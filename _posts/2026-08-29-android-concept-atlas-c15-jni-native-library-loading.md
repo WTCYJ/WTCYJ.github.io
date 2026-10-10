@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C15 | 가상 실습 보고서 — JNI 경계·네이티브 라이브러리 로딩, 관리 코드와 C/C++ 사이의 계약"
 date: 2026-08-29 23:09:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

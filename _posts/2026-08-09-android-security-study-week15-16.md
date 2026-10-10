@@ -3,7 +3,7 @@ layout: post
 title: "Android 앱 보안 분석 15~16주차 - Binder 경계와 SELinux, 그리고 패치 수준"
 date: 2026-08-09 14:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 시스템보안, Binder, servicemanager, SELinux, MAC, AVC, VerifiedBoot, 보안패치수준, SecurityBulletin, adb, 에뮬레이터, 학습기록]
 excerpt: "앱이 아니라 앱을 담고 있는 플랫폼을 봤습니다. 같은 호출을 shell과 앱 UID에서 각각 시도해 Binder 경계가 두 겹으로 동작하는 것을 확인했고, API 33과 16을 나란히 놓고 패치 수준과 SELinux 정책을 비교했습니다. adb shell이 특권 계정이라는 사실을 세 번째로 스스로 잡아내, 측정 주체를 먼저 적고 시작하는 규율로 굳힌 과정도 함께 담았습니다."
 ---

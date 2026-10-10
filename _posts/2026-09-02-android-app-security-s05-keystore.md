@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S05] Android Keystore 실측"
 date: 2026-09-02 13:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, Keystore, AES-GCM, 암호화, 하드웨어보안, 비추출키, 학습기록]
 excerpt: "S04에서 본 평문 저장의 대안이 Android Keystore입니다. 그런데 이번 대상 InsecureShop은 Keystore를 쓰지 않아서, Keystore의 성질을 직접 확인하려고 최소 데모 앱을 손으로 빌드했습니다. 비추출 AES 키를 만들어 getEncoded()가 null인지, 키 원문 없이 AES-GCM 암복호화가 도는지, 그리고 이 키가 하드웨어에 있는지 소프트웨어에 있는지까지 화면에 찍어 봤습니다. 에뮬레이터에서는 SOFTWARE였습니다."
 ---

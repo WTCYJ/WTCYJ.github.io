@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas Tier 6 | 학습 로드맵 — Native·커널"
 date: 2026-08-29 23:37:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: learning-roadmap
 verification_date: 2026-08-29

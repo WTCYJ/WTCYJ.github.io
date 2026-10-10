@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S07] Intent와 PendingIntent 보안"
 date: 2026-09-02 15:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, Intent, IntentRedirection, PendingIntent, 암묵인텐트, IPC, InsecureShop, 학습기록]
 excerpt: "남이 준 Intent를 그대로 실행해 주면 무슨 일이 벌어지는지 봤습니다. InsecureShop의 WebView2Activity는 extra_intent 라는 이름으로 넘어온 Intent를 검사 없이 startActivity 합니다. 직접 만든 공격 앱이 이 통로로 exported=false인 PrivateActivity를 열고, 그 안 WebView가 로드할 URL까지 통제해 화면에 'PWNED'를 띄웠습니다. 여기에 암묵 인텐트 유출과 PendingIntent의 mutable/immutable까지 함께 정리했습니다."
 ---

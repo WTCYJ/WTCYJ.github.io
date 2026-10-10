@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S08] Deep Link와 App Link"
 date: 2026-09-02 16:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, DeepLink, AppLink, 커스텀스킴, assetlinks, WebView, InsecureShop, 학습기록]
 excerpt: "웹페이지의 링크 한 줄로 앱을 열 수 있다면, 그 링크가 앱에 무엇을 시키는지가 중요합니다. InsecureShop의 insecureshop:// 커스텀 스킴은 브라우저에서 열리고, /web 경로는 넘겨받은 url을 검증 없이 WebView에 로드합니다. 로컬 테스트 서버의 임의 페이지를 이 딥링크로 앱 안에 띄워, 커스텀 스킴이 왜 소유권을 증명하지 못하는지와 검증된 App Link가 무엇을 다르게 하는지 정리했습니다."
 ---

@@ -3,7 +3,7 @@ layout: post
 title: "AndroGoat - Kotlin으로 만든 취약 앱을 에뮬레이터에서 직접 뜯어보기"
 date: 2026-09-02 20:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, OWASP, AndroGoat, Kotlin, Frida, adb, jadx, 정적분석, 동적분석, 취약점실습, 학습기록]
 excerpt: "MASTG Playground를 끝내고 안드로이드 실습 자료를 더 찾다가 깃허브에서 AndroGoat을 봤습니다. Kotlin으로 만든 첫 취약 앱이라길래 API33 에뮬레이터에 올려 카테고리별로 직접 눌러 봤습니다. 평문 저장·하드코딩된 AWS/OpenAI 키·무방비 컴포넌트·SQL/OS 커맨드 인젝션·WebView 파일 절도·XSS·클립보드/키보드 유출·생체인증과 SSL 피닝 우회까지, adb·run-as·root·logcat·sqlite·Frida로 값을 뽑아 확인한 기록입니다."
 ---

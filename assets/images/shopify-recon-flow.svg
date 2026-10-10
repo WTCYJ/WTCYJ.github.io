@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" font-family="'Segoe UI','Malgun Gothic',sans-serif">
+  <defs>
+    <marker id="a2" markerWidth="11" markerHeight="11" refX="8" refY="3.2" orient="auto">
+      <path d="M0,0 L8,3.2 L0,6.4 Z" fill="#0ea5e9"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="560" fill="#f8fafc"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#0f172a">조사(정찰) 과정 — 대상에 직접 닿지 않는 수동 OSINT</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">스캐닝·자동화 없이 공개 정보만으로 공격 표면을 그린 뒤, "무료 가입"으로 합법 발판을 만든다.</text>
+
+  <!-- step 1 -->
+  <rect x="24" y="86" width="280" height="120" rx="10" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="40" y="112" font-size="14" font-weight="700" fill="#0369a1">① 서브도메인 열거</text>
+  <text x="40" y="134" font-size="12" fill="#475569">crt.sh 인증서 투명성 로그 조회</text>
+  <rect x="40" y="144" width="248" height="48" rx="6" fill="#0f172a"/>
+  <text x="50" y="164" font-size="10.5" fill="#7dd3fc" font-family="monospace">curl "crt.sh/?q=%25.shopify.com"</text>
+  <text x="50" y="182" font-size="10.5" fill="#86efac" font-family="monospace">  | jq -r '.[].name_value' | sort -u</text>
+
+  <!-- step 2 -->
+  <rect x="340" y="86" width="280" height="120" rx="10" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="356" y="112" font-size="14" font-weight="700" fill="#0369a1">② 공개 자산 지도화</text>
+  <text x="356" y="134" font-size="12" fill="#475569">발견된 공개 표면 분류</text>
+  <text x="356" y="156" font-size="11.5" fill="#334155">accounts · partners · apps</text>
+  <text x="356" y="174" font-size="11.5" fill="#334155">checkout · cdn · *.myshopify.com</text>
+  <text x="356" y="194" font-size="11" font-style="italic" fill="#64748b">→ 어디가 인증·앱·테넌트 경계인가</text>
+
+  <!-- step 3 -->
+  <rect x="656" y="86" width="280" height="120" rx="10" fill="#fff" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="672" y="112" font-size="14" font-weight="700" fill="#0369a1">③ 공개 소스 학습</text>
+  <text x="672" y="134" font-size="12" fill="#475569">GitHub 공개 저장소·문서</text>
+  <text x="672" y="156" font-size="11.5" fill="#334155">OAuth 흐름 · App Bridge</text>
+  <text x="672" y="174" font-size="11.5" fill="#334155">API 경로 · Liquid 객체 모델</text>
+  <text x="672" y="194" font-size="11" font-style="italic" fill="#64748b">→ 검증 로직의 형태를 미리 파악</text>
+
+  <!-- arrows -->
+  <line x1="304" y1="146" x2="338" y2="146" stroke="#0ea5e9" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="620" y1="146" x2="654" y2="146" stroke="#0ea5e9" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- step 4 foothold -->
+  <rect x="200" y="250" width="560" height="96" rx="10" fill="#fff7ed" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="220" y="278" font-size="15" font-weight="700" fill="#b91c1c">④ 무료 개발 스토어 가입 → 합법 발판 확보</text>
+  <text x="220" y="302" font-size="12.5" fill="#7c2d12">my-lab-store.myshopify.com — Shopify 자기 도메인 위에서 JS·Liquid·API를 합법적으로 실행</text>
+  <text x="220" y="324" font-size="12.5" fill="#7c2d12">"외부 공격자가 가장 갖기 어려운 '내부 발판'을 가입 한 번으로 얻는다."</text>
+
+  <!-- arrow down to foothold -->
+  <line x1="480" y1="206" x2="480" y2="248" stroke="#0ea5e9" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- step 5 surface -->
+  <rect x="24" y="384" width="912" height="120" rx="10" fill="#fff" stroke="#10b981" stroke-width="1.5"/>
+  <text x="40" y="410" font-size="14" font-weight="700" fill="#047857">⑤ 공격 표면 도출 — "검증 로직이 약한 경계"</text>
+  <text x="40" y="434" font-size="12" fill="#334155">CORS(접미·정규식 허점) · postMessage(부분매칭) · OAuth redirect(미정확매칭) · Liquid(렌더 컨텍스트 누수) · GraphQL(필드 인가 누락)</text>
+  <text x="40" y="458" font-size="12" fill="#475569">각 경계의 '문자열 비교 한 줄'이 정확매칭인지 부분매칭인지가 — 격리가 유지되는지 깨지는지를 가른다.</text>
+  <text x="40" y="486" font-size="11" fill="#94a3b8">윤리: 이 단계까지는 공개 정보·본인 자산만 사용. 취약 신호 발견 시 즉시 중단하고 HackerOne 공식 채널로 제보.</text>
+</svg>

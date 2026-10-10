@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S14] 동적 분석과 Frida"
 date: 2026-09-02 22:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, Frida, 동적분석, 후킹, 인증우회, InsecureShop, 학습기록]
 excerpt: "정적으로 읽은 것을 이번엔 살아 있는 프로세스에서 확인했습니다. Frida로 InsecureShop에 붙어, 로그인 검증 메서드가 받는 아이디·비밀번호와 그 반환값을 그대로 관측했습니다. 그리고 같은 훅으로 반환을 true로 바꾸자, 틀린 비밀번호로도 로그인이 통과했습니다. 관측과 보안 경계 무력화는 다른 일이라, 그 경계를 분명히 그어 둡니다."
 ---

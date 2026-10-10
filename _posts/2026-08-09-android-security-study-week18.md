@@ -3,7 +3,7 @@ layout: post
 title: "Android 앱 보안 분석 18주차 - CVE 선정, 불리틴을 믿지 않고 이미지를 열어보기"
 date: 2026-08-09 16:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, CVE, AOSP, 보안불리틴, ZenModeHelper, DoS, 패치분석, 시스템이미지, 에뮬레이터, 학습기록]
 excerpt: "24주 로드맵의 18주차는 공개 CVE 하나를 고르는 회차입니다. 불리틴 표만 보면 후보가 여럿인데, 정작 중요한 질문은 따로 있었습니다. 내가 가진 두 이미지가 정말 그 패치의 전과 후인가. 이걸 추정하지 않고 4.3GB짜리 system.img 두 개를 직접 뒤져서 확인했고, 그 실측 한 번으로 이 쌍에서 실제 판별되는 CVE-2022-20425를 확정하며 다음 세 주의 헛걸음을 미리 걷어냈습니다."
 ---

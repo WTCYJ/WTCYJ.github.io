@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S16] JNI와 네이티브 라이브러리 분석"
 date: 2026-09-03 09:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, JNI, 네이티브, readelf, RELRO, NX, PIE, RegisterNatives, 학습기록]
 excerpt: "코드를 네이티브(.so)로 내리면 분석이 어려워진다고들 하지만, 어디까지 그런지 직접 확인했습니다. NDK로 JNI 라이브러리를 하나 만들어, 이름 규칙으로 연결한 메서드와 JNI_OnLoad의 RegisterNatives로 연결한 메서드를 심볼 테이블에서 비교했습니다. 그리고 readelf로 PIE·RELRO·NX·카나리 같은 보호 수준을 읽고, 네이티브에 넣은 비밀 문자열이 그대로 strings로 나오는 것도 봤습니다."
 ---

@@ -3,7 +3,7 @@ layout: post
 title: "DEF CON 33 — 다시 살아난 LaunchAnyWhere"
 date: 2026-09-03 09:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [DEFCON, 컨퍼런스, 안드로이드, Intent, LaunchAnyWhere, TOCTOU, AOSP, 권한상승, CVE, LLM]
 excerpt: "2013년에 막혔고 2022년에 또 막혔던 안드로이드 LaunchAnyWhere가 2025년에 세 번째로 돌아온 이야기입니다. Qidan He는 검사와 사용 사이의 시간차를 노렸는데, 그 경쟁 구간이 원래 1밀리초였습니다. 이걸 수백 밀리초까지 늘리는 데 인텐트 필터의 카테고리 3만 개를 썼고, 여기에 원래는 일관성을 지키라고 만들어 둔 PackageManagerService의 스냅숏이 힘을 보탰습니다. 막으라고 넣은 장치가 오히려 공격을 안정적으로 만들어 준 셈인데, 그 대목이 이 발표의 핵심이라고 봤습니다."
 ---

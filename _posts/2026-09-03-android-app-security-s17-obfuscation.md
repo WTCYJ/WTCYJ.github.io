@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S17] 난독화와 안티탬퍼"
 date: 2026-09-03 10:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 난독화, R8, ProGuard, 안티탬퍼, 무결성, 학습기록]
 excerpt: "R8 난독화가 무엇을 바꾸고 무엇을 못 바꾸는지 직접 확인했습니다. 같은 앱을 난독화 전과 후로 빌드해, 리플렉션으로 자기 메서드 이름을 찍어 봤습니다. getApiKey·verifyIntegrity는 a·b로 바뀌었지만, 코드에 박힌 비밀 문자열은 두 빌드 모두에 그대로 남았습니다. 난독화는 이름을 가릴 뿐, 보안 경계가 아니라는 걸 눈으로 봅니다."
 ---

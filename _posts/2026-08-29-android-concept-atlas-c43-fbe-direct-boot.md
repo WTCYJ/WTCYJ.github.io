@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C43 | 가상 실습 보고서 — 파일 기반 암호화와 Direct Boot, 잠금 전과 후의 두 저장소"
 date: 2026-08-29 23:42:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

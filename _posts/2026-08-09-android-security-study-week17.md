@@ -3,7 +3,7 @@ layout: post
 title: "Android 앱 보안 분석 17주차 - AOSP 빌드 없이 패치 전·후 비교 하네스 만들기"
 date: 2026-08-09 15:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, Cuttlefish, AOSP, WSL2, KVM, 에뮬레이터, 회귀비교, 측정오류, 대조군, InsecureShop, 딥링크, 학습기록]
 excerpt: "로드맵 후반은 AOSP 빌드(공식 요구사항 400GB)를 전제로 설계했지만, 이 구간의 진짜 목적은 패치 전·후를 대조할 platform 을 확보하는 것이었습니다. 그 목적을 장비 범위 안에서 달성하려고, 보유한 두 에뮬레이터 이미지를 baseline/patched 역할로 놓는 비교 하네스를 설계·검증했습니다. 프로브를 만드는 동안 측정 오류를 세 번 잡아내 신뢰도를 끌어올린 정밀화 과정이 절반을 차지합니다."
 ---

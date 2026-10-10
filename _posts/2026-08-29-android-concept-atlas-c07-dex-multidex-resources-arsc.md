@@ -3,7 +3,7 @@ layout: post
 title: "Android Security Concept Atlas C07 | 가상 실습 보고서 — DEX·multidex·resources.arsc, APK 안에서 코드와 리소스가 만나는 법"
 date: 2026-08-29 23:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 series: Android Security Concept Atlas
 document_type: virtual-lab-report
 verification_date: 2026-08-29

@@ -3,7 +3,7 @@ layout: post
 title: "Fuzzing-101"
 date: 2026-09-03 02:00:00 +0900
 category: 블로그/기술
-author: WTCY
+author: SeiKa
 tags: [Fuzzing, AFL++, ASAN, CVE, Xpdf, libexif, tcpdump, libpcap, 취약점분석, 학습기록]
 excerpt: "퍼징 환경을 직접 만들고, 타겟을 읽고, 전략을 세워 돌리고, 나온 크래시의 원인을 끝까지 따라가 본 기록입니다. Fuzzing-101의 앞 세 문제를 골라 WSL에 AFL++를 소스로 올리고 Xpdf 3.02·libexif 0.6.14·tcpdump 4.9.1을 세웠습니다. Xpdf에서는 CVE-2019-13288의 재귀 고리와 그 옆에 있던 NULL 역참조를, libexif에서는 정수 오버플로로 무너진 경계 검사와 exif_entry_fix의 힙 오버플로를 확인했습니다. tcpdump는 크래시가 한참 안 나왔는데, 판정이 pcap 헤더의 snaplen에 걸려 있다는 걸 알아내 시드와 전략을 고치자 CVE-2017-13011·CVE-2017-13000·CVE-2017-13032를 포함해 네 자리가 나왔습니다. 노리던 CVE-2017-13028은 조건을 세워 직접 재현했고, 두 자리는 고쳐서 확인까지 했습니다."
 ---

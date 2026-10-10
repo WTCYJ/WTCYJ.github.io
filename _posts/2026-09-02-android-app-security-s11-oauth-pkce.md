@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S11] 인증과 세션 — OAuth PKCE"
 date: 2026-09-02 19:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, OAuth, PKCE, 인증, 세션, 토큰, 학습기록]
 excerpt: "모바일 OAuth의 표준인 Authorization Code + PKCE를 처음부터 끝까지 돌려 봤습니다. InsecureShop엔 OAuth가 없어서, 모의 인증 서버와 클라이언트 앱을 직접 만들어 verifier/challenge 생성, 인가 코드 발급, 토큰 교환까지 화면에 찍었습니다. 그리고 도난당한 코드를 틀린 verifier로 교환하려 하면 PKCE가 그것을 막는다는 것, 등록되지 않은 redirect_uri는 거부된다는 것을 함께 확인했습니다."
 ---

@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S18] 취약 앱 종합 모의진단"
 date: 2026-09-03 11:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, 모의진단, 펜테스트, CVSS, InsecureShop, 최종보고서, 학습기록]
 excerpt: "S01부터 하나씩 판 InsecureShop의 결함들을 한 편으로 모았습니다. 공격 표면, 발견 12건, 심각도와 참고 CVSS, 재현 위치, 그리고 수정과 회귀 검증까지 — 하나의 모의진단 보고서로 정리했습니다. 마무리로, 직접 만든 공격 앱이 이 앱의 자격증명을 실제로 뽑아내는 걸 한 화면에 담았습니다."
 ---

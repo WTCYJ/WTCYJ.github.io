@@ -3,7 +3,7 @@ layout: post
 title: "[Android 앱 보안 S03] APK 정적 분석과 공격 표면"
 date: 2026-09-02 11:00:00 +0900
 category: 안드로이드
-author: WTCY
+author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, apktool, jadx, AndroidManifest, exported, deeplink, 정적분석, InsecureShop, 학습기록]
 excerpt: "APK를 코드로 열기 전에 매니페스트부터 읽습니다. InsecureShop을 apktool과 jadx로 디코드해 exported 컴포넌트·intent-filter·딥링크·backup/debuggable/cleartext 설정을 뽑고, 두 도구의 결과를 맞대 봤습니다. 명시적으로 열어 둔 것보다, intent-filter 때문에 조용히 열려 버린 컴포넌트가 더 많았고, 로그인 없이 그중 하나를 그대로 띄워 확인했습니다."
 ---
