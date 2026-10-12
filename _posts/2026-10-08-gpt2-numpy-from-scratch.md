@@ -8,11 +8,13 @@ tags: [LLM, GPT-2, Transformer, NumPy, Self-attention, BPE, 샘플링, SFT, RLHF
 excerpt: "GPT-2 small을 NumPy 행렬 연산만으로 구현하고 공개 가중치를 올려 Hugging Face와 logits를 비교했다. float32 최대 오차 2.8e-3, float64로 올리면 1.1e-11. 그 위에서 토크나이저, 어텐션 맵, √d_k, causal mask, 잔차 연결, temperature, SFT·DPO·GRPO를 숫자로 확인하고, 2026년에 공개된 모델들의 토크나이저와 config.json을 받아 무엇이 달라졌는지 비교했다."
 ---
 
+> 구현 코드는 노트북 파일 [gpt2_numpy.ipynb](/assets/files/gpt2-numpy/gpt2_numpy.ipynb)로 정리해 두었다. 토크나이저부터 Hugging Face 비교, 어텐션 맵, 부품을 뺀 실험까지 셀 단위로 나뉘어 있고 실행 결과도 함께 저장돼 있다. Jupyter나 Colab에서 열어 바로 다시 돌려 볼 수 있다.
+
 ChatGPT나 Claude에 문장을 넣으면 답이 한 토큰씩 나온다. 그 토큰 하나가 나오기까지 안에서 어떤 계산이 오가는지는 그동안 그림으로만 봤다. 그래서 이번에는 GPT-2 small(파라미터 1억 2,441만 개)을 라이브러리 없이 NumPy로 직접 짜고, OpenAI가 공개한 가중치를 올려 Hugging Face 구현과 같은 숫자가 나오는지 확인했다. 숫자가 맞고 나면 부품을 마음대로 빼거나 바꿔 볼 수 있다. 글의 절반은 그렇게 해 본 실험이다.
 
 GPT-2는 2019년 모델이다. 그래도 지금 공개되는 모델들의 뼈대는 거의 그대로다. 글 뒷부분에서는 2025~2026년에 Hugging Face에 올라온 모델들(gpt-oss, Qwen3.8, DeepSeek-V4.1, K-EXAONE 2.0, Kanana-2 등)의 토크나이저와 `config.json`을 직접 받아, GPT-2와 무엇이 같고 무엇이 바뀌었는지 비교했다.
 
-코드는 역할별로 나눴다. 모델과 토크나이저는 [gpt2_numpy.py](/assets/files/gpt2-numpy/gpt2_numpy.py), Hugging Face·tiktoken과의 비교는 [compare_hf.py](/assets/files/gpt2-numpy/compare_hf.py), GPT-2 실험은 [experiments.py](/assets/files/gpt2-numpy/experiments.py), 최신 모델과의 비교는 [modern.py](/assets/files/gpt2-numpy/modern.py)에 있다. 실행 환경은 Windows 11, Python 3.11, NumPy 2.4.6이고, 비교용으로 transformers 5.19.0, tiktoken 0.14.0, PyTorch 2.14.1(CPU)을 썼다. Hugging Face에서는 `model.safetensors`, `vocab.json`, `merges.txt` 파일만 받았고, 모델 계산과 BPE는 직접 구현했다.
+노트북 말고 파이썬 파일로도 올려 두었다. 모델과 토크나이저는 [gpt2_numpy.py](/assets/files/gpt2-numpy/gpt2_numpy.py), Hugging Face·tiktoken과의 비교는 [compare_hf.py](/assets/files/gpt2-numpy/compare_hf.py), GPT-2 실험은 [experiments.py](/assets/files/gpt2-numpy/experiments.py), 최신 모델과의 비교는 [modern.py](/assets/files/gpt2-numpy/modern.py)에 있다. 실행 환경은 Windows 11, Python 3.11, NumPy 2.4.6이고, 비교용으로 transformers 5.19.0, tiktoken 0.14.0, PyTorch 2.14.1(CPU)을 썼다. Hugging Face에서는 `model.safetensors`, `vocab.json`, `merges.txt` 파일만 받았고, 모델 계산과 BPE는 직접 구현했다.
 
 ## 전체 구조
 
@@ -68,27 +70,31 @@ GPT-2는 2019년 모델이다. 그래도 지금 공개되는 모델들의 뼈대
 
 GPT-2의 토크나이저는 바이트 단위 BPE다. 문장을 UTF-8 바이트로 바꾼 뒤 바이트 하나를 토큰 하나로 놓고 시작해서, 학습 때 정해 둔 순서대로 붙어 있는 두 조각을 합쳐 나간다. 그 순서가 `merges.txt`에 50,000줄로 적혀 있고, 위에 있는 줄일수록 먼저 학습된 병합이라 우선순위가 높다. 원리는 [Sennrich 등의 BPE 논문](https://arxiv.org/abs/1508.07909)에서 왔다.
 
-병합에 앞서 정규식으로 문장을 대략 단어 단위로 자른다. 영어 축약형(`'s`, `'ll`), 앞에 공백 하나가 붙은 글자 묶음, 숫자 묶음, 기호 묶음, 공백 순으로 잘라서, 단어 앞 공백은 단어 토큰 쪽에 붙는다. vocab에서 `Ġ`로 보이는 글자가 바로 그 공백이다. 바이트 0x20을 그대로 두면 JSON에 저장하기가 곤란해서, GPT-2는 바이트 256개를 눈에 보이는 유니코드 글자 256개에 하나씩 대응시켜 놓았다. `bytes_to_unicode()`가 그 표를 만든다.
+병합에 앞서 정규식으로 문장을 대략 단어 단위로 자른다. 영어 축약형(`'s`, `'ll`), 앞에 공백 하나가 붙은 글자 묶음, 숫자 묶음, 기호 묶음, 공백 순으로 잘라서, 단어 앞 공백은 단어 토큰 쪽에 붙는다. vocab에서 `Ġ`로 보이는 글자가 바로 그 공백이다. 바이트 0x20을 그대로 두면 JSON에 저장하기가 곤란해서, GPT-2는 바이트 256개를 눈에 보이는 유니코드 글자 256개에 하나씩 대응시켜 놓았다. `b2u_table()`이 그 표를 만든다.
 
 병합 부분은 이렇게 짰다.
 
 ```python
-def bpe(self, word, trace=None):
-    parts = list(word)
-    while len(parts) > 1:
-        pairs = [(self.ranks.get(p, 1e18), i) for i, p in enumerate(zip(parts, parts[1:]))]
-        rank, i = min(pairs)
-        if rank == 1e18:          # 더 합칠 쌍이 vocab에 없음
+def bpe(self, w, tr=None):
+    # 한 글자씩 쪼갠 다음 rank 제일 낮은 쌍부터 계속 합침
+    p = list(w)
+    while len(p) > 1:
+        r, i = min((self.rank.get(x, 1e18), i) for i, x in enumerate(zip(p, p[1:])))
+        if r == 1e18:  # 더 합칠 쌍 없음
             break
-        pair = (parts[i], parts[i + 1])
+        a, b = p[i], p[i + 1]
         out, j = [], 0
-        while j < len(parts):     # 같은 쌍이 여러 번 있으면 왼쪽부터 전부 합친다
-            if j < len(parts) - 1 and (parts[j], parts[j + 1]) == pair:
-                out.append(parts[j] + parts[j + 1]); j += 2
+        while j < len(p):  # 같은 쌍 여러 개면 왼쪽부터 다 합침
+            if j < len(p) - 1 and p[j] == a and p[j + 1] == b:
+                out.append(a + b)
+                j += 2
             else:
-                out.append(parts[j]); j += 1
-        parts = out
-    return parts
+                out.append(p[j])
+                j += 1
+        p = out
+        if tr is not None:
+            tr.append((int(r), (a, b), p[:]))
+    return p
 ```
 
 문장 중간에 나오는 단어 tokenization을 예로 들어 보자. 앞에 공백이 붙어 있으니 실제 입력은 공백 1바이트와 글자 12바이트, 합쳐서 13바이트다. 병합 과정을 하나씩 찍어 보면 다음과 같다.
@@ -109,7 +115,7 @@ def bpe(self, word, trace=None):
 
 13바이트가 토큰 2개로 줄었다. 영어에서 자주 나오는 조각일수록 순위가 높아 먼저 붙는다.
 
-구현이 맞는지는 tiktoken의 `gpt2` 인코딩, Hugging Face `GPT2TokenizerFast`와 비교해서 확인했다. 영어, 한국어, 일본어, 이모지, 탭과 연속 개행, 파이썬 코드에 `compare_hf.py` 파일 자체(1,514토큰)까지 넣어 봤는데, 세 쪽의 토큰 ID가 모두 같았고 디코딩하면 원문이 그대로 돌아왔다.
+구현이 맞는지는 tiktoken의 `gpt2` 인코딩, Hugging Face `GPT2TokenizerFast`와 비교해서 확인했다. 영어, 한국어, 일본어, 이모지, 탭과 연속 개행, 파이썬 코드에 `compare_hf.py` 파일 자체(2,326토큰)까지 넣어 봤는데, 세 쪽의 토큰 ID가 모두 같았고 디코딩하면 원문이 그대로 돌아왔다.
 
 ### 탐구 질문 1. 한국어는 토큰이 몇 배 나오나
 
@@ -163,7 +169,7 @@ ec | 95 | 88 | eb | 85 | 95 | ed 95 | 98 | ec | 84 | b8 | ec | 9a | 94
 구현 쪽에서 보면 임베딩은 행렬에서 행 하나를 꺼내는 일이다. 토큰 ID가 464면 `wte`의 464번째 행(숫자 768개)을 꺼내고, 그 토큰이 문장의 0번째 자리에 있으면 `wpe`의 0번째 행을 꺼내 더한다.
 
 ```python
-x = w["wte.weight"][ids] + w["wpe.weight"][np.arange(len(ids))]   # (T, 768)
+x = w["wte.weight"][ids] + w["wpe.weight"][np.arange(len(ids))]  # (T, 768). 토큰 임베딩 + 위치 임베딩
 ```
 
 어텐션은 그 자체로는 순서를 모르는 연산이다. 토큰 순서를 뒤섞어도 같은 집합이면 같은 결과가 나온다. 그래서 위치 정보를 벡터에 직접 더해 줘야 "The cat"과 "cat The"를 구별할 수 있다. GPT-2의 위치 임베딩은 원래 트랜스포머처럼 사인·코사인 공식으로 만든 값이 아니라 학습으로 얻은 값이다. 위치끼리 코사인 유사도를 그려 보면, 아무도 알려 주지 않았는데 가까운 위치끼리 닮아 가는 구조가 학습만으로 생겼다.
@@ -185,21 +191,21 @@ $$
 $M$은 causal mask다. $j > i$인 칸, 즉 미래 위치에 $-\infty$를 넣어서 softmax를 거친 뒤 0이 되게 만든다. GPT-2 small은 768차원을 64차원짜리 헤드 12개로 나눠 이 계산을 각각 한 다음 다시 이어 붙인다. 헤드마다 서로 다른 관계를 보라는 뜻이다. NumPy에서는 reshape와 transpose로 헤드 축을 앞으로 빼 두면 행렬곱 한 번에 12개 헤드가 동시에 계산된다.
 
 ```python
-def attention(x, w, p, causal=True, scale=True, keep=None):
+def attn(x, w, p, causal=True, scale=True, keep=None):
     T, C = x.shape
-    d = C // N_HEAD                                                     # 64
-    qkv = x @ w[p + "c_attn.weight"] + w[p + "c_attn.bias"]           # (T, 3C)
+    d = C // NH  # 64
+    qkv = x @ w[p + "c_attn.weight"] + w[p + "c_attn.bias"]  # (T, 3C)
     q, k, v = np.split(qkv, 3, axis=-1)
-    q, k, v = (a.reshape(T, N_HEAD, d).transpose(1, 0, 2) for a in (q, k, v))  # (H, T, d)
-    scores = q @ k.transpose(0, 2, 1)                                   # (H, T, T)
+    q, k, v = (a.reshape(T, NH, d).transpose(1, 0, 2) for a in (q, k, v))  # (H, T, d)
+    s = q @ k.transpose(0, 2, 1)  # (H, T, T)
     if scale:
-        scores = scores / np.sqrt(d)
+        s = s / np.sqrt(d)
     if causal:
-        future = np.triu(np.ones((T, T), dtype=bool), k=1)              # j > i 인 칸 = 미래
-        scores = np.where(future, -1e10, scores)
-    att = softmax(scores)
-    out = (att @ v).transpose(1, 0, 2).reshape(T, C)                    # 헤드를 다시 이어 붙임
-    return out @ w[p + "c_proj.weight"] + w[p + "c_proj.bias"]
+        fut = np.triu(np.ones((T, T), dtype=bool), k=1)  # j > i 칸 = 미래
+        s = np.where(fut, -1e10, s)
+    a = softmax(s)
+    o = (a @ v).transpose(1, 0, 2).reshape(T, C)  # 헤드 다시 이어붙임
+    return o @ w[p + "c_proj.weight"] + w[p + "c_proj.bias"]
 ```
 
 `causal`과 `scale` 인자는 뒤의 실험에서 이 장치들을 끄려고 넣었다. 기본값으로 두면 GPT-2와 똑같이 동작한다.
@@ -227,25 +233,29 @@ def attention(x, w, p, causal=True, scale=True, keep=None):
 블록의 나머지 부품은 간단하다. LayerNorm은 벡터 하나의 768개 값을 평균 0, 분산 1로 맞춘 다음 학습된 배율 `g`와 이동값 `b`를 적용한다. MLP는 768차원을 3072로 넓혔다가 GELU를 거쳐 다시 768로 줄인다. 어텐션이 위치 사이로 정보를 옮긴다면, MLP는 위치마다 따로 그 벡터 안에서 계산한다.
 
 ```python
-def layer_norm(x, g, b, eps=1e-5):
+def ln(x, g, b, eps=1e-5):
     mu = x.mean(-1, keepdims=True)
-    var = x.var(-1, keepdims=True)
+    var = x.var(-1, keepdims=True)  # n으로 나누는 분산임 (torch LayerNorm이랑 같음)
     return (x - mu) / np.sqrt(var + eps) * g + b
 
-def gelu(x):   # GPT-2 의 gelu_new: tanh 근사식
+
+def gelu(x):
+    # gpt2는 tanh 근사식(gelu_new) 씀
     return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
 
-def forward(ids, w, causal=True, scale=True, residual=True, keep=None):
+
+def fwd(ids, w, causal=True, scale=True, res=True, keep=None):
+    # ids -> logits (T, 50257). causal/scale/res 끄면 그 장치 뺀 모델 됨 (실험용)
     ids = np.asarray(ids)
-    x = w["wte.weight"][ids] + w["wpe.weight"][np.arange(len(ids))]
+    x = w["wte.weight"][ids] + w["wpe.weight"][np.arange(len(ids))]  # 토큰 임베딩 + 위치 임베딩
     for i in range(12):
         p = f"h.{i}."
-        a = attention(layer_norm(x, w[p + "ln_1.weight"], w[p + "ln_1.bias"]), w, p + "attn.", causal, scale, keep)
-        x = x + a if residual else a
-        m = mlp(layer_norm(x, w[p + "ln_2.weight"], w[p + "ln_2.bias"]), w, p + "mlp.")
-        x = x + m if residual else m
-    x = layer_norm(x, w["ln_f.weight"], w["ln_f.bias"])
-    return x @ w["wte.weight"].T
+        a = attn(ln(x, w[p + "ln_1.weight"], w[p + "ln_1.bias"]), w, p + "attn.", causal, scale, keep)
+        x = x + a if res else a
+        m = mlp(ln(x, w[p + "ln_2.weight"], w[p + "ln_2.bias"]), w, p + "mlp.")
+        x = x + m if res else m
+    x = ln(x, w["ln_f.weight"], w["ln_f.bias"])
+    return x @ w["wte.weight"].T  # 출력층 따로 없음. 입력 임베딩 재사용함 (weight tying)
 ```
 
 LayerNorm이 어텐션과 MLP 앞에 놓인 구조(pre-LN)가 원래 트랜스포머와 다른 점이다. [GPT-2 논문](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)이 정규화를 이 자리로 옮기고 마지막 블록 뒤에 `ln_f`를 하나 더 붙였다. 이렇게 하면 `x`가 지나가는 큰길(잔차 스트림)에는 정규화가 끼어들지 않고 덧셈만 쌓인다. [Xiong 등](https://arxiv.org/abs/2002.04745)은 이 배치가 학습을 훨씬 안정적으로 만든다는 것을 분석했다.
@@ -317,21 +327,20 @@ GPT-2를 직접 역전파하는 대신, 256차원 벡터를 $f(x) = W\tanh(x)$�
 마지막 위치의 logits $z$에서 다음 토큰을 고르는 방법은 여러 가지다.
 
 ```python
-def next_token(logits, rng, temperature=1.0, top_k=None, top_p=None):
-    if temperature == 0:                                   # greedy
-        return int(np.argmax(logits))
-    z = logits / temperature
-    if top_k is not None:                                  # 상위 k개만 남김
-        kth = np.sort(z)[-top_k]
+def sample(lg, rng, t=1.0, k=None, p=None):
+    if t == 0:  # greedy
+        return int(np.argmax(lg))
+    z = lg / t
+    if k is not None:  # 상위 k개만 남김
+        kth = np.sort(z)[-k]
         z = np.where(z < kth, -np.inf, z)
-    probs = softmax(z)
-    if top_p is not None:                                  # 누적확률 p까지만 남김
-        order = np.argsort(-probs)
-        cum = np.cumsum(probs[order])
-        cut = order[cum - probs[order] >= top_p]
-        probs[cut] = 0
-        probs /= probs.sum()
-    return int(rng.choice(len(probs), p=probs))
+    pr = softmax(z)
+    if p is not None:  # 누적확률 p 넘은 다음 토큰부터 버림
+        o = np.argsort(-pr)
+        cum = np.cumsum(pr[o])
+        pr[o[cum - pr[o] >= p]] = 0
+        pr /= pr.sum()
+    return int(rng.choice(len(pr), p=pr))
 ```
 
 logits를 temperature $T$로 나누면 확률은 $p_i \propto e^{z_i/T}$가 된다. $T<1$이면 큰 값과 작은 값의 격차가 벌어져 분포가 뾰족해지고, $T>1$이면 평평해진다. "Once upon a time, in a small village by the sea," 다음에 올 토큰의 분포로 확인했다.
@@ -457,7 +466,7 @@ $$
 
 쉬운 질문에서는 8개 중 4개가 Paris를 맞혀서 맞힌 답은 +1, 틀린 답은 −1을 받았다. 사람이 좋고 나쁨을 하나하나 매기지 않아도 정답 판정기만 있으면 학습 신호가 나온다. 반대로 GPT-2에게 덧셈은 너무 어려워서 8개가 모두 틀렸고, 보상이 전부 같으니 이득도 전부 0이 되어 배울 게 하나도 없었다. RLVR이 어느 정도 실력을 갖춘 모델에서 출발하는 이유가 이것이다. [DAPO](https://arxiv.org/abs/2503.14476)처럼 모두 맞히거나 모두 틀린 그룹을 걸러 내고 다시 뽑는 개선안이 나온 것도 같은 문제 때문이다.
 
-정리하면 사전학습은 언어와 지식을, SFT는 지시에 답하는 형식과 멈출 때를, RLHF와 DPO는 여러 가능한 답 가운데 사람이 더 낫다고 보는 쪽을, RLVR은 정답에 이르는 풀이를 확률적으로 밀어 올린다. 모델 구조는 처음부터 끝까지 이 글에서 짠 `forward` 그대로이고, 바뀌는 건 가중치 숫자뿐이다.
+정리하면 사전학습은 언어와 지식을, SFT는 지시에 답하는 형식과 멈출 때를, RLHF와 DPO는 여러 가능한 답 가운데 사람이 더 낫다고 보는 쪽을, RLVR은 정답에 이르는 풀이를 확률적으로 밀어 올린다. 모델 구조는 처음부터 끝까지 이 글에서 짠 `fwd` 그대로이고, 바뀌는 건 가중치 숫자뿐이다.
 
 ## 2026년 모델은 GPT-2에서 무엇이 바뀌었나
 
@@ -484,7 +493,7 @@ KV 헤드 수도 눈에 띈다. GPT-2는 질의 헤드와 KV 헤드가 12개로 
 
 FFN은 GELU에서 SiLU 게이트를 쓰는 SwiGLU([Shazeer](https://arxiv.org/abs/2002.05202))로 바뀌었고, 큰 모델일수록 전문가 혼합(MoE)을 쓴다. FFN을 여러 개 두고 토큰마다 일부만 골라 계산하는 구조다. K-EXAONE 2.0은 이름의 750B-A37B가 뜻하듯 전체 파라미터 7,500억 개 중 토큰당 370억 개만 계산하고, DeepSeek-V4.1-Flash는 전문가 384개 중 6개만 쓴다. LayerNorm은 평균을 빼는 단계와 bias를 생략한 [RMSNorm](https://arxiv.org/abs/1910.07467)으로 바뀌었다. 입력과 출력 임베딩을 공유하는 GPT-2 방식은 작은 모델인 Kanana-2 3B에만 남아 있다. 모델이 커지면 임베딩이 차지하는 비중이 작아져서 굳이 아낄 이유가 줄어든다.
 
-결국 바뀐 것은 길이(RoPE, 슬라이딩·선형 어텐션), 메모리(GQA), 계산량(MoE) 쪽이고, 토큰 하나를 만드는 원리는 GPT-2 그대로다. 이 글의 NumPy 코드에서 `wpe`를 RoPE로, `layer_norm`을 RMSNorm으로, `gelu` MLP를 게이트 MLP로 바꾸고 KV 헤드를 나눠 쓰게 하면 구조적으로는 지금 모델과 거의 같아진다.
+결국 바뀐 것은 길이(RoPE, 슬라이딩·선형 어텐션), 메모리(GQA), 계산량(MoE) 쪽이고, 토큰 하나를 만드는 원리는 GPT-2 그대로다. 이 글의 NumPy 코드에서 `wpe`를 RoPE로, `ln`을 RMSNorm으로, `gelu` MLP를 게이트 MLP로 바꾸고 KV 헤드를 나눠 쓰게 하면 구조적으로는 지금 모델과 거의 같아진다.
 
 ## 정리
 
@@ -492,28 +501,12 @@ FFN은 GELU에서 SiLU 게이트를 쓰는 SwiGLU([Shazeer](https://arxiv.org/ab
 
 부품을 하나씩 빼 본 결과도 분명했다. $\sqrt{d_k}$를 빼면 어텐션의 77%가 한 토큰에 꽂히고 손실이 3.33에서 5.78이 된다. causal mask를 빼면 뒤에 붙인 문장 때문에 앞 위치 logits가 99.5까지 바뀐다. 잔차 연결을 빼면 학습된 모델은 무작위에 가까워지고, 학습 전의 깊은 망은 기울기가 1e-49에서 1e6 사이를 오간다. temperature는 같은 분포를 뾰족하게도 평평하게도 만들어서, 0.1에서는 반복에, 2.0에서는 의미 없는 조각에 빠진다.
 
-한국어 토큰 문제는 7년 사이에 가장 극적으로 나아진 부분이었다. GPT-2에서 4.74배였던 한국어 토큰 수가 2026년 국내 모델 토크나이저에서는 영어보다 적어졌다. 대화형 모델과 사전학습 모델의 차이는 구조가 아니라 무엇을 목표로 학습했느냐에 있었다. 같은 `forward` 위에서 손실을 어디에 거느냐, 무엇과 비교하느냐, 보상을 누가 매기느냐가 달라질 뿐이다.
+한국어 토큰 문제는 7년 사이에 가장 극적으로 나아진 부분이었다. GPT-2에서 4.74배였던 한국어 토큰 수가 2026년 국내 모델 토크나이저에서는 영어보다 적어졌다. 대화형 모델과 사전학습 모델의 차이는 구조가 아니라 무엇을 목표로 학습했느냐에 있었다. 같은 `fwd` 위에서 손실을 어디에 거느냐, 무엇과 비교하느냐, 보상을 누가 매기느냐가 달라질 뿐이다.
 
 다음에는 이 구현에 역전파를 붙여 작은 데이터로 SFT를 직접 돌려 보고 싶다. 응답 첫 토큰의 손실 14.3이 몇 스텝 만에 내려가는지, 그리고 7 + 5에서 한 번도 보상을 받지 못한 GPT-2가 쉬운 문제부터 GRPO로 학습하면 어디까지 올라오는지가 궁금하다.
 
 ## 참고 자료
 
 - Radford et al., [Language Models are Unsupervised Multitask Learners](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf) (GPT-2 논문)
-- Vaswani et al., [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
-- Sennrich et al., [Neural Machine Translation of Rare Words with Subword Units](https://arxiv.org/abs/1508.07909) (BPE)
-- He et al., [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)
-- Xiong et al., [On Layer Normalization in the Transformer Architecture](https://arxiv.org/abs/2002.04745)
-- Olsson et al., [In-context Learning and Induction Heads](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html)
-- Xiao et al., [Efficient Streaming Language Models with Attention Sinks](https://arxiv.org/abs/2309.17453)
-- Holtzman et al., [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751) (top-p)
-- Ouyang et al., [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155) (InstructGPT, RLHF)
-- Schulman et al., [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)
-- Rafailov et al., [Direct Preference Optimization](https://arxiv.org/abs/2305.18290)
-- Shao et al., [DeepSeekMath](https://arxiv.org/abs/2402.03300) (GRPO)
-- DeepSeek-AI, [DeepSeek-R1](https://arxiv.org/abs/2501.12948)
-- Yu et al., [DAPO](https://arxiv.org/abs/2503.14476)
-- [Reinforcement Learning for LLM Post-Training: A Survey](https://arxiv.org/abs/2407.16216)
-- Su et al., [RoFormer](https://arxiv.org/abs/2104.09864) (RoPE), Peng et al., [YaRN](https://arxiv.org/abs/2309.00071)
-- Ainslie et al., [GQA](https://arxiv.org/abs/2305.13245), Shazeer, [GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202), Zhang & Sennrich, [RMSNorm](https://arxiv.org/abs/1910.07467)
 - 비교에 쓴 Hugging Face 저장소: [openai/gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b), [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B), [deepseek-ai/DeepSeek-V4.1-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash), [LGAI-EXAONE/K-EXAONE-2.0-750B-A37B](https://huggingface.co/LGAI-EXAONE/K-EXAONE-2.0-750B-A37B), [kakaocorp/kanana-2-3b-instruct](https://huggingface.co/kakaocorp/kanana-2-3b-instruct), [naver-hyperclovax/HyperCLOVAX-SEED-Think-32B](https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-32B), [upstage/solar-pro4-tokenizer](https://huggingface.co/upstage/solar-pro4-tokenizer), [mistralai/Mistral-Medium-3.5-128B](https://huggingface.co/mistralai/Mistral-Medium-3.5-128B)
 - [openai/tiktoken](https://github.com/openai/tiktoken), [Hugging Face openai-community/gpt2](https://huggingface.co/openai-community/gpt2)
