@@ -35,10 +35,10 @@ excerpt: "Android 보안 실습·연구 시리즈의 목차다. 에뮬레이터�
 21. [Ghidra·Rizin native 분석 — 스트립된 JNI 표를 파일에서 읽기](/posts/android-lab-p1c21-ghidra-rizin-native/)
 22. [ASan·IntSan으로 JNI 버그 읽기 — 섀도 바이트에서 tombstone까지](/posts/android-lab-p1c22-sanitizer-jni-analysis/)
 23. [Flutter·React Native·Cordova — 로직이 DEX 밖에 있는 앱](/posts/android-lab-p1c23-flutter-reactnative-cordova/)
-24. MobSF 결과 손으로 검증하기 — 정답을 아는 앱으로 오탐과 미탐 가르기
+24. [MobSF 결과 손으로 검증하기 — 정답을 아는 앱으로 오탐과 미탐 가르기](/posts/android-lab-p1c24/)
 25. Semgrep·CodeQL·Androguard 커스텀 규칙 작성: 데이터플로우 taint로 프로젝트 고유 결함 잡기
 26. MASVS 요구사항을 MASTG 검증 절차로: 커버리지 매트릭스로 감사 재현하기
-27. 방어 회귀 테스트 설계: 패치된 결함이 변종으로 되살아나지 않게 고정
+27. 방어 회귀 테스트 — WorkSource의 4바이트를 취약 이미지에서 먼저 빨갛게
 28. 최종 종합 보안 감사 리포트: 증적·CVSS 심각도·책임공개 타임라인 통합
 
 ## 2부 · Android 전문 기술
