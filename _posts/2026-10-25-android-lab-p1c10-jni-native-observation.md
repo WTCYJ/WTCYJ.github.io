@@ -5,12 +5,12 @@ date: 2026-10-25 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, JNI, Frida, RegisterNatives, libart, CheckJNI, NativeHook]
-excerpt: "심볼을 지운 자작 .so를 spawn으로 띄우고 libart의 RegisterNatives에 후크를 걸어 nativeCheck가 libjnimap.so+0x19f0이라는 걸 찾았고, 그 주소에서 strcmp에 들어가는 비밀값과 반환값까지 읽었다. RegisterNatives는 libart에서 export되지 않았고, debuggable 앱에서는 등록 스레드의 215번 칸이 CheckJNI 판을 가리켰다."
+excerpt: "심볼을 지운 자작 .so를 spawn으로 띄워 libart의 RegisterNatives를 후크하자 nativeCheck가 libjnimap.so+0x19f0으로 나왔고, 그 주소에서 strcmp에 넘어가는 비밀값과 반환값을 읽었다. RegisterNatives는 libart에서 export되지 않았고, debuggable 앱은 같은 등록이 CheckJNI 구현을 거쳤다."
 ---
 
 [지난 글](/posts/android-lab-p1c09-classloader-dynamic-loading/)에서는 패커가 ART에 넘기는 dex를 입구에서 받아 냈다. 그렇게 꺼낸 dex는 다시 jadx로 읽힌다. 앱이 `.so`에 넣어 둔 로직은 사정이 다르다. DEX에는 `native` 선언 한 줄만 남고, 라이브러리를 스트립하면 함수 이름까지 사라진다. 그래도 Java 메서드와 C 함수가 이어지는 순간은 있고, 라이브러리가 직접 등록하는 방식이면 그 순간은 ART의 `RegisterNatives`를 지난다. 이번에는 [8장](/posts/android-lab-p1c08-frida-spawn-attach-java-hook/)의 Frida로 그 지점을 잡아 이름과 주소의 짝을 받아 적고, 그 주소에 직접 붙어 인자와 반환값을 읽는다. JNI 경계와 `.so` 로딩의 개념은 [Atlas C15](/posts/android-concept-atlas-c15-jni-native-library-loading/)에, PLT와 GOT는 [C33](/posts/android-concept-atlas-c33-elf-linker-plt-got/)에 있다.
 
-기기는 `codex-atlas-api33` 에뮬레이터(Android 13, API 33, google_apis x86_64 userdebug, 빌드 TE1A.240213.009, 보안 패치 2024-03-01)이고 ART 모듈은 versionCode 331711080이다. `adb root`가 되고 SELinux는 Enforcing이다. 이 이미지는 `ro.product.cpu.abilist`가 `x86_64` 하나이고 `ro.dalvik.vm.native.bridge`는 `0`이다. ARM 코드를 옮겨 주는 변환 계층 없이 앱의 x86_64 라이브러리가 그대로 돈다. arm64의 PAC/BTI가 켜진 함수에 거는 후크는 이 x86_64 이미지에서 볼 수 없어서 [C37](/posts/android-concept-atlas-c37-exploit-mitigations/)의 설명으로 대신한다. libart에서 심볼 표가 빠진 경우를 볼 때만 `sec-36-std`(Android 16, API 36, ART 모듈 360527520)를 따로 띄웠다. 호스트 쪽은 Frida 17.17.0과 frida-tools 14.8.1, NDK 27의 clang 18.0.4와 llvm 도구, jadx 1.5.5, 에뮬레이터 36.5.11이다. ART 소스 링크는 기기의 ART 모듈과 같은 태그 `aml_art_331711080`에, 프레임워크와 bionic 링크는 `android-13.0.0_r84`에 걸었다.
+기기는 `codex-atlas-api33` 에뮬레이터(Android 13, API 33, google_apis x86_64 userdebug, 빌드 TE1A.240213.009, 보안 패치 2024-03-01)이고 ART 모듈은 versionCode 331711080이다. `adb root`가 되고 SELinux는 Enforcing이다. 이 이미지는 `ro.product.cpu.abilist`가 `x86_64` 하나이고 `ro.dalvik.vm.native.bridge`는 `0`이다. ARM 코드를 옮겨 주는 변환 계층 없이 앱의 x86_64 라이브러리가 바로 돈다. arm64의 PAC/BTI가 켜진 함수에 거는 후크는 이 x86_64 이미지에서 볼 수 없어서 [C37](/posts/android-concept-atlas-c37-exploit-mitigations/)의 설명으로 대신한다. libart에서 심볼 표가 빠진 경우를 볼 때만 `sec-36-std`(Android 16, API 36, ART 모듈 360527520)를 따로 띄웠다. 호스트 쪽은 Frida 17.17.0과 frida-tools 14.8.1, NDK 27의 clang 18.0.4와 llvm 도구, jadx 1.5.5, 에뮬레이터 36.5.11이다. ART 소스 링크는 기기의 ART 모듈과 같은 태그 `aml_art_331711080`에, 프레임워크와 bionic 링크는 `android-13.0.0_r84`에 걸었다.
 
 ## 심볼을 지운 libjnimap.so와 실험 앱
 
@@ -202,7 +202,7 @@ llvm-nm -C art9/libart.so | grep RegisterNatives
 
 `.dynsym`에서 이름에 RegisterNatives가 들어간 심볼은 0개다. `.symtab`에는 소문자 `t`, 곧 로컬 함수로 `art::(anonymous namespace)::CheckJNI::RegisterNatives`(0x615ab0), `art::JNI<false>::RegisterNatives`(0x69ca80), `art::JNI<true>::RegisterNatives`(0x7074f0)가 있다. 동적 링커가 보는 export 표에 아예 없으니 맹글된 이름을 그대로 넣어도 export 조회는 실패한다. 구현도 하나가 아니다. ART의 `JNI` 클래스는 [jni_internal.cc L657-658](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/jni/jni_internal.cc#657)에서 `template <bool kEnableIndexIds>`로 선언돼 두 벌이 생기고, CheckJNI가 그 앞을 감싸는 판을 하나 더 둔다. Android 9 이미지(API 28 x86)의 libart에는 템플릿 없는 `art::JNI::RegisterNatives`와 CheckJNI 판만 있다. 소스로 보면 [android-10.0.0_r1 L643](https://android.googlesource.com/platform/art/+/refs/tags/android-10.0.0_r1/runtime/jni/jni_internal.cc#643)까지 평범한 `class JNI`였고 [android-11.0.0_r1 L481-482](https://android.googlesource.com/platform/art/+/refs/tags/android-11.0.0_r1/runtime/jni/jni_internal.cc#481)에서 템플릿이 됐다. CheckJNI 판 이름 끝의 `.llvm.6973224403690363785`는 컴파일러가 로컬 함수에 붙인 접미사라 빌드가 바뀌면 같이 바뀐다. `.symtab` 자체도 이 에뮬레이터 이미지가 남겨 둔 것이어서 다른 이미지에 있다는 보장이 없다. 뒤에서 API 36 이미지로 따로 확인했다.
 
-스크립트를 쓰기 전에 Frida 버전도 짚어 둔다. Frida 17에서는 `Module.findExportByName()`, `Module.getExportByName()` 같은 정적 Module 메서드가 빠졌다([17.0.0 릴리스 노트](https://frida.re/news/2025/05/17/frida-17-0-0-released/)의 Static Module APIs 절). 전역 export는 `Module.getGlobalExportByName(name)`으로 찾고, 특정 모듈은 `Process.getModuleByName('libart.so')`로 모듈 객체를 받은 뒤 그 객체의 `findExportByName`, `enumerateExports`, `enumerateSymbols`를 부른다. 호스트의 Frida 17.17.0에서 `typeof`로 확인해 보니 `Module.getExportByName`, `Module.findExportByName`, `Module.enumerateSymbols`, `Memory.readByteArray`, `Memory.hexdump`는 모두 `undefined`였고 `hexdump`는 전역 함수로 있었다. 아래 스크립트는 전부 이 API로 썼다.
+libart 모듈 객체에서 export와 심볼을 찾을 때 Frida 17에서는 쓰는 API가 다르다. 이 버전에서는 `Module.findExportByName()`, `Module.getExportByName()` 같은 정적 Module 메서드가 빠졌다([17.0.0 릴리스 노트](https://frida.re/news/2025/05/17/frida-17-0-0-released/)의 Static Module APIs 절). 전역 export는 `Module.getGlobalExportByName(name)`으로 찾고, 특정 모듈은 `Process.getModuleByName('libart.so')`로 모듈 객체를 받은 뒤 그 객체의 `findExportByName`, `enumerateExports`, `enumerateSymbols`를 부른다. 호스트의 Frida 17.17.0에서 `typeof`로 확인해 보니 `Module.getExportByName`, `Module.findExportByName`, `Module.enumerateSymbols`, `Memory.readByteArray`, `Memory.hexdump`는 모두 `undefined`였고 `hexdump`는 전역 함수로 있었다. 아래 스크립트는 전부 이 API로 썼다.
 
 ## 215번 칸을 읽어 등록 순간을 잡는다
 
@@ -320,7 +320,7 @@ frida -D $S -f io.seika.jnimap -l frida/regnatives.js -q -t 6
 
 `findExportByName('RegisterNatives')`는 null이고 export 목록에도 없다. `enumerateSymbols()`는 `.symtab`의 로컬 심볼 세 개를 돌려줬다. 215번 칸은 두 시점 모두 libart+0x69ca80, `art::JNI<false>::RegisterNatives`를 가리켰다. 심볼로 이미 건 주소라서 후크 수는 3에서 늘지 않았다. 앱을 재개하자 프레임워크 쪽 `libframework-connectivity-jni.so`가 메서드 12개를 등록하는 호출이 먼저 지나갔고, 이어서 `io.seika.jnimap.Native`에 대한 `n=3` 등록이 잡혔다.
 
-`nativeCheck`는 `libjnimap.so+0x19f0`, `nativeMix`는 `+0x1a90`, `nativeRebind`는 `+0x1aa0`이다. 스트립하지 않은 빌드의 `verify_guess`, `mix_int`, `rebind` 주소와 그대로 맞는다. `DebugSymbol`은 이 주소들을 `libjnimap.so!0x19f0`처럼 모듈과 오프셋으로만 적었고, objdump처럼 앞 심볼에 갖다 붙이지 않았다. `nativeHello`는 출력 어디에도 없다. 등록 표에 들어 있지 않은 메서드라서 그렇고, 이 메서드가 언제 연결되는지는 뒤에서 따로 본다.
+`nativeCheck`는 `libjnimap.so+0x19f0`, `nativeMix`는 `+0x1a90`, `nativeRebind`는 `+0x1aa0`이다. 스트립하지 않은 빌드의 `verify_guess`, `mix_int`, `rebind` 주소와 맞는다. `DebugSymbol`은 이 주소들을 `libjnimap.so!0x19f0`처럼 모듈과 오프셋으로만 적었고, objdump처럼 앞 심볼에 갖다 붙이지 않았다. `nativeHello`는 출력 어디에도 없다. 등록 표에 들어 있지 않은 메서드라서 그렇고, 이 메서드가 언제 연결되는지는 뒤에서 따로 본다.
 
 ## 찾은 오프셋에 붙어 JNI 인자 읽기
 
@@ -406,7 +406,7 @@ frida -D $S -N io.seika.jnimap -l frida/natives.js -l frida/java-side.js -q -t 1
 
 ![natives.js와 java-side.js를 attach한 터미널. libjnimap.so base=0x730b8bf63000, Java 후크의 Native.nativeCheck("letmein") called 뒤에 nativeCheck onEnter JNIEnv 포인터 0x730cd116f8d0, 그 표 0x730c0a58d358은 JniNativeInterfaceFunctions false 판 gJniNativeInterface, 두 번째 인자 jobject this는 io.seika.jnimap.Native, 세 번째 인자 jstring은 "letmein", strcmp@plt는 libjnimap.so+0x1a55에서 a="letmein" b="SEIKA-JNI-1025"로 불리고 hexdump 53 45 49 4b 41 2d 4a 4e 49 2d 31 30 32 35, onLeave jboolean 0, Java 쪽 returned false, nativeMix는 jclass io.seika.jnimap.Native와 jint=7을 받아 ret=4348](/assets/img/android-mastery/p1c10/04-native-args-attach.png)
 
-Java 후크의 `called` 줄과 `returned false` 줄 사이에 네이티브 쪽 줄이 끼어 경계를 넘나드는 순서가 그대로 보인다. `args[0]`의 JNIEnv*가 가리키는 표는 0x730c0a58d358로, libart 베이스 0x730c09a00000에서 +0xb8d358에 있는 `JniNativeInterfaceFunctions<false>::gJniNativeInterface`다. 등록 때 215번 칸이 `JNI<false>` 구현을 가리킨 것과 같은 표다.
+Java 후크의 `called` 줄과 `returned false` 줄 사이에 네이티브 쪽 줄이 끼어 경계를 넘나드는 순서가 드러난다. `args[0]`의 JNIEnv*가 가리키는 표는 0x730c0a58d358로, libart 베이스 0x730c09a00000에서 +0xb8d358에 있는 `JniNativeInterfaceFunctions<false>::gJniNativeInterface`다. 등록 때 215번 칸이 `JNI<false>` 구현을 가리킨 것과 같은 표다.
 
 `nativeCheck`의 `args[1]`은 `io.seika.jnimap.Native` 인스턴스, `args[2]`는 jstring이고 풀면 `"letmein"`이다. 이 둘의 값은 0x7ffc2b3cef48과 0x7ffc2b3cef4c로 스택 주소에 4바이트 간격이었고, static 메서드 `nativeMix`의 jclass는 0x730eb8b77648로 다른 영역에 있었다. ART가 네이티브 호출 직전에 참조를 스택 칸에 늘어놓고 그 칸의 주소를 넘기는 것으로 보이는데, 소스까지 따라가 확인하지는 않았다. 어느 쪽이든 args에 든 값은 참조라서 `args[2].toInt32()`처럼 정수로 읽으면 참조 값의 하위 32비트가 나올 뿐이다.
 
@@ -556,15 +556,15 @@ frida -D $S -f io.seika.jnimap -l frida/loadtrace.js -q -t 14
 
 ![로드 추적 터미널. Module.getExportByName(null, 'android_dlopen_ext')는 TypeError: not a function, at eval (input:1)로 끝나고 getGlobalExportByName은 "0x730ea36b2bd0"을 돌려준다. spawn 뒤 android_dlopen_ext가 libjnimap.so를 libnativeloader.so+0x204bc (NativeLoaderNamespace::Load+0xbc)에서 열고, dlsym JNI_OnLoad -> 0x730ba5a75960 (호출자 SharedLibrary::FindSymbolWithoutNativeBridge+0x3e), JNI_OnLoad는 JavaVMExt::LoadNativeLibrary+0xe89에서 불려 0x10006을 돌려준다. 첫 onNewIntent hello=true 뒤에만 dlsym Java_io_seika_jnimap_Native_nativeHello -> 0x730ba5a75940이 찍히고 두 번째 onNewIntent 뒤에는 dlsym 줄이 없다](/assets/img/android-mastery/p1c10/05-loadtrace.png)
 
-옛 호출 `Module.getExportByName(null, ...)`은 `TypeError: not a function`으로 끝났고 `Module.getGlobalExportByName`은 주소를 돌려줬다. Frida 16 시절 예제를 그대로 가져오면 이 줄에서 멈춘다.
+옛 호출 `Module.getExportByName(null, ...)`은 `TypeError: not a function`으로 끝났고 `Module.getGlobalExportByName`은 주소를 돌려줬다. Frida 16 시절 예제를 옮겨 쓰면 이 줄에서 멈춘다.
 
-spawn 쪽 출력은 로드 순서를 그대로 보여 준다. `libjnimap.so`를 연 `android_dlopen_ext`의 호출자는 `libnativeloader.so`의 `android::NativeLoaderNamespace::Load`였다. 이 함수는 [native_loader_namespace.cpp L162-168](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/libnativeloader/native_loader_namespace.cpp#162)에서 앱의 링커 네임스페이스를 지정해 `RTLD_NOW`로 연다. 이어서 같은 핸들로 `dlsym(handle, "JNI_OnLoad")`가 불렸고 결과의 끝자리 960이 정적 분석의 0x1960과 맞는다. 호출자는 `art::SharedLibrary::FindSymbolWithoutNativeBridge`로, [java_vm_ext.cc L164-177](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/jni/java_vm_ext.cc#164)에서 `dlsym(handle_, symbol_name.c_str())`을 부르는 그 함수다. `JNI_OnLoad`는 `art::JavaVMExt::LoadNativeLibrary`에서 불렸고([java_vm_ext.cc L1093-1108](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/jni/java_vm_ext.cc#1093)) `JNI_VERSION_1_6`인 0x10006을 돌려줬다. 출력의 맹글된 이름은 `llvm-cxxfilt`로 풀어 확인했다.
+spawn 쪽 출력을 위에서부터 읽으면 로드 순서가 된다. `libjnimap.so`를 연 `android_dlopen_ext`의 호출자는 `libnativeloader.so`의 `android::NativeLoaderNamespace::Load`였다. 이 함수는 [native_loader_namespace.cpp L162-168](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/libnativeloader/native_loader_namespace.cpp#162)에서 앱의 링커 네임스페이스를 지정해 `RTLD_NOW`로 연다. 이어서 같은 핸들로 `dlsym(handle, "JNI_OnLoad")`가 불렸고 결과의 끝자리 960이 정적 분석의 0x1960과 맞는다. 호출자는 `art::SharedLibrary::FindSymbolWithoutNativeBridge`로, [java_vm_ext.cc L164-177](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/jni/java_vm_ext.cc#164)에서 `dlsym(handle_, symbol_name.c_str())`을 부르는 그 함수다. `JNI_OnLoad`는 `art::JavaVMExt::LoadNativeLibrary`에서 불렸고([java_vm_ext.cc L1093-1108](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/jni/java_vm_ext.cc#1093)) `JNI_VERSION_1_6`인 0x10006을 돌려줬다. 출력의 맹글된 이름은 `llvm-cxxfilt`로 풀어 확인했다.
 
 `nativeHello`는 첫 `hello=true` 인텐트에서 처음 불릴 때 `dlsym(handle, "Java_io_seika_jnimap_Native_nativeHello")`로 찾아졌고(끝자리 940), 두 번째 인텐트에서는 dlsym 줄이 없었다. `nativeCheck`나 `nativeMix`로는 dlsym이 한 번도 불리지 않았다. ART는 네이티브 메서드의 진입점을 처음에 dlsym 조회 스텁으로 걸어 둔다([class_linker.cc L3454-3459](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/class_linker.cc#3454)). 처음 불리면 `artFindNativeMethodRunnable`이 `FindCodeForNativeMethod`로 주소를 찾고([jni_entrypoints.cc L114](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/entrypoints/jni/jni_entrypoints.cc#114)), 짧은 이름과 시그니처가 붙은 긴 이름을 차례로 `FindSymbol`에 넣어 본다([java_vm_ext.cc L327-332](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/jni/java_vm_ext.cc#327)). 찾은 주소는 `class_linker->RegisterNative`로 메서드에 기록되고(L124), 다음 호출부터는 스텁을 거치지 않는다. 처음 쓸 때 찾는다는 점에서 lazy binding처럼 보이지만 ELF의 lazy binding과는 관계가 없다. bionic은 앞에서 본 대로 lazy binding 자체를 지원하지 않는다.
 
 그래서 `Java_` export 방식의 메서드는 `RegisterNatives`를 한 번도 지나지 않고, `RegisterNatives` 후크로는 보이지 않는다. 그런 메서드의 이름과 주소는 `dlsym` 후크나 동적 심볼 표에서 얻는다. 두 길은 ART 안의 `ClassLinker::RegisterNative`에서 만난다([jni_internal.cc L2688](https://android.googlesource.com/platform/art/+/refs/tags/aml_art_331711080/runtime/jni/jni_internal.cc#2688)과 jni_entrypoints.cc L124). API 33 libart에서는 이 함수가 `_ZN3art11ClassLinker14RegisterNativeEPNS_6ThreadEPNS_9ArtMethodEPKv`로 `.dynsym`에까지 올라 있어 한곳에서 둘 다 볼 자리로 보이지만, 이번에는 걸어 보지 않았다. API 36 libart의 `.dynsym`에는 없다.
 
-이 출력이 처음부터 나온 건 아니다. 첫 판의 `loadtrace.js`는 dlopen과 `JNI_OnLoad` 줄만 찍고 `[dlsym]`도 `[java]`도 내지 않았다. logcat에는 `nativeHello() = hi from Java_ export`가 남았는데도 그랬다. 먼저 onLeave에서 받은 `retval` 객체를 `handle = h`로 그대로 저장한 게 문제였다. 콜백이 끝난 뒤 그 객체를 다시 읽으면 0x0이 나왔고, 그래서 dlsym 필터가 어떤 핸들과도 맞지 않았다. Frida가 retval 객체를 콜백 뒤에 다시 쓰는 것으로 보여 `ptr(h.toString())`으로 값을 복사해 두게 고쳤다. spawn 직후에 건 `MainActivity.onNewIntent` Java 후크도 "hooked"까지 찍고는 한 번도 불리지 않았다. 4초 뒤에 건 후크는 불렸기 때문에, `libjnimap.so`의 dlopen이 끝나는 시점(액티비티의 onCreate 안)에 `setTimeout`으로 후크를 걸게 바꿨다. 이른 후크가 왜 사라지는지는 더 파고들지 않았다.
+이 출력이 처음부터 나온 건 아니다. 처음 쓴 `loadtrace.js`는 dlopen과 `JNI_OnLoad` 줄만 찍고 `[dlsym]`도 `[java]`도 내지 않았다. logcat에는 `nativeHello() = hi from Java_ export`가 남았는데도 그랬다. 먼저 onLeave에서 받은 `retval` 객체를 `handle = h`로 저장한 게 문제였다. 콜백이 끝난 뒤 그 객체를 다시 읽으면 0x0이 나왔고, 그래서 dlsym 필터가 어떤 핸들과도 맞지 않았다. Frida가 retval 객체를 콜백 뒤에 다시 쓰는 것으로 보여 `ptr(h.toString())`으로 값을 복사해 두게 고쳤다. spawn 직후에 건 `MainActivity.onNewIntent` Java 후크도 "hooked"까지 찍고는 한 번도 불리지 않았다. 4초 뒤에 건 후크는 불렸기 때문에, `libjnimap.so`의 dlopen이 끝나는 시점(액티비티의 onCreate 안)에 `setTimeout`으로 후크를 걸게 바꿨다. 이른 후크가 왜 사라지는지는 더 파고들지 않았다.
 
 ## debuggable 앱에서는 215번 칸이 CheckJNI다
 
@@ -621,7 +621,7 @@ frida -D $S -N io.seika.jnimap -l frida/regnatives.js -q -t 12
 
 ![attach 모드의 regnatives.js 출력. export null, enumerateSymbols 3개, slot 215는 Frida 스레드 기준 libart.so+0x69ca80 art::JNI false 판이고, libjnimap.so just loaded 줄은 없다. rebind 인텐트 뒤에 RegisterNatives class=io.seika.jnimap.Native n=3이 한 번 찍혀 nativeCheck +0x19f0, nativeMix +0x1a90, nativeRebind +0x1aa0, returned 0](/assets/img/android-mastery/p1c10/09c-rebind-attach-main.png)
 
-`libjnimap.so just loaded` 줄은 나오지 않았다. 붙기 전에 이미 로드된 라이브러리라서다. 이 프로세스가 시작할 때 `JNI_OnLoad`에서 한 등록도 보이지 않는다. 등록 줄은 앱이 `nativeRebind()`로 `RegisterNatives`를 다시 불렀을 때 한 번 찍혔고, logcat에도 `nativeRebind: RegisterNatives(3) = 0`이 남았다. 실제 앱은 보통 이런 재등록을 하지 않으니 등록 표를 보려면 ([8장](/posts/android-lab-p1c08-frida-spawn-attach-java-hook/)에서처럼) spawn으로 띄워야 한다. attach는 오프셋을 이미 알고 있을 때 쓴다.
+`libjnimap.so just loaded` 줄은 나오지 않았다. 붙기 전에 이미 로드된 라이브러리라서다. 이 프로세스가 시작할 때 `JNI_OnLoad`에서 한 등록도 보이지 않는다. 등록 줄은 앱이 `nativeRebind()`로 `RegisterNatives`를 다시 불렀을 때 한 번 찍혔고, logcat에도 `nativeRebind: RegisterNatives(3) = 0`이 남았다. 실제 앱은 보통 이런 재등록을 하지 않으니 등록 표를 보려면 ([8장](/posts/android-lab-p1c08-frida-spawn-attach-java-hook/)에서처럼) spawn으로 띄워야 하고, 이번처럼 오프셋을 이미 안 뒤 인자와 반환값을 볼 때는 attach로 충분했다.
 
 ## Android 16 이미지의 libart에는 .symtab이 없다
 
@@ -640,7 +640,7 @@ llvm-nm -C art36/mdi.elf | grep RegisterNatives
 
 ![API 36 보조 에뮬레이터 터미널. sdk 36, com.google.android.art versionCode 360527520, libart.so 12782304바이트를 pull했고 grep으로 고른 심볼 섹션 중 .dynsym과 .gnu_debugdata만 있고 .symtab은 없다. llvm-nm은 art36/libart.so: no symbols, .gnu_debugdata를 덤프해 xz로 푼 mdi.elf에는 T 타입으로 667e40 CheckJNI::RegisterNatives(.__uniq.99033978352804627313491551960229047428.llvm.6262425906947437964), 6e9ec0 art::JNI false 판, 7538e0 art::JNI true 판이 있다](/assets/img/android-mastery/p1c10/09a-api36-libart.png)
 
-이 libart에는 `.symtab`이 없고 심볼이 든 섹션은 `.dynsym`과 `.gnu_debugdata`뿐이며 `llvm-nm`은 "no symbols"라고 답한다. `.gnu_debugdata`는 xz로 압축한 작은 ELF를 넣어 두는 섹션(MiniDebugInfo)인데, 풀어 보면 세 구현이 그대로 있다. 다만 CheckJNI 판 접미사가 `.__uniq.99033978352804627313491551960229047428.llvm.6262425906947437964`로 API 33의 것과 다르고, 세 심볼 모두 대문자 `T`로 적혀 있다. 이 상태에서 Frida가 무엇을 찾는지 같은 `regnatives.js`로 봤다.
+이 libart에는 `.symtab`이 없고 심볼이 든 섹션은 `.dynsym`과 `.gnu_debugdata`뿐이며 `llvm-nm`은 "no symbols"라고 답한다. `.gnu_debugdata`는 xz로 압축한 작은 ELF를 넣어 두는 섹션(MiniDebugInfo)인데, 풀어 보면 세 구현이 다 들어 있다. 다만 CheckJNI 판 접미사가 `.__uniq.99033978352804627313491551960229047428.llvm.6262425906947437964`로 API 33의 것과 다르고, 세 심볼 모두 대문자 `T`로 적혀 있다. 이 상태에서 Frida가 무엇을 찾는지 같은 `regnatives.js`로 봤다.
 
 ```bash
 adb -s $S shell am force-stop io.seika.jnimap
@@ -657,11 +657,11 @@ Frida 17.17.0은 MiniDebugInfo도 읽었다. `enumerateSymbols()`가 세 심볼�
 | API 33 | io.seika.jnimapdbg | `CheckJNI` libart+0x615ab0 | `JNI<true>` |
 | API 36 | io.seika.jnimap | `JNI<false>` libart+0x6e9ec0 | 없음 |
 
-API 36 이미지는 `ro.product.cpu.abilist`가 `x86_64,arm64-v8a`이고 `ro.dalvik.vm.native.bridge`가 `libndk_translation.so`다. 앱 프로세스에도 `/system/lib64/libndk_translation.so`가 매핑돼 있었다. 하지만 앱의 `primaryCpuAbi`는 x86_64였고 x86_64 라이브러리는 변환 없이 돌았다. 그 위에 건 x86_64 후크가 그대로 동작했다. ARM 라이브러리를 이 변환기로 돌리는 경우는 해 보지 않았다.
+API 36 이미지는 `ro.product.cpu.abilist`가 `x86_64,arm64-v8a`이고 `ro.dalvik.vm.native.bridge`가 `libndk_translation.so`다. 앱 프로세스에도 `/system/lib64/libndk_translation.so`가 매핑돼 있었다. 하지만 앱의 `primaryCpuAbi`는 x86_64였고 x86_64 라이브러리는 변환 없이 돌았다. 그 위에 건 x86_64 후크도 API 33에서처럼 걸렸다. ARM 라이브러리를 이 변환기로 돌리는 경우는 해 보지 않았다.
 
 ## 판정을 기기 밖으로 빼야 하는 이유
 
-`static`과 숨김 visibility, 스트립은 이름만 지운다. 이름을 지워도 등록 순간과 재배치에서 주소가 나왔고, XOR로 감춘 비밀값은 `strcmp` 인자로 풀렸고, 판정은 반환값 하나로 뒤집혔다. 그러니 잠금 해제나 구매 확인처럼 결과가 중요한 판단은 서버가 내리고, 앱은 서버가 검증할 수 있는 근거를 보내도록 짜야 한다. 비밀값을 기기에 두어야 한다면 앱 메모리에 평문으로 풀리지 않는 Keystore 키로 바꾸는 쪽이 낫다([14장](/posts/android-lab-p1c14-keystore-biometricprompt/)).
+`flip.js`가 반환값 하나로 `locked`를 `UNLOCKED`로 바꾼 걸 보면, 잠금 해제나 구매 확인처럼 결과가 중요한 판단은 서버가 내리고 앱은 서버가 검증할 수 있는 근거만 보내도록 짜야 한다. 비밀값을 기기에 두어야 한다면 앱 메모리에 평문으로 풀리지 않는 Keystore 키로 바꾸는 쪽이 낫다([14장](/posts/android-lab-p1c14-keystore-biometricprompt/)).
 
 점검도 같은 도구로 한다. 릴리스 빌드에 `regnatives.js`를 spawn으로 돌리면 등록되는 메서드와 오프셋 목록이 나온다. 목록에 디버그용 메서드가 남아 있거나 예상 밖의 등록이 보이면 빌드 설정부터 본다. `flip.js`처럼 네이티브 판정의 반환값을 바꿔 놓고도 서버가 요청을 거절하는지 보면 판정이 정말 서버에 있는지 드러난다. 이번 실험 앱에는 서버가 없어서 이 확인은 돌려 보지 못했다.
 
