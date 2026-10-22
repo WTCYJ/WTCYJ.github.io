@@ -22,7 +22,7 @@ excerpt: "Android 보안 실습·연구 시리즈의 목차다. 에뮬레이터�
 8. [Frida spawn·attach와 Java 훅 — 붙는 시점과 훅이 새는 길](/posts/android-lab-p1c08-frida-spawn-attach-java-hook/)
 9. [ClassLoader와 동적 로딩 — 패커가 ART에 넘기는 dex를 입구에서 꺼내기](/posts/android-lab-p1c09-classloader-dynamic-loading/)
 10. [JNI·native 함수 동적 관찰 — 스트립된 함수를 RegisterNatives로 찾기](/posts/android-lab-p1c10-jni-native-observation/)
-11. [Burp/mitmproxy 로컬 인터셉션 — 유저 CA가 막히는 곳, 핀이 막는 곳](/posts/android-lab-p1c11-burp-mitmproxy-intercept/)
+11. [mitmproxy 로컬 인터셉션 — 유저 CA가 막히는 곳, 핀이 막는 곳](/posts/android-lab-p1c11-burp-mitmproxy-intercept/)
 12. [Network Security Config 분석 — 정적으로 만든 호스트 표를 기기에서 맞춰 보기](/posts/android-lab-p1c12-network-security-config/)
 13. [저장소·로그·클립보드·백업 점검 — 토큰이 앱 밖으로 나가는 길](/posts/android-lab-p1c13-storage-log-clipboard-backup/)
 14. [Keystore와 BiometricPrompt — 콜백을 속여도 열리지 않는 키](/posts/android-lab-p1c14-keystore-biometricprompt/)

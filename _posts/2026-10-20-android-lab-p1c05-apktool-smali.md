@@ -5,7 +5,7 @@ date: 2026-10-20 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, apktool, smali, baksmali, Dalvik, DEX, jadx, ART, VerifyError]
-excerpt: "apktool 3.0.2로 손대지 않고 다시 묶은 dex는 2364바이트에서 2220바이트로 바뀌었지만 다시 푼 smali는 같았다. move-result 뒤의 const/4 한 줄은 화면을 UNLOCKED로 바꿨고 자리나 레지스터를 잘못 고른 패치는 smali 조립, apktool 빌드, d8 재변환, 서명을 모두 통과한 뒤(오류를 낸 것은 jadx 하나였다) 기기에서 ART 검증기의 VerifyError로 막혔다."
+excerpt: "apktool 3.0.2로 손대지 않고 다시 묶은 dex는 2364바이트에서 2220바이트로 바뀌었지만 다시 푼 smali는 같았다. move-result 뒤의 const/4 한 줄은 화면을 UNLOCKED로 바꿨다. 자리나 레지스터를 잘못 고른 패치는 조립, 빌드, d8, 서명을 다 통과하고 기기에서야 VerifyError로 막혔다."
 ---
 
 jadx가 다시 짜 준 Java로 앱을 읽다 보면([지난 글](/posts/android-lab-p1c04-jadx-static-analysis/)) 고쳐 보고 싶은 줄이 나온다. 라이선스 검사의 분기 하나, 루트 탐지 결과를 받는 변수 하나 같은 것들이다. 이런 수정은 보통 apktool로 푼 smali에서 한다. jadx의 Java는 다시 빌드할 수 없지만 smali는 바이트코드를 옮긴 것이라 재조립해도 안전하다는 설명이 늘 따라붙는다. 직접 풀고 묶고 고쳐 보니 재조립해도 명령이 바뀌지 않는다는 쪽은 맞았다. 그런데 넣을 자리나 레지스터를 잘못 고른 패치도 smali·apktool·d8이 모두 받아 줬고 jadx의 Java도 이 앱에서는 javac를 통과했다. jadx 쪽 함정은 다른 데 있었다. jadx는 구조를 세우지 못한 메서드를 예외만 던지는 코드로 바꿔 두고 javac는 그 코드도 오류 없이 컴파일한다.
@@ -268,7 +268,7 @@ $ diff -u --strip-trailing-cr smali.orig/io/seika/smali/MainActivity.smali smali
 10
 ```
 
-줄 끝을 무시하자 바뀐 것은 끼워 넣은 한 줄뿐이었다. 변경 기록을 남기거나 리뷰에 넘길 diff라면 이 옵션을 붙이는 편이 낫다.
+줄 끝을 무시하자 바뀐 것은 끼워 넣은 한 줄뿐이었고, 뒤의 diff 명령에는 모두 `--strip-trailing-cr`를 붙였다.
 
 같은 캡처 중간에서 `apksigner verify`는 dist APK에 `DOES NOT VERIFY`와 `ERROR: Missing META-INF/MANIFEST.MF`를 냈다. 서명 파일이 하나도 없다. 맨 아래처럼 고친 APK를 jadx로 다시 풀면 `gate.isEnabled();` 호출은 남고 조건이 `if (1 != 0)`으로 바뀌어 있다. 패치가 의도한 자리에 들어갔는지 빠르게 보는 데 쓸 만하다. dex 수준에서도 확인했다. dist APK의 dex를 꺼내 `dexdump -d`로 본 `onCreate` 앞부분이다(바이트 열은 줄였다).
 
@@ -357,7 +357,7 @@ Archive:  patched.apk
      6608                     6 files
 ```
 
-apksigner의 `ApkVerifier`는 minSdk가 24 미만이거나 v2 이상 서명이 없을 때만 JAR 서명을 검사한다([ApkVerifier.java L340-344](https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb/src/main/java/com/android/apksig/ApkVerifier.java#340)). minSdk 26에 v2·v3 서명이 있는 이 APK에서 `v1 false`는 v1을 검사하지 않았다는 표시이고 v1이 없다는 말이 아니다. 서명을 마친 파일에 `zipalign -c -p 4`를 다시 돌려도 종료 코드 0이었고 classes.dex의 SHA-256(`b3d2cb02…`)은 dist APK의 것과 같았다. 서명은 `META-INF`의 JAR 서명 파일과 ZIP Central Directory 바로 앞에 놓이는 APK Signing Block([APK Signature Scheme v2](https://source.android.com/docs/security/features/apksigning/v2))을 덧붙이고 정렬을 위해 항목 사이 여백을 다시 맞출 뿐 항목의 내용은 다시 쓰지 않는다.
+apksigner의 `ApkVerifier`는 minSdk가 24 미만이거나 v2 이상 서명이 없을 때만 JAR 서명을 검사한다([ApkVerifier.java L340-344](https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb/src/main/java/com/android/apksig/ApkVerifier.java#340)). minSdk 26에 v2·v3 서명이 있는 이 APK에서 `v1 false`는 v1을 검사하지 않았다는 표시이고 v1이 없다는 말이 아니다. 서명을 마친 파일에 `zipalign -c -p 4`를 다시 돌려도 종료 코드 0이었고 classes.dex의 SHA-256(`b3d2cb02…`)은 dist APK의 것과 같았다. 서명하면서 apksigner는 `META-INF`의 JAR 서명 파일과 ZIP Central Directory 바로 앞의 APK Signing Block([APK Signature Scheme v2](https://source.android.com/docs/security/features/apksigning/v2))을 덧붙이고, 정렬에 맞춰 항목 사이 여백을 다시 잡는다. classes.dex 해시가 같았으니 항목 내용은 그대로였다.
 
 dist APK는 zipalign 없이 apksigner로 서명만 해도 `resources.arsc`가 2156으로 옮겨져 정렬 검사를 통과했다.
 
@@ -441,7 +441,7 @@ adb.exe: failed to install v1only.apk: Failure [INSTALL_PARSE_FAILED_NO_CERTIFIC
 
 ![apksigner sign에 --v2-signing-enabled false --v3-signing-enabled false를 주어 aligned.apk에서 v1only.apk를 만들고, apksigner verify -v v1only.apk가 DOES NOT VERIFY와 Target SDK version 33 requires a minimum of signature scheme v2를 찍고, adb install -r v1only.apk가 Failure INSTALL_PARSE_FAILED_NO_CERTIFICATES: Scanning Failed.: No signature found in package of version 2 or newer for package io.seika.smali로 실패한 터미널](/assets/img/android-mastery/p1c05/15-device-v1only.png)
 
-apksigner는 targetSdk 33을 보고 서명 단계에서 이미 v2가 없다고 경고한다. 기기에서는 v1 서명이 온전하니 세션의 가벼운 파싱은 통과했고 패키지를 스캔하는 단계에서 `No signature found in package of version 2 or newer`로 막혔다. 문구는 같은 `INSTALL_PARSE_FAILED_NO_CERTIFICATES`지만 dist APK의 null 배열과는 다른 자리다. 같은 문구를 jarsigner로 서명한 APK와 targetSdk 29 대조군으로 다시 보는 것은 [7장](/posts/android-lab-p1c07-apk-modify-zipalign-resign/)에서 한다. 다른 키로 다시 서명했을 때 무엇이 깨지는지도 7장과 [APK 서명(C08)](/posts/android-concept-atlas-c08-apk-signing/)에서 다룬다.
+apksigner sign은 아무 말 없이 v1only.apk를 만들었고, 이를 거부한 것은 apksigner verify다. verify는 targetSdk 33을 보고 v2 이상 서명이 없다며 `DOES NOT VERIFY`를 냈다. 기기에서는 v1 서명이 온전하니 세션의 가벼운 파싱은 통과했고 패키지를 스캔하는 단계에서 `No signature found in package of version 2 or newer`로 막혔다. 이 문구는 targetSdk에 맞는 최소 스킴을 검사하는 `assertMinSignatureSchemeIsValid`가 만들고([ScanPackageUtils.java L690-701](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/ScanPackageUtils.java#690)), 스캔 중 난 예외에 `Scanning Failed.`를 붙이는 곳은 `InstallPackageHelper`다([InstallPackageHelper.java L978](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/InstallPackageHelper.java#978)). 문구는 같은 `INSTALL_PARSE_FAILED_NO_CERTIFICATES`지만 dist APK의 null 배열과는 다른 자리다. 같은 문구를 jarsigner로 서명한 APK와 targetSdk 29 대조군으로 다시 보는 것은 [7장](/posts/android-lab-p1c07-apk-modify-zipalign-resign/)에서 한다. 다른 키로 다시 서명했을 때 무엇이 깨지는지도 7장과 [APK 서명(C08)](/posts/android-concept-atlas-c08-apk-signing/)에서 다룬다.
 
 ## jadx의 Java로 다시 빌드하면 생기는 일
 
@@ -625,7 +625,7 @@ badorder d8 rc=0
 badreg d8 rc=0
 ```
 
-둘 다 Dalvik 규칙을 어긴다. [Constraints](https://source.android.com/docs/core/runtime/constraints) 문서의 B19는 `move-result<kind>` 바로 앞 명령이 `invoke-<kind>`여야 한다고 정하고 B1은 명령의 인자 개수와 타입이 언제나 명령과 맞아야 한다고 정한다. smali 어셈블러는 이 규칙을 검사하지 않아 둘 다 조립했고 apktool도 묶어 냈다. 만들어진 dex를 d8로 dex→dex 변환해 봐도 위처럼 종료 코드 0에 경고 하나 없었고 서명까지 문제없이 됐으니 호스트에서 이상을 알린 도구는 jadx 하나였다. jadx가 badreg의 `MainActivity.java` 주석에 남긴 스택 트레이스에는 `Unexpected instance arg in invoke`라는 원인도 찍혔다.
+둘 다 Dalvik 규칙을 어긴다. [Constraints](https://source.android.com/docs/core/runtime/constraints) 문서의 B19는 `move-result<kind>` 바로 앞 명령이 `invoke-<kind>`여야 한다고 정하고 B10은 인스턴스 메서드 호출의 수신 객체가 명령에 지정한 클래스와 대입 호환이어야 한다고 정한다. badreg는 int 상수를 `Gate.label`의 수신 객체로 넘기니 B10에 걸린다. smali 어셈블러는 이 규칙을 검사하지 않아 둘 다 조립했고 apktool도 묶어 냈다. 만들어진 dex를 d8로 dex→dex 변환해 봐도 위처럼 종료 코드 0에 경고 하나 없었고 서명까지 문제없이 됐으니 호스트에서 이상을 알린 도구는 jadx 하나였다. jadx가 badreg의 `MainActivity.java` 주석에 남긴 스택 트레이스에는 `Unexpected instance arg in invoke`라는 원인도 찍혔다.
 
 dexdump로 보면 무엇이 틀렸는지 분명하다.
 
