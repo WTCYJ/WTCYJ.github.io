@@ -34,7 +34,7 @@ excerpt: "Android 보안 실습·연구 시리즈의 목차다. 에뮬레이터�
 20. [딥링크·App Link·WebView — 콜백 가로채기와 JS 브리지 실측](/posts/android-lab-p1c20-deeplink-applink-webview/)
 21. [Ghidra·Rizin native 분석 — 스트립된 JNI 표를 파일에서 읽기](/posts/android-lab-p1c21-ghidra-rizin-native/)
 22. [ASan·IntSan으로 JNI 버그 읽기 — 섀도 바이트에서 tombstone까지](/posts/android-lab-p1c22-sanitizer-jni-analysis/)
-23. Flutter·React Native·Cordova — 로직이 DEX 밖에 있는 앱
+23. [Flutter·React Native·Cordova — 로직이 DEX 밖에 있는 앱](/posts/android-lab-p1c23-flutter-reactnative-cordova/)
 24. MobSF 자동 스캔 결과의 수동 검증: 오탐과 미탐의 경계 확정
 25. Semgrep·CodeQL·Androguard 커스텀 규칙 작성: 데이터플로우 taint로 프로젝트 고유 결함 잡기
 26. MASVS 요구사항을 MASTG 검증 절차로: 커버리지 매트릭스로 감사 재현하기
