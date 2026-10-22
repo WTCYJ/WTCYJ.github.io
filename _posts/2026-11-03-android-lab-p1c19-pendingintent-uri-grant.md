@@ -5,7 +5,7 @@ date: 2026-11-03 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, PendingIntent, URIGrant, FLAG_IMMUTABLE, ConfusedDeputy, ContentProvider, Android16]
-excerpt: "무권한 앱이 mutable 암시적 PendingIntent에 data와 FLAG_GRANT_READ_URI_PERMISSION을 채워 보내자 피해자의 비공개 provider 읽기 grant가 공격자 UID 앞으로 기록됐고, Android 16에서도 targetSdk 33 피해자는 경고만 남긴 채 같은 결과가 났다. 받은 URI를 대신 읽어 주는 공유 대상은 고치다가 정상 공유까지 막는 실수를 한 번 거쳐서 바로잡았다."
+excerpt: "무권한 앱이 mutable 암시적 PendingIntent에 data와 FLAG_GRANT_READ_URI_PERMISSION을 채워 보내자 피해자의 비공개 provider 읽기 grant가 공격자 UID 앞으로 기록됐고, Android 16에서도 targetSdk 33 피해자는 경고만 남긴 채 같은 결과가 났다. 받은 URI를 대신 읽어 주는 공유 대상은 고치다가 정상 공유까지 막았고, provider 소유 UID를 허용하는 줄을 더해 호출자 자신의 URI만은 다시 통과시켰다."
 ---
 
 [앞 글](/posts/android-lab-p1c18-contentprovider-fileprovider/)에서는 provider를 export해 둔 탓에 생기는 유출을 봤다. provider를 export하지 않아도 `android:grantUriPermissions`를 켜 두면 주인이 URI 하나씩 남에게 읽기 권한을 내줄 수 있다. 그런데 그 grant는 누구 이름으로 나가는가. PendingIntent는 만든 앱의 신원으로 실행되는 토큰이고, URI grant는 Intent를 보내는 쪽의 신원으로 발급된다. 둘이 만나면 공격자가 피해자의 이름으로 피해자의 파일 읽기 권한을 자기에게 발급하게 할 수 있다. 반대 방향도 있다. 피해자가 공격자가 건넨 URI를 제 권한으로 열어 주면 피해자가 대리인 노릇을 한다(confused deputy).
@@ -46,7 +46,7 @@ mkapk apps/victim out/pilab-t34.apk --key debug --min 26 --target 34
 mkapk apps/attacker out/piatk.apk --key attacker --min 26 --target 33
 ```
 
-본 실험은 Android 13 에뮬레이터(API 33, 빌드 `TE1A.240213.009`, 보안 패치 2024-03-01, userdebug, SELinux Enforcing)에서 돌렸고, `adb unroot`로 셸을 uid 2000으로 내려 두었다. 버전 비교는 Android 16 에뮬레이터(API 36, `BE2A.250530.026.F3`)에서 했다. 캡처에 나오는 `$S`는 `export S=emulator-5600`처럼 에뮬레이터 시리얼을 담은 변수다.
+실험은 대부분 Android 13 에뮬레이터(API 33, 빌드 `TE1A.240213.009`, 보안 패치 2024-03-01, userdebug, SELinux Enforcing)에서 돌렸고, `adb unroot`로 셸을 uid 2000으로 내려 두었다. 버전 비교는 Android 16 에뮬레이터(API 36, `BE2A.250530.026.F3`)에서 했는데, 이쪽은 셸을 root로 둔 채 돌렸다(앱 간 grant와 BAL 판정은 셸 UID와 무관한 `am start` 경로다). 캡처에 나오는 `$S`는 `export S=emulator-5600`처럼 에뮬레이터 시리얼을 담은 변수다.
 
 ## 플래그 없이 만들면 생성부터 실패한다
 
@@ -108,7 +108,7 @@ new Handler().postDelayed(new Runnable() {
 
 이렇게 합쳐진 Intent를 시스템은 PendingIntent를 만든 앱의 UID로 시작한다. [`PendingIntentRecord.sendInner`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/PendingIntentRecord.java#501)가 `startActivityInPackage(uid, …)`를 부를 때 넘기는 `uid`가 생성자의 것이다. URI grant 검사는 "보내는 쪽이 이 URI를 읽을 수 있는가"를 묻는데, 보내는 쪽이 provider 주인인 피해자이니 통과하고, grant는 공격자 UID 앞으로 기록된다.
 
-예상 밖이었던 값이 하나 있다. 설치 직후 첫 실행에서 `HelperActivity`가 찍은 `getCreatorPackage()`는 `null`, `getCreatorUid()`는 -1이었다. 같은 기기에서 바로 다음에 돌린 실험에서는 `io.seika.pilab`/10179가 나왔다. 하이재크 직후 `dumpsys package queries`를 보면 두 앱이 "queryable via interaction" 항목에 서로를 올려 두고 있었다. 공격자 앱은 targetSdk 33에 `<queries>`가 없으니, 첫 상호작용 전에는 피해자가 보이지 않아 생성자 정보가 걸러졌다가 이 상호작용으로 보이게 된 것과 맞아떨어진다. 다만 실험 전 스냅샷도, `<queries>`를 넣고 빼는 대조도 하지 않았으니 원인을 확정하지는 못했다. Android 16에서는 재설치와 `pm clear` 뒤 매번 `null`이었고 이유는 따로 보지 않았다. 어쨌든 공격 자체에는 생성자 정보가 필요 없었다.
+예상 밖이었던 값이 하나 있다. 설치 직후 첫 실행에서 `HelperActivity`가 찍은 `getCreatorPackage()`는 `null`, `getCreatorUid()`는 -1이었다. 같은 기기에서 바로 다음에 돌린 실험에서는 `io.seika.pilab`/10179가 나왔다. 그래서 하이재크 앞뒤로 `adb shell dumpsys package queries`를 떠 두었다. 설치만 끝난 상태의 덤프에는 `io.seika.piatk`라는 문자열이 아예 없었고, "queryable via interaction" 항목에도 두 앱을 서로 잇는 줄은 없었다(pilab은 시스템 패키지 묶음 아래에만 한 번 나왔다). 하이재크 직후에는 같은 항목에 `io.seika.pilab:` 아래 `io.seika.piatk`, `io.seika.piatk:` 아래 `io.seika.pilab`이 올라와 있었다. 공격자 앱은 targetSdk 33에 `<queries>`가 없으니, 첫 상호작용 전에는 피해자가 보이지 않아 생성자 정보가 걸러졌다가 이 상호작용으로 보이게 된 것으로 보인다. `<queries>`를 넣고 빼는 대조는 하지 않았으니 원인을 확정하지는 못했다. Android 16에서는 재설치와 `pm clear` 뒤 매번 `null`이었고 이유는 따로 보지 않았다. 어쨌든 공격 자체에는 생성자 정보가 필요 없었다.
 
 ## fill-in이 멈추는 자리
 
@@ -144,15 +144,25 @@ grant를 허용하지 않는 provider로 겨눈 경우는 시스템이 막았다
 
 ## Android 14 이후에도 targetSdk가 정한다
 
-[Android 14 동작 변경 문서](https://developer.android.com/about/versions/14/behavior-changes-14#safer-intents)는 targetSdk 34 이상 앱이 mutable 암시적 PendingIntent를 만들면 시스템이 예외를 던진다고 적고 있다. 그 차단이 기기 버전으로 걸리는지 앱의 targetSdk로 걸리는지 보려고 Android 16 에뮬레이터에 같은 targetSdk 33 피해자를 올렸다. 이 이미지는 처음 부팅한 상태라 체인이 느려서, 처음에 `sleep 3`으로 잡았을 때는 로그가 아직 안 나와 있었다. 대기를 15초로 늘리고 logcat 버퍼를 `logcat -G 4M`으로 키운 뒤(캡처 밖에서 한 번 실행) 다시 돌렸다.
+[Android 14 동작 변경 문서](https://developer.android.com/about/versions/14/behavior-changes-14#safer-intents)는 targetSdk 34 이상 앱이 mutable 암시적 PendingIntent를 만들면 시스템이 예외를 던진다고 적고 있다. 그 차단이 기기 버전으로 걸리는지 앱의 targetSdk로 걸리는지 보려고 Android 16 에뮬레이터에 같은 targetSdk 33 피해자를 올렸다. 이 이미지는 처음 부팅한 상태라 체인이 느려서, 처음에 `sleep 3`으로 잡았을 때는 로그가 아직 안 나와 있었다. 대기를 15초로 늘리고 logcat 버퍼를 `logcat -G 4M`으로 키운 뒤(캡처 밖에서 한 번 실행) 다시 돌렸다. grep 필터도 처음에는 `PendingIntent`라는 단어를 통째로 걸었더니 Google 서비스 쪽 `ctxmgr`, `AnomalyConfigLogger` 줄이 섞여 들어와서, 경고 태그 `W/PendingIntent`와 BAL 줄만 남기도록 좁혔다.
+
+```bash
+adb -s $S shell getprop ro.build.version.sdk
+adb -s $S install -r out/pilab.apk
+adb -s $S install -r out/piatk.apk
+adb -s $S logcat -c
+adb -s $S shell am start --activity-clear-task -n io.seika.pilab/.EmitActivity --es mode mutable-implicit
+sleep 15
+adb -s $S logcat -d -v tag | grep -E "PILAB|PIATK|^W/PendingIntent|BAL hardening" | grep -vE '^W/PendingIntent:[[:space:]]+at ' | cut -c1-300
+```
 
 ![API 36 기기, getprop ro.build.version.sdk 36, targetSdk 33 피해자 mutable-implicit 실행 뒤 W/PendingIntent "New mutable implicit PendingIntent: pkg=io.seika.pilab ... This will be blocked once the app targets U+", E/ActivityTaskManager "With Android 14 BAL hardening this activity start will be blocked if the PI sender upgrades target_sdk to 34+", LeakActivity myUid=10217, LeakActivity read -> pilab-secret-7311](/assets/img/android-mastery/p1c19/10-aux36-target33.png)
 
 Android 16에서도 targetSdk 33 앱은 그대로 뚫렸다. 생성 시점에 `W/PendingIntent`로 "This will be blocked once the app targets U+" 경고가 찍히고, 시작 시점에 `E/ActivityTaskManager`가 백그라운드 Activity 시작(BAL) 강화 관련으로 "With Android 14 BAL hardening this activity start will be blocked if the PI sender upgrades target_sdk to 34+"를 남겼지만, 시작은 진행됐고 공격자 UID 10217이 `pilab-secret-7311`을 읽었다. 경고는 [`PendingIntent` 466행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/app/PendingIntent.java#466)의 조건 안에서, `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT`가 켜지지 않은 앱에만 [473행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/app/PendingIntent.java#473)의 `Log.w`로 찍는다.
 
-같은 피해자를 targetSdk 34로 다시 빌드해 올렸다. 이번에는 `mutable-implicit` 생성 자체가 `IllegalArgumentException`으로 실패했다. 이어서 `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT`(0x01000000)를 더한 `mutable-unsafe`(플래그 `0x3000000`)로 만들자 PendingIntent가 생성됐고, 하이재크가 똑같이 재현됐다. 이 실행에서는 앞 실험의 `LeakActivity` 태스크가 앞으로 불려 나오기만 해서 `onCreate` 로그가 안 찍혔기 때문에, `pm clear`와 `am force-stop io.seika.piatk`를 넣었다.
+같은 피해자를 targetSdk 34로 다시 빌드해 올렸다(`out/pilab-t34.apk`, 설치 뒤 `dumpsys package io.seika.pilab`에 `targetSdk=34`). 이번에는 `mutable-implicit` 생성 자체가 `IllegalArgumentException`으로 실패했다. 이어서 `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT`(0x01000000)를 더한 `mutable-unsafe`(플래그 `0x3000000`)로 만들자 PendingIntent가 생성됐고, 하이재크가 똑같이 재현됐다. 처음 돌렸을 때는 앞 실험의 `LeakActivity` 태스크가 앞으로 불려 나오기만 하고 `onCreate` 로그가 안 찍혀서, 공격자 앱에 `pm clear`와 `am force-stop`을 넣었다.
 
-![API 36, 설치 Success 뒤 dumpsys package io.seika.pilab에 targetSdk=34, pm clear io.seika.piatk, mutable-implicit에서 W/PILAB Emit getActivity failed: IllegalArgumentException "Targeting U+ (version 34 and above) disallows creating or retrieving a PendingIntent with FLAG_MUTABLE, an implicit Intent", 이어서 mutable-unsafe flags=0x3000000 생성 성공, LeakActivity myUid=10217 read -> pilab-secret-7311](/assets/img/android-mastery/p1c19/11-aux36-target34.png)
+![API 36, pm clear 결과 Success 다음 logcat -c, mutable-implicit 실행, sleep 15, am force-stop io.seika.piatk, mutable-unsafe 실행 뒤 logcat: Emit targetSdk=34 mutable-implicit에서 W/PILAB Emit getActivity failed: IllegalArgumentException "Targeting U+ (version 34 and above) disallows creating or retrieving a PendingIntent with FLAG_MUTABLE, an implicit Intent", 이어서 mutable-unsafe flags=0x3000000 생성 성공, LeakActivity myUid=10217 read -> pilab-secret-7311](/assets/img/android-mastery/p1c19/11-aux36-target34.png)
 
 이 예외는 system_server의 [`ActivityManagerService` 5509행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/services/core/java/com/android/server/am/ActivityManagerService.java#5509)의 검사에 걸리고, 같은 블록의 5530행에서 던진다. 앱별 compat 변경 `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT`(236704164)가 켜진 앱, 곧 targetSdk 34 이상인 앱에만 해당한다. "암시적"의 정의는 [`isNewMutableDisallowedImplicitPendingIntent`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/app/PendingIntent.java#478) 안에서 컴포넌트와 패키지가 둘 다 null인 경우이고([488행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/app/PendingIntent.java#488)), `FLAG_NO_CREATE`나 `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT`가 있으면 대상에서 빠진다. base Intent에 `setPackage`만 해도 이 검사는 통과한다. 소스대로라면 그때는 앞에서 본 패키지 fill-in 규칙(이미 있으면 안 바뀐다) 때문에 공격자가 목적지를 자기 앱으로 돌리지 못하겠지만, 이 조합은 따로 돌려 보지 않았다.
 
@@ -199,7 +209,7 @@ boolean allowed(Uri u) { return u != null; }
 
 `SafeImportActivity`는 처음에 이렇게 판단하도록 썼다. 스킴은 `content`만 받는다. authority가 가리키는 provider가 내 앱 것이면 거부한다. 마지막으로 호출자 UID가 그 URI를 읽을 수 있는지 `Context.checkUriPermission(uri, -1, callerUid, FLAG_GRANT_READ_URI_PERMISSION)`로 확인한다. 호출자가 못 읽는 URI를 내가 대신 읽어 주면 안 된다는 생각이다.
 
-두 버전의 APK를 번갈아 설치하며 같은 세 요청을 보냈다. 첫 버전 `out/v1/pilab.apk`는 아래 `check` 메서드에서 provider 소유 UID를 허용하는 줄(`SafeImportActivity.java` 34행)이 없던 소스를 앞의 빌드와 같은 옵션(`mkapk apps/victim out/v1/pilab.apk --key debug --min 26 --target 33`)으로 빌드한 것이다. 이 버전에서 내 provider URI와 `file://` 공격은 막혔다. 그런데 공격자 앱이 자기 provider(`io.seika.piatk.files`)의 URI를 grant까지 붙여 정상적으로 공유한 경우도 `caller uid 10180 cannot read it`으로 막혔다.
+두 버전의 APK를 번갈아 설치하며 같은 세 요청을 보냈다. 첫 버전 `out/v1/pilab.apk`는 아래 `check` 메서드에서 provider 소유 UID를 허용하는 줄(`SafeImportActivity.java` 34행)이 없던 상태로 처음 빌드한 `out/pilab.apk`(빌드 옵션은 앞과 같다)를, 다시 빌드하기 전에 `out/v1/`로 복사해 둔 것이다. 이 버전에서 내 provider URI와 `file://` 공격은 막혔다. 그런데 공격자 앱이 자기 provider(`io.seika.piatk.files`)의 URI를 grant까지 붙여 정상적으로 공유한 경우도 `caller uid 10180 cannot read it`으로 막혔다.
 
 ![adb install -r out/v1/pilab.apk 뒤 첫 SafeImportActivity: safe-content는 reason=own provider io.seika.pilab.SecretProvider로 차단, safe-file은 reason=scheme file로 차단, safe-own의 content://io.seika.piatk.files/shared.txt +grant도 reason=caller uid 10180 cannot read it으로 차단되어 result code=0 preview=null](/assets/img/android-mastery/p1c19/09-device-safe-import-v1.png)
 
@@ -248,7 +258,7 @@ provider 쪽에서는 grant가 꼭 필요한 provider에만 허용한다. [`<pro
 # 공격자 UID 앞으로 피해자 URI grant가 생겼는지
 adb -s $S shell dumpsys activity permissions | grep -A2 "holds:"
 # send()는 조용하니 실패 이유는 system_server 로그에서 본다
-adb -s $S logcat -d -v tag | grep -E "does not allow granting|PendingIntent"
+adb -s $S logcat -d -v tag | grep -E "does not allow granting|^W/PendingIntent|BAL hardening"
 ```
 
 *다음 글: [Deep Link·App Link·WebView 실습](/posts/android-lab-p1c20-deeplink-applink-webview/)*
