@@ -28,7 +28,7 @@ excerpt: "Android 13 에뮬레이터에서 권한 없는 exported provider는 �
 | `io.seika.cplab.files` | exported, 권한 없음 | 커스텀 `openFile`, 경로 검사 없음 |
 | `io.seika.cplab.files.safe` | exported, 권한 없음 | canonical 경로 검사 추가 |
 
-공격 쪽은 다른 키로 서명한 `io.seika.cpattack`(권한 하나 없이 `<queries>`로 피해자 패키지만 선언)과, 같은 코드에서 `<queries>`만 뺀 `io.seika.cpblind`다. FileProvider 실험용으로 같은 코드를 androidx.core 1.12.0과 1.16.0에 각각 묶은 `io.seika.fpold`, `io.seika.fpnew`를 따로 만들었고, exported 기본값을 보려고 `android:exported`를 아예 적지 않은 provider를 targetSdk 16과 17로 빌드한 `io.seika.cpleg16`, `io.seika.cpleg17`도 설치했다.
+공격 쪽은 다른 키로 서명한 `io.seika.cpattack`(권한 하나 없이 `<queries>`로 피해자 패키지들만 선언)과, 같은 코드에서 `<queries>`만 뺀 `io.seika.cpblind`다. FileProvider 실험용으로 같은 코드를 androidx.core 1.12.0과 1.16.0에 각각 묶은 `io.seika.fpold`, `io.seika.fpnew`를 따로 만들었고, exported 기본값을 보려고 `android:exported`를 아예 적지 않은 provider를 targetSdk 16과 17로 빌드한 `io.seika.cpleg16`, `io.seika.cpleg17`도 설치했다.
 
 외부 앱 입장에서 provider 목록은 APK 매니페스트에서 바로 나온다. 호스트에서 `aapt dump xmltree out/cplab.apk AndroidManifest.xml`의 provider 항목을 보면 `.users.private`만 `android:exported=(type 0x12)0x0`이고 나머지는 `0xffffffff`(true)이며, `.users.guarded`에만 `readPermission`과 `writePermission`이 붙어 있다.
 
@@ -64,11 +64,18 @@ adb -s $S logcat -d -v tag -s CPATK:I CPLAB:I
 
 provider 쪽 로그 `I/CPLAB: vuln query, caller=io.seika.cpattack sql=SELECT * FROM users`가 호출자 패키지를 그대로 보여 준다. admin의 email이 `attacker@lab.test`로 바뀌어 있는 것은 아래 SQL 주입 실험의 `update`가 먼저 돌았기 때문이다.
 
-"아무 앱이나"에는 단서가 하나 붙는다. targetSdk 30 이상인 앱은 패키지 가시성 때문에 `<queries>` 없이는 provider를 찾지도 못한다. `<queries>`만 뺀 `cpblind`(uid 10186)로 같은 요청을 보내면 세 authority 모두 `E/ActivityThread: Failed to find provider info for io.seika.cplab.users`가 찍히고 `ContentResolver.query`가 `null`을 돌려준다(실행은 `adb -s $S shell am start -S -W -n io.seika.cpblind/io.seika.cpattack.Main --es mode query`, [`ActivityThread.java` 7086행 부근](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/app/ActivityThread.java#7080)).
+"아무 앱이나"에는 단서가 하나 붙는다. targetSdk 30 이상인 앱은 패키지 가시성 때문에 `<queries>` 없이는 provider를 찾지도 못한다. `<queries>`만 뺀 `cpblind`(uid 10186)로 같은 요청을 보내면 세 authority 모두 `E/ActivityThread: Failed to find provider info for io.seika.cplab.users`가 찍히고 `ContentResolver.query`가 `null`을 돌려준다([`ActivityThread.java` 7086행 부근](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/app/ActivityThread.java#7080)). 아래 캡처는 이렇게 돌렸다. `ActivityThread`의 오류 줄을 보려면 logcat 필터에 `ActivityThread:E`를 더해야 한다.
+
+```bash
+adb -s $S logcat -c
+adb -s $S shell am start -S -W -n io.seika.cpblind/io.seika.cpattack.Main --es mode query
+adb -s $S shell sleep 2
+adb -s $S logcat -d -v tag -s CPATK:I ActivityThread:E
+```
 
 ![<queries>가 없는 io.seika.cpblind uid=10186이 io.seika.cplab.users, .users.guarded, .users.private 각각에 대해 E/ActivityThread Failed to find provider info를 받고 query 결과가 null (provider not found)인 logcat](/assets/img/android-mastery/p1c18/12-device-blind.png)
 
-`<queries>`가 막는 것은 provider를 찾는 단계뿐이다. 매니페스트에 `<package android:name="io.seika.cplab" />` 한 줄을 넣은 `cpattack`은 그 뒤 exported·권한 검사까지 통과해 위에서처럼 그대로 읽었다.
+`<queries>`가 막는 것은 provider를 찾는 단계뿐이다. `<queries>`에 cplab 패키지를 적은 `<package>` 줄을 넣은 `cpattack`(FileProvider 실험용으로 fpold·fpnew도 함께 적었다)은 그 뒤 exported·권한 검사까지 통과해 위에서처럼 그대로 읽었다.
 
 ## 호출자가 WHERE 절을 쓰는 provider에서 SQL 주입이 뜻하는 것
 
@@ -96,7 +103,7 @@ provider 쪽 로그 `I/CPLAB: vuln query, caller=io.seika.cpattack sql=SELECT * 
 
 `SQLiteDatabase.query`는 [`queryWithFactory`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/database/sqlite/SQLiteDatabase.java#1556)에서 [`SQLiteQueryBuilder.buildQueryString`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/database/sqlite/SQLiteQueryBuilder.java#373)으로 SQL을 만든다. 373~399행을 보면 projection의 열 이름은 `appendColumns`로, selection은 `" WHERE "` 뒤에 손대지 않고 붙는다. 로그에 찍히는 SQL은 provider가 같은 함수로 만든 문자열이라 실제 실행된 문장과 같다.
 
-그래서 이 provider에서 문제가 되는 건 provider가 내주려던 범위 밖이다. `users`만 열어 둔 provider로 `secrets` 테이블을 읽을 수 있는지, URI 경로처럼 원래 값으로만 쓰여야 할 입력이 SQL 문법이 되는지를 봤다.
+이 provider에서 문제가 되는 건 provider가 내주려던 범위 밖이다. `users`만 열어 둔 provider로 `secrets` 테이블을 읽을 수 있는지, URI 경로처럼 원래 값으로만 쓰여야 할 입력이 SQL 문법이 되는지를 봤다.
 
 ```bash
 adb -s $S logcat -c
@@ -112,9 +119,9 @@ adb -s $S logcat -d -v tag -s CPLAB:I
 
 selection에 붙인 `UNION SELECT _id,k,v,0 FROM secrets`는 `users`의 열 이름을 빌려 `Row: 0 _id=1, name=api_key, email=lab-apikey-0000-fake, token=0`으로 돌아왔다. projection 쪽은 `content`가 `:`로 열을 나누므로([Content.java 393행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/cmds/content/src/com/android/commands/content/Content.java#393)) `name:(SELECT v FROM secrets)`가 열 두 개가 되고, 두 번째 열이 모든 행에 API 키를 실어 왔다.
 
-세 번째가 고전적인 주입이다. 경로 세그먼트는 `Uri`가 퍼센트 디코딩해서 주므로 `x%27%20UNION…`은 provider 안에서 `x' UNION SELECT _id,k,v FROM secrets--`가 되고, 로그의 SQL은 `WHERE name = 'x' UNION SELECT _id,k,v FROM secrets--'`다. 끝의 따옴표는 주석으로 사라졌다. URI 경로로 이름 하나를 받는 코드라 selection처럼 SQL 입력으로 의식되지 않는다.
+세 번째는 URI 경로로 이름 하나를 받는 코드라 SQL 입력처럼 보이지 않지만 고전적인 주입이다. 경로 세그먼트는 `Uri`가 퍼센트 디코딩해서 주므로 `x%27%20UNION…`은 provider 안에서 `x' UNION SELECT _id,k,v FROM secrets--`가 되고, 로그의 SQL은 `WHERE name = 'x' UNION SELECT _id,k,v FROM secrets--'`다. 끝의 따옴표는 주석으로 사라졌다.
 
-쓰기도 막혀 있지 않았다. `.users`에는 읽기·쓰기 권한이 하나도 없어서 `update`가 그대로 통과했고, admin의 email이 `attacker@lab.test`가 된 값은 이후 모든 캡처에 남아 있다. `readPermission`만 달고 `writePermission`을 빠뜨린 provider는 따로 만들어 재지 않았다. 소스로 보면 쓰기도 같은 결과일 것으로 보인다. provider를 여는 단계에서는 [`ContentProviderHelper` 1537~1541행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ContentProviderHelper.java#1537)이 `writePermission`이 `null`이면 읽기 권한 검사에 실패해도 provider를 열어 주고, [`ContentProvider.enforceWritePermissionInner`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/content/ContentProvider.java#885)는 쓰기 권한이 `null`이면 `allowDefaultWrite`를 참으로 두고(911행) 그대로 허용한다(935행).
+쓰기도 막혀 있지 않았다. `.users`에는 읽기·쓰기 권한이 하나도 없어서 `update`가 그대로 통과했고, admin의 email이 `attacker@lab.test`가 된 값은 이후 모든 캡처에 남아 있다. `readPermission`만 달고 `writePermission`을 빠뜨린 provider는 따로 만들어 재지 않았다. 소스상으로는 쓰기도 같은 결과가 나와야 한다. provider를 여는 단계에서는 [`ContentProviderHelper` 1537~1541행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ContentProviderHelper.java#1537)이 `writePermission`이 `null`이면 읽기 권한 검사에 실패해도 provider를 열어 주고, [`ContentProvider.enforceWritePermissionInner`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/content/ContentProvider.java#885)는 쓰기 권한이 `null`이면 `allowDefaultWrite`를 참으로 두고(911행) 그대로 허용한다(935행).
 
 ## setStrict 하나로는 서브쿼리가 남았다
 
@@ -328,7 +335,7 @@ grant 전에는 두 버전 모두 `not exported from UID 10180`(`10181`)로 막�
 
 [`isPathPrefixMatch`(Uri.java 2429~2446행)](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/net/Uri.java#2429)는 디코딩된 경로 세그먼트를 앞에서부터 비교한다. `docs/..%2Fdocs-private%2Fsecret.txt`의 세그먼트는 `docs`와 `../docs-private/secret.txt` 두 개이고, 첫 세그먼트가 grant의 `docs`와 같으니 통과다. 시스템은 세그먼트 안의 `../`를 해석하지 않으므로, 나머지 판정은 FileProvider의 `getFileForUri`가 맡는다.
 
-grant 기록도 확인했다. 위 두 명령을 마친 직후의 `dumpsys activity permissions`에는 fpnew 쪽 `UriPermission{… content://io.seika.fpnew.files/docs [user 0] [prefix]}` 하나만 있었다. 이 grant는 받은 액티비티가 소유하는데, 두 번째 `am start -S`가 `cpattack`을 강제 종료하면서 fpold에서 받은 첫 grant가 함께 사라진 것으로 보인다. 그래서 fpold grant만 다시 받고 바로 덤프했다.
+grant 기록도 확인했다. 위 두 명령을 마친 직후의 `dumpsys activity permissions`에서 seika 패키지 관련 grant는 fpnew 쪽 `UriPermission{… content://io.seika.fpnew.files/docs [user 0] [prefix]}` 하나뿐이었다. 이 grant는 받은 액티비티가 소유하는데, 두 번째 `am start -S`가 `cpattack`을 강제 종료하면서 fpold에서 받은 첫 grant가 함께 사라진 것으로 보인다. 그래서 fpold grant만 다시 받고 바로 덤프했다.
 
 ```bash
 adb -s $S shell am start -S -W -n io.seika.cpattack/.Main --es mode grant --es target io.seika.fpold | grep Status
@@ -346,7 +353,7 @@ adb -s $S shell dumpsys activity permissions | tr -d '\r' | grep -B1 -A6 seika
 
 grant가 걸린 URI는 `docs`까지이고 `[prefix]` 표시가 붙어 있다. `docs-private`에 대한 grant는 어디에도 없다. 그런데도 옆 폴더 파일이 열린 것은 시스템의 세그먼트 비교와 1.12.0 FileProvider의 문자열 접두사 검사가 둘 다 이 URI를 통과시켰기 때문이다.
 
-`root-path`는 이 버그와 별개의 위험이다. androidx 문서의 [클래스 설명](https://developer.android.com/reference/androidx/core/content/FileProvider)에는 `files-path`, `cache-path`, `external-path` 같은 태그만 나오고 `root-path`는 없지만, 소스에는 [`TAG_ROOT_PATH = "root-path"`(358행)와 `DEVICE_ROOT = new File("/")`(371행)](https://android.googlesource.com/platform/frameworks/support/+/09cc9cba1038cd29b8dd06d859cc69f8c121c113/core/core/src/main/java/androidx/core/content/FileProvider.java#358)가 있다. 위 SelfTest 캡처에서 `.wide` provider는 두 버전 모두 `getUriForFile`로 `session.xml`을 `content://io.seika.fpnew.wide/root/data/data/io.seika.fpnew/shared_prefs/session.xml` 같은 URI로 바꿔 줬다. 읽기는 같은 꼴의 다른 URI, `…/root/data/user/0/io.seika.fpnew/shared_prefs/session.xml`로 했고 성공했다(`getUriForFile`이 돌려준 URI 자체를 열어 보지는 않았다). `root-path`의 root는 `/`라서 `belongsToRoot`를 고친 1.16.0도 이 URI를 통과시켰다. 그 URI가 밖으로 나가느냐는 앱이 grant를 어떻게 주느냐에 달렸다.
+`root-path`는 이 버그와 별개의 위험이다. androidx 문서의 [클래스 설명](https://developer.android.com/reference/androidx/core/content/FileProvider)에는 `files-path`, `cache-path`, `external-path` 같은 태그만 나오고 `root-path`는 없지만, 소스에는 [`TAG_ROOT_PATH = "root-path"`(358행)와 `DEVICE_ROOT = new File("/")`(371행)](https://android.googlesource.com/platform/frameworks/support/+/09cc9cba1038cd29b8dd06d859cc69f8c121c113/core/core/src/main/java/androidx/core/content/FileProvider.java#358)가 있다. 위 SelfTest 캡처에서 `.wide` provider는 두 버전 모두 `getUriForFile`로 `session.xml`을 `content://io.seika.fpnew.wide/root/data/data/io.seika.fpnew/shared_prefs/session.xml` 같은 URI로 바꿔 줬다. 읽기는 같은 꼴의 다른 URI, `…/root/data/user/0/io.seika.fpnew/shared_prefs/session.xml`로 했고 성공했다(`getUriForFile`이 돌려준 URI 자체를 열어 보지는 않았다). `root-path`의 root는 `/`라서 `belongsToRoot`를 고친 1.16.0도 이 URI를 통과시켰다. 이 URI가 실제로 다른 앱 손에 들어가는지는 앱이 wide provider URI에 grant를 붙여 내보내는지에 달렸는데, 이번에는 그 경로를 따로 재지 않았다.
 
 ## exported 기본값을 정하는 건 targetSdk다
 
@@ -362,7 +369,7 @@ grant가 걸린 URI는 `docs`까지이고 `[prefix]` 표시가 붙어 있다. `d
                             targetSdkVersion < Build.VERSION_CODES.JELLY_BEAN_MR1));
 ```
 
-그래서 API 33 기기에 `exported`를 적지 않은 같은 provider를 targetSdk 16과 17로 설치해 셸에서 읽어 봤다. 처음 결과는 예상과 달랐다.
+API 33 기기에 `exported`를 적지 않은 같은 provider를 targetSdk 16과 17로 설치해 셸에서 읽어 봤다. 처음 결과는 예상과 달랐다.
 
 ```bash
 adb -s $S shell dumpsys package io.seika.cpleg16 | grep -m1 targetSdk
@@ -381,7 +388,7 @@ targetSdk 17은 예상대로 `not exported`였지만 16에서는 권한 거부 �
 
 ![검토 수락 뒤: cpleg16(targetSdk=16)은 Row: 0 pkg=io.seika.cpleg16, targetSdk=16, note=no android:exported in manifest를 돌려주고, cpleg17(targetSdk=17)은 여전히 not exported from UID 10184로 거부된 터미널](/assets/img/android-mastery/p1c18/11-device-legacy-exported.png)
 
-검토를 마친 targetSdk 16 provider는 셸에 행을 내줬다. 매니페스트에 `exported`를 적지 않은 같은 코드가 targetSdk 한 단계 차이로 열리고 닫힌다. 오래된 앱을 다시 빌드하며 targetSdk를 17 이상으로 올리면 이 provider는 닫힌다. Android 14부터는 targetSdk 23 미만 앱의 설치 자체를 막는다고 [동작 변경 문서](https://developer.android.com/about/versions/14/behavior-changes-all#minimum-target-api-level)에 나와 있다. 이번 API 33 기기에서는 targetSdk 16 앱 설치가 `Success`로 끝났고, API 34 이상에서 설치가 막히는지는 확인하지 않았다.
+검토를 마친 targetSdk 16 provider는 셸에 행을 내줬다. 매니페스트에 `exported`를 적지 않은 같은 코드가 targetSdk 16에서는 열리고 17에서는 닫혔으니, 오래된 앱을 targetSdk 17 이상으로 다시 빌드하기만 해도 이 provider는 닫힌다. Android 14부터는 targetSdk 23 미만 앱의 설치 자체를 막는다고 [동작 변경 문서](https://developer.android.com/about/versions/14/behavior-changes-all#minimum-target-api-level)에 나와 있다. 이번 API 33 기기에서는 targetSdk 16 앱 설치가 `Success`로 끝났고, API 34 이상에서 설치가 막히는지는 확인하지 않았다.
 
 ## 막는 방법과 막혔는지 확인하는 방법
 
