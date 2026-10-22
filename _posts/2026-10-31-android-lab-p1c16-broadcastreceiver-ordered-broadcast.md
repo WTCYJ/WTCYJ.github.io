@@ -10,7 +10,7 @@ excerpt: "Android 13 에뮬레이터에서 extra로 발신자를 확인하던 ex
 
 [앞 글](/posts/android-lab-p1c15-activity-intent-injection/)에서는 exported 액티비티에 Intent를 밀어 넣었다. 브로드캐스트 리시버도 같은 문으로 들어온다. 리시버는 자기에게 온 브로드캐스트를 누가 보냈는지 알 길이 거의 없어서 위조에 약하다. 반대로 앱이 보내는 쪽일 때는 받는 쪽을 정하지 않으면 다른 앱이 끼어들고, ordered broadcast라면 결과까지 고쳐 쓴다. 피해자 앱과 공격자 앱을 직접 만들어 양쪽을 다 돌렸다.
 
-주 기기는 Android 13 에뮬레이터(API 33, x86_64, userdebug, 빌드 TE1A.240213.009, 보안 패치 2024-03-01)다. userdebug라 `adb root`가 되고 실습 환경은 root 셸로 올라와 있었는데, root 셸(uid 0)에서는 권한 검사가 전부 통과해 버려서 `adb unroot`로 uid 2000으로 돌려 놓고 시작했다. Android 16의 바뀐 규칙을 보려고 API 36 에뮬레이터(빌드 BE2A.250530.026.F3, 패치 2025-07-05)를 따로 띄웠고, 거기서는 `aflags`를 읽어야 해서 root를 유지했다. 명령의 `$S`는 첫 명령 블록에서 정한 에뮬레이터 시리얼이다. 소스 링크는 Android 13은 frameworks/base `android-13.0.0_r84`, Android 16은 `android-16.0.0_r2` 태그로 걸고, Android 14 호환성 변경 정의는 `android-14.0.0_r1`, SMS 디스패치는 frameworks/opt/telephony `android-13.0.0_r84`에서 가져왔다. 13과 16 태그는 측정한 에뮬레이터 빌드와 같은 빌드는 아니고 가장 가까운 공개 태그다.
+주 기기는 Android 13 에뮬레이터(API 33, x86_64, userdebug, 빌드 TE1A.240213.009, 보안 패치 2024-03-01)다. userdebug라 `adb root`가 되고 실습 환경은 root 셸로 올라와 있었는데, root 셸(uid 0)에서는 권한 검사가 전부 통과해 버려서 `adb unroot`로 uid 2000으로 돌려 놓고 시작했다. Android 16의 바뀐 규칙을 보려고 API 36 에뮬레이터(빌드 BE2A.250530.026.F3, 패치 2025-07-05)를 따로 띄웠고, 거기서는 `aflags`를 읽어야 해서 root를 유지했다. 명령의 `$S`는 Android 13 절에서는 API 33 에뮬레이터(`emulator-5602`), Android 16 캡처에서는 API 36 에뮬레이터(여기서는 `emulator-5622`)의 시리얼이다. 소스는 측정한 빌드와 가장 가까운 공개 태그(13은 android-13.0.0_r84, 16은 android-16.0.0_r2)로 링크했다.
 
 ## 피해자, 공격자, 그리고 매니페스트에 안 보이는 리시버
 
@@ -43,7 +43,7 @@ public class CtrlReceiver extends BroadcastReceiver {
 }
 ```
 
-공격자 `io.seika.bcastatk`는 다른 키로 서명했다. 매니페스트에 피해자의 서명 권한 `INTERNAL`을 `uses-permission`으로 적어 두었는데, 서명이 다르니 설치해도 부여되지 않는다. 이게 뒤에서 쓸모가 있다. 앱들은 javac, d8, aapt, zipalign, apksigner를 차례로 부르는 작은 빌드 스크립트로 만들었다.
+공격자 `io.seika.bcastatk`(targetSdk 33)는 다른 키로 서명했다. 매니페스트에 피해자의 서명 권한 `INTERNAL`을 `uses-permission`으로 적어 두었는데, 서명이 다르니 설치해도 부여되지 않는다. 이게 뒤에서 쓸모가 있다. 앱들은 javac, d8, aapt, zipalign, apksigner를 차례로 부르는 작은 빌드 스크립트로 만들었다.
 
 [매니페스트 매핑](/posts/android-lab-p1c06-manifest-attack-surface-mapping/)에서 쓴 매퍼를 피해자 APK에 돌리면 리시버 쪽은 이렇게 나온다.
 
@@ -60,7 +60,7 @@ public class CtrlReceiver extends BroadcastReceiver {
 피해자의 `MainActivity`를 띄워 둔 채로 셸에서 보냈다. 컴포넌트를 지정하지 않은 암시적 브로드캐스트로 한 번, `-n`으로 리시버를 지정하되 extra 없이 한 번, `-n`에 `origin`까지 넣어 한 번이다.
 
 ```bash
-S=emulator-5600
+S=emulator-5602
 adb -s $S unroot
 sleep 3
 adb -s $S wait-for-device
@@ -78,7 +78,7 @@ adb -s $S logcat -d -v tag -s BCASTLAB BroadcastQueue | grep -E "BCASTLAB|io\.se
 
 ![API 33 에뮬레이터에서 adb shell id -u 결과 2000, MainActivity를 --ez reset true로 띄운 뒤 am broadcast 세 번. 세 번 모두 Broadcast completed: result=0. logcat에는 W/BroadcastQueue: Background execution not allowed: receiving Intent { act=io.seika.bcastlab.action.UNLOCK flg=0x400010 (has extras) } to io.seika.bcastlab/.CtrlReceiver, W/BCASTLAB: CtrlReceiver rejected origin=null sentFrom=n/a(sdk 33), I/BCASTLAB: CtrlReceiver UNLOCK accepted origin=push-server code=0000 sentFrom=n/a(sdk 33)](/assets/img/android-mastery/p1c16/03-device-forge-shell.png)
 
-`-n` 없이 보내면 매칭되는 exported 리시버가 전부 받는다고 생각했는데 틀렸다. 첫 번째 브로드캐스트는 `Background execution not allowed`로 버려졌고, 피해자 앱이 포그라운드에 떠 있었는데도 그랬다. Android 13의 [BroadcastQueue.java 1707~1733행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/BroadcastQueue.java#1707)이 매니페스트 리시버로 가는 브로드캐스트마다 `getAppStartModeLOSP()`를 묻는다. 여기서 넘기는 `alwaysRestrict` 인자가 true라 맨 앞의 `isPendingTopUid` 예외만 빼면 프로세스가 idle인지 따지지 않고 제한 판정으로 넘어가고([ActivityManagerService.java 6065~6091행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ActivityManagerService.java#6065)), targetSdk 26 이상 앱은 거기서 제한 모드를 받는다([같은 파일 5984~5990행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ActivityManagerService.java#5984)). 그다음 컴포넌트도 패키지도 지정되지 않았고 서명 권한도 요구하지 않는 브로드캐스트면 건너뛴다.
+`-n` 없이 보내면 매칭되는 exported 리시버가 전부 받는다고 생각했는데 틀렸다. 첫 번째 브로드캐스트는 `Background execution not allowed`로 버려졌고, 피해자 앱이 포그라운드에 떠 있었는데도 그랬다. Android 13의 [BroadcastQueue.java 1707~1733행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/BroadcastQueue.java#1707)이 매니페스트 리시버로 가는 브로드캐스트마다 `getAppStartModeLOSP()`를 묻는다. 여기서 넘기는 `alwaysRestrict` 인자가 true라 맨 앞의 `isPendingTopUid` 예외만 빼면 프로세스가 idle인지 따지지 않고 제한 판정으로 넘어가고([ActivityManagerService.java 6065~6097행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ActivityManagerService.java#6065)), targetSdk 26 이상 앱은 거기서 제한 모드를 받는다([같은 파일 5984~5990행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ActivityManagerService.java#5984)). 그다음 컴포넌트도 패키지도 지정되지 않았고 서명 권한도 요구하지 않는 브로드캐스트면 건너뛴다.
 
 ![android-13.0.0_r84 BroadcastQueue.java 1703~1735행. 1707행 if (!skip) 강조, 1708~1710행 mService.getAppStartModeLOSP(uid, packageName, targetSdkVersion, -1, true, false, false), 1721~1726행 FLAG_RECEIVER_EXCLUDE_BACKGROUND이거나 getComponent() == null && getPackage() == null && FLAG_RECEIVER_INCLUDE_BACKGROUND 없음 && !isSignaturePerm(r.requiredPermissions) 조건, 1729행 Slog.w "Background execution not allowed: receiving ", 1732행 skip = true](/assets/img/android-mastery/p1c16/20-src-a13-background-check.png)
 
@@ -90,14 +90,13 @@ Android 8에서 들어온 [암시적 브로드캐스트 제한](https://develope
 
 에뮬레이터 화면에서는 잠금이 풀려 있었다.
 
-![BcastLab MainActivity 주황색 화면. state: UNLOCKED, last change by: CtrlReceiver origin=push-server code=0000, at 02:03:28](/assets/img/android-mastery/p1c16/04-device-unlocked.png)
+![BcastLab MainActivity 주황색 화면. state: UNLOCKED, last change by: CtrlReceiver origin=push-server code=0000, at 04:02:55](/assets/img/android-mastery/p1c16/04-device-unlocked.png)
 
 ## 다른 키로 서명한 앱의 위조와 서명 권한 리시버
 
 셸은 uid 2000이라 일반 앱보다 권한이 많다. 공격자 앱의 `FireActivity`로 같은 브로드캐스트를 보내 봤다. `--es target ctrl`이면 `CtrlReceiver`로, `safe`면 `SafeCtrlReceiver`로 `origin=push-server`, `code=atk`를 담아 `sendBroadcast()`한다. 이어서 셸로도 `SafeCtrlReceiver`를 두드리고, 마지막으로 피해자 앱 자신이 `SafeCtrlReceiver`에 보내게 했다.
 
 ```bash
-adb -s $S shell am start -S -W -n io.seika.bcastlab/.MainActivity
 adb -s $S shell am start -n io.seika.bcastlab/.MainActivity --ez reset true
 adb -s $S logcat -c
 adb -s $S shell am start -n io.seika.bcastatk/.FireActivity --es target ctrl
@@ -111,13 +110,15 @@ adb -s $S logcat -d -v tag -s BCASTLAB BCASTATK BroadcastQueue | grep -E "BCASTL
 
 중간의 `sleep 1`은 처음에 없었다. `FireActivity`는 `onCreate()`에서 보내고 바로 `finish()`하는데, 두 번째 실행이 첫 인스턴스가 끝나기 전에 도착해 `intent has been delivered to currently running top-most instance`가 뜨고 SAFE 쪽은 아예 송신되지 않았다. 한 박자 쉬게 하고 다시 찍었다.
 
-다시 돌릴 때 두 군데서 더 걸렸다. 마지막 `sleep`이 2초였을 때는 `SafeCtrlReceiver UNLOCK accepted` 줄이 아직 찍히기 전에 logcat을 읽어 버려서 4초로 늘렸다. 그리고 결제 실험을 한 번 돌린 뒤라 `PayActivity`가 피해자 태스크 맨 위에 있으면 `am start -n .../.MainActivity --es send safe`가 `intent has been delivered to currently running top-most instance` 경고만 찍고 아무것도 보내지 않았다. 태스크만 앞으로 나오고 `MainActivity`의 `onNewIntent()`도 `onCreate()`도 불리지 않은 것이다. 그래서 첫 줄에 `am start -S`로 피해자 태스크를 새로 띄워 `MainActivity`를 맨 위에 두고 시작한다. 캡처에서 `--es send safe` 뒤에 같은 경고가 보이지만, 이때는 `MainActivity`가 맨 위라 `onNewIntent()`로 extra가 처리됐다.
+다시 돌릴 때 두 군데서 더 걸렸다. 마지막 `sleep`이 2초였을 때는 `SafeCtrlReceiver UNLOCK accepted` 줄이 아직 찍히기 전에 logcat을 읽어 버려서 4초로 늘렸다.
 
-![logcat 결과. I/BCASTATK: FireActivity sent io.seika.bcastlab.action.UNLOCK to io.seika.bcastlab/.CtrlReceiver origin=push-server uid=10180, 같은 앱이 SAFE_UNLOCK을 SafeCtrlReceiver로 보낸 줄, I/BCASTLAB: CtrlReceiver UNLOCK accepted origin=push-server code=atk, W/BroadcastQueue: Permission Denial: broadcasting Intent { act=...SAFE_UNLOCK flg=0x10 ... } from io.seika.bcastatk (pid=6541, uid=10180) to io.seika.bcastlab/.SafeCtrlReceiver requires io.seika.bcastlab.permission.CONTROL, 셸에 대한 같은 Permission Denial ... from null (pid=6701, uid=2000), 마지막으로 MainActivity sent ... shareIdentity=false와 SafeCtrlReceiver UNLOCK accepted origin=push-server](/assets/img/android-mastery/p1c16/05-device-forge-app-vs-perm.png)
+다른 하나는 결제 실험을 한 번 돌린 뒤라 `PayActivity`가 피해자 태스크 맨 위에 있으면 `am start -n .../.MainActivity --es send safe`가 `intent has been delivered to currently running top-most instance` 경고만 찍고 아무것도 보내지 않았다. 태스크만 앞으로 나오고 `MainActivity`의 `onNewIntent()`도 `onCreate()`도 불리지 않은 것이다. 그때는 `am start -S -W -n io.seika.bcastlab/.MainActivity`로 피해자 태스크를 새로 띄운 뒤 위 명령을 돌렸고, 앞 절의 셸 실험 바로 뒤에 돌리면 `MainActivity`가 이미 맨 위라 그럴 필요가 없다. 캡처의 `--es send safe` 뒤에도 같은 경고가 찍혀 있는데, 이번에는 맨 위가 `MainActivity` 자신이라 `onNewIntent()`가 불려 extra가 처리됐다(바로 아래 `SafeCtrlReceiver UNLOCK accepted` 줄).
 
-요청한 서명 권한조차 부여받지 못한 uid 10180 앱이 `code=atk`로 잠금을 풀었다. 송신에는 [패키지 가시성](/posts/android-concept-atlas-c11-package-visibility-uri-permission/) 필터도 걸리지 않는다. 브로드캐스트를 보낼 때 수신자 조회는 SYSTEM_UID로 돌기 때문에([ResolveIntentHelper.java 325~330행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/ResolveIntentHelper.java#325)) 공격자 매니페스트에 `<queries>`가 없어도 된다.
+![logcat 결과. I/BCASTATK: FireActivity sent io.seika.bcastlab.action.UNLOCK to io.seika.bcastlab/.CtrlReceiver origin=push-server uid=10180, 같은 앱이 SAFE_UNLOCK을 SafeCtrlReceiver로 보낸 줄, I/BCASTLAB: CtrlReceiver UNLOCK accepted origin=push-server code=atk, W/BroadcastQueue: Permission Denial: broadcasting Intent { act=...SAFE_UNLOCK flg=0x10 ... } from io.seika.bcastatk (pid=5062, uid=10180) to io.seika.bcastlab/.SafeCtrlReceiver requires io.seika.bcastlab.permission.CONTROL, 셸에 대한 같은 Permission Denial ... from null (pid=5129, uid=2000), 마지막으로 am start --es send safe 뒤 intent has been delivered to currently running top-most instance 경고, MainActivity sent ... shareIdentity=false와 SafeCtrlReceiver UNLOCK accepted origin=push-server](/assets/img/android-mastery/p1c16/05-device-forge-app-vs-perm.png)
 
-`SafeCtrlReceiver`는 공격자에게도 셸에게도 `Permission Denial`로 막혔고, `onReceive()`는 불리지 않았다. 검사는 시스템이 이 리시버에 전달하기 직전에 하고([BroadcastQueue.java 1585~1597행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/BroadcastQueue.java#1585)), 걸리면 앱 프로세스로는 아무것도 가지 않는다. 같은 서명인 피해자 앱 자신은 통과했다. 로그 형식은 `from <패키지> (pid, uid) to <컴포넌트> requires <권한>`이고, 셸은 패키지명 자리가 비어 `from null (uid=2000)`으로 찍힌다. `sendBroadcast()`는 수신 측이 받아들였는지 막혔는지를 송신자에게 알려 주지 않는다. 공격자는 아무 신호 없이 몇 번이고 다시 보내 볼 수 있고, 막혔다는 사실은 시스템 로그의 `Permission Denial`에만 남는다.
+요청한 서명 권한조차 부여받지 못한 uid 10180 앱이 `code=atk`로 잠금을 풀었다. 송신에는 [패키지 가시성](/posts/android-concept-atlas-c11-package-visibility-uri-permission/) 필터도 걸리지 않는다. 브로드캐스트를 보낼 때 수신자 조회는 SYSTEM_UID로 돌기 때문에([ResolveIntentHelper.java 325~330행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/ResolveIntentHelper.java#325)) targetSdk 33인 공격자 매니페스트에 `<queries>`가 없어도 된다.
+
+`SafeCtrlReceiver`는 공격자에게도 셸에게도 `Permission Denial`로 막혔고, `onReceive()`는 불리지 않았다. 검사는 시스템이 이 리시버에 전달하기 직전에 하고([BroadcastQueue.java 1585~1597행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/BroadcastQueue.java#1585)), 걸리면 앱 프로세스로는 아무것도 가지 않는다. 같은 서명인 피해자 앱 자신은 통과했다. 로그 형식은 `from <패키지> (pid, uid) to <컴포넌트> requires <권한>`이고, 셸은 패키지명 자리가 비어 `from null (pid=…, uid=2000)`으로 찍힌다. `sendBroadcast()`는 수신 측이 받아들였는지 막혔는지를 송신자에게 알려 주지 않아서, 이번에도 공격자 앱 쪽에는 실패 흔적이 없었고 `Permission Denial`은 시스템 로그에만 찍혔다.
 
 ## 앱이 보낸 CHECK를 다른 앱이 먼저 받는다
 
@@ -157,6 +158,7 @@ adb -s $S logcat -d -v tag -s BCASTLAB BCASTATK BroadcastQueue | grep -E "BCASTL
 // apps/attacker/src/io/seika/bcastatk/ArmActivity.java 32~33행, 47~70행 (발췌)
                 app.registerReceiver(new Hi(), filter(999), Context.RECEIVER_EXPORTED);
                 app.registerReceiver(new Lo(), filter(-999), Context.RECEIVER_EXPORTED);
+        // … 34~46행 생략 …
 
     static final class Hi extends BroadcastReceiver {
         @Override
@@ -201,9 +203,11 @@ sleep 2
 adb -s $S logcat -d -v tag -s BCASTLAB BCASTATK | grep -E "BCASTLAB|BCASTATK"
 ```
 
-![첫 실행에서 PayActivity send mode=implicit amount=50000 otp=245921, Verifier(0) in ordered=true code=0 data=PENDING, Verifier(0) out code=0 data=DENIED by Verifier: over limit 10000, PayActivity final ... -> DENIED. dumpsys activity broadcasts io.seika.bcastatk에서 ReceiverList 두 개(6541 io.seika.bcastatk/10180/u0), Action "io.seika.bcastlab.action.CHECK", mPriority=-999와 mPriority=999. 두 번째 실행에서 PayActivity send otp=740616, I/BCASTATK: HI(999) got ordered=true amount=50000 otp=740616 code=0 data=PENDING, Verifier in/out, I/BCASTATK: LO(-999) got ordered=true code=0 data=DENIED by Verifier: over limit 10000, PayActivity final -> DENIED](/assets/img/android-mastery/p1c16/06-device-ordered-sniff.png)
+![첫 실행에서 PayActivity send mode=implicit amount=50000 otp=515556, Verifier(0) in ordered=true code=0 data=PENDING, Verifier(0) out code=0 data=DENIED by Verifier: over limit 10000, PayActivity final ... -> DENIED. dumpsys activity broadcasts io.seika.bcastatk에서 ReceiverList 두 개(6048 io.seika.bcastatk/10180/u0), Action "io.seika.bcastlab.action.CHECK", mPriority=999와 mPriority=-999. 두 번째 실행에서 PayActivity send otp=467265, I/BCASTATK: HI(999) got ordered=true amount=50000 otp=467265 code=0 data=PENDING, Verifier in/out, I/BCASTATK: LO(-999) got ordered=true code=0 data=DENIED by Verifier: over limit 10000, PayActivity final -> DENIED](/assets/img/android-mastery/p1c16/06-device-ordered-sniff.png)
 
-`dumpsys`에 공격자 프로세스가 `CHECK`에 대해 등록한 `ReceiverList` 두 개가 우선순위 999와 -999로 보인다. 두 번째 결제에서는 HI가 피해자의 `Verifier`보다 먼저 받아 OTP 740616을 그대로 읽었고, LO는 `Verifier`가 끝난 뒤 그 판정을 받아 봤다. 결제 결과 자체는 아직 DENIED다. 엿보기만 했기 때문이다. `ArmActivity`를 띄운 직후 `sleep 2`는 처음엔 없었는데, 그때는 리시버 등록이 끝나기 전에 `dumpsys`가 돌아 아무것도 나오지 않았다.
+`dumpsys`에 공격자 프로세스가 `CHECK`에 대해 등록한 `ReceiverList` 두 개가 우선순위 999와 -999로 보인다. 두 번째 결제에서는 HI가 피해자의 `Verifier`보다 먼저 받아 OTP 467265를 그대로 읽었고, LO는 `Verifier`가 끝난 뒤 그 판정을 받아 봤다. 결제 결과 자체는 아직 DENIED다. 엿보기만 했기 때문이다. `ArmActivity`를 띄운 직후 `sleep 2`는 처음엔 없었는데, 그때는 리시버 등록이 끝나기 전에 `dumpsys`가 돌아 아무것도 나오지 않았다. `dumpsys`가 999를 먼저 보여 준 것도 우연이다. 다른 날 돌렸을 때는 -999가 먼저 나왔고, 목록 순서는 전달 순서와 상관없다.
+
+에뮬레이터를 막 부팅하고 이 실험을 처음 돌렸을 때는 2초 안에 로그가 하나도 안 찍혔다. `PayActivity send` 줄만 있고 `Verifier`도 결과도 없었다. `-v time`으로 다시 보니 두 번 보낸 `CHECK`가 두 번째 송신으로부터 약 20초 뒤(04:04:30.069 송신, 04:04:50.779 `Verifier`)에 한꺼번에 처리됐다. 그 사이 시스템 로그에는 부팅 직후 Phenotype 관련 매니페스트 리시버를 깨우는 브로드캐스트가 줄지어 있었다. 이 앱의 `CHECK`는 포그라운드 플래그 없이(`flg=0x10`) 나가니 Android 13의 직렬 백그라운드 큐에서 그 뒤에 줄을 섰던 것으로 보인다. 어느 레코드가 큐를 붙잡고 있었는지까지는 확인하지 못했다. 큐가 한가해진 뒤 바로 다시 돌린 것이 위 캡처다.
 
 ## LO(-999)가 거절을 승인으로 바꿨다
 
@@ -217,7 +221,7 @@ sleep 2
 adb -s $S logcat -d -v tag -s BCASTLAB BCASTATK | grep -E "BCASTLAB|BCASTATK"
 ```
 
-![forge 모드 결과. Verifier registered priority=0 flags=RECEIVER_NOT_EXPORTED, PayActivity send mode=implicit amount=50000 otp=521835, HI(999) got ... otp=521835 code=0 data=PENDING, Verifier(0) out code=0 data=DENIED by Verifier: over limit 10000, LO(-999) got ... data=DENIED by Verifier, W/BCASTATK: LO(-999) rewrote result -> code=-1 data=APPROVED (rewritten by bcastatk LO), I/BCASTLAB: PayActivity final code=-1 data=APPROVED (rewritten by bcastatk LO) -> APPROVED](/assets/img/android-mastery/p1c16/07-device-ordered-forge.png)
+![forge 모드 결과. PayActivity send mode=implicit amount=50000 otp=246406, HI(999) got ... otp=246406 code=0 data=PENDING, Verifier(0) out code=0 data=DENIED by Verifier: over limit 10000, LO(-999) got ... data=DENIED by Verifier, W/BCASTATK: LO(-999) rewrote result -> code=-1 data=APPROVED (rewritten by bcastatk LO), I/BCASTLAB: PayActivity final code=-1 data=APPROVED (rewritten by bcastatk LO) -> APPROVED](/assets/img/android-mastery/p1c16/07-device-ordered-forge.png)
 
 `Verifier`는 제대로 거절했다. 그 뒤에 도는 LO가 결과를 -1과 APPROVED로 덮어썼고, 결과 리시버는 그 값을 받았다. 화면에는 한도의 다섯 배 금액이 승인으로 떴다.
 
@@ -225,7 +229,7 @@ adb -s $S logcat -d -v tag -s BCASTLAB BCASTATK | grep -E "BCASTLAB|BCASTATK"
 
 ordered broadcast의 결과는 리시버 하나가 끝날 때마다 브로드캐스트 레코드에 그대로 복사된다. Android 13 큐에서는 [BroadcastQueue.java 596~603행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/BroadcastQueue.java#596)이 그 자리다. 누가 쓴 값인지는 남지 않는다. 다음 리시버와 마지막 결과 리시버가 보는 것은 직전 리시버가 남긴 값뿐이다. 이번 실험에서는 `Verifier` 뒤에 LO가 있었기 때문에 `Verifier`의 DENIED는 결과 리시버까지 가지 못했다.
 
-## abortBroadcast와 FLAG_RECEIVER_NO_ABORT
+## abort는 Verifier를 건너뛰고, NO_ABORT는 abort만 지운다
 
 이번에는 HI가 결과를 APPROVED로 쓰고 `abortBroadcast()`를 부르게 했다. 두 번째 실행에서는 피해자가 `FLAG_RECEIVER_NO_ABORT`를 붙여 보낸다(`--es mode noabort`).
 
@@ -241,7 +245,7 @@ sleep 2
 adb -s $S logcat -d -v tag -s BCASTLAB BCASTATK | grep -E "BCASTLAB|BCASTATK"
 ```
 
-![abort 모드 첫 실행: PayActivity send otp=712389, HI(999) got ..., W/BCASTATK: HI(999) setResult(OK) + abortBroadcast() abort=true, 바로 PayActivity final code=-1 data=APPROVED (set by bcastatk HI, then aborted) -> APPROVED로 Verifier 줄 없음. noabort 실행: PayActivity send mode=noabort otp=029565, HI가 같은 abort, Verifier(0) in ordered=true code=-1 data=APPROVED (set by bcastatk HI, then aborted), Verifier(0) out code=0 data=DENIED, LO(-999) got ... DENIED, PayActivity final code=0 ... -> DENIED](/assets/img/android-mastery/p1c16/09-device-ordered-abort.png)
+![abort 모드 첫 실행: PayActivity send otp=352868, HI(999) got ..., W/BCASTATK: HI(999) setResult(OK) + abortBroadcast() abort=true, 바로 PayActivity final code=-1 data=APPROVED (set by bcastatk HI, then aborted) -> APPROVED로 Verifier 줄 없음. noabort 실행: PayActivity send mode=noabort otp=658374, HI가 같은 abort, Verifier(0) in ordered=true code=-1 data=APPROVED (set by bcastatk HI, then aborted), Verifier(0) out code=0 data=DENIED, LO(-999) got ... DENIED, PayActivity final code=0 ... -> DENIED](/assets/img/android-mastery/p1c16/09-device-ordered-abort.png)
 
 첫 실행에서는 `Verifier`가 한 줄도 찍히지 않았다. abort하면 아래 우선순위 리시버는 건너뛰지만 결과 리시버는 여전히 불리고, 그 결과 리시버는 HI가 남긴 APPROVED를 받는다.
 
@@ -265,13 +269,13 @@ sleep 2
 adb -s $S logcat -d -v tag -s BCASTLAB BCASTATK BroadcastReceiver | grep -E "BCASTLAB|BCASTATK|trying to return result"
 ```
 
-![normal 모드 결과. PayActivity send mode=normal otp=775189, HI(999) got ordered=false amount=50000 otp=775189 code=-1 data=null, E/BroadcastReceiver: BroadcastReceiver trying to return result during a non-ordered broadcast와 java.lang.RuntimeException 줄이 두 쌍, HI(999) setResult(OK) + abortBroadcast() abort=true, LO(-999) got ordered=false code=-1 data=null, Verifier(0) in ordered=false code=-1 data=null, 같은 E/BroadcastReceiver 쌍 하나 더, Verifier(0) out code=0 data=DENIED. PayActivity final 줄 없음](/assets/img/android-mastery/p1c16/10-device-normal-abort.png)
+![normal 모드 결과. PayActivity send mode=normal otp=087121, HI(999) got ordered=false amount=50000 otp=087121 code=-1 data=null, E/BroadcastReceiver: BroadcastReceiver trying to return result during a non-ordered broadcast와 java.lang.RuntimeException 줄이 두 쌍, HI(999) setResult(OK) + abortBroadcast() abort=true, LO(-999) got ordered=false code=-1 data=null, Verifier(0) in ordered=false code=-1 data=null, 같은 E/BroadcastReceiver 쌍 하나 더, Verifier(0) out code=0 data=DENIED. PayActivity final 줄 없음](/assets/img/android-mastery/p1c16/10-device-normal-abort.png)
 
-HI가 `abort=true`를 찍었는데도 LO와 `Verifier` 모두 받았다. 리시버들은 처음부터 `code=-1 data=null`로 시작했고, `setResult()`와 `abortBroadcast()`를 부를 때마다 `trying to return result during a non-ordered broadcast`가 E 레벨로 RuntimeException 스택과 함께 찍혔다. HI에서 두 번(setResult, abort), `Verifier`에서 한 번이다. 순서는 LO가 `Verifier`보다 먼저였고, 두 번 돌렸을 때 모두 그랬다. 일반 브로드캐스트에서는 프로세스 사이 순서가 보장되지 않는다.
+HI가 `abort=true`를 찍었는데도 LO와 `Verifier` 모두 받았다. 리시버들은 처음부터 `code=-1 data=null`로 시작했고, `setResult()`와 `abortBroadcast()`를 부를 때마다 `trying to return result during a non-ordered broadcast`가 E 레벨로 RuntimeException 스택과 함께 찍혔다. HI에서 두 번(setResult, abort), `Verifier`에서 한 번이다. 순서는 LO가 `Verifier`보다 먼저였고 날을 바꿔 세 번 돌렸을 때 모두 그랬지만, 일반 브로드캐스트는 문서상 순서를 약속하지 않으니 이 순서에 기대면 안 된다.
 
 ![android-13.0.0_r84 BroadcastReceiver.java 271~293행 sendFinished. 282행 if (mOrderedHint) am.finishReceiver(mToken, mResultCode, mResultData, mResultExtras, mAbortBroadcast, mFlags); else 주석 "This broadcast was sent to a component; it is not ordered" 아래 288행 am.finishReceiver(mToken, 0, null, null, false, mFlags)](/assets/img/android-mastery/p1c16/21-src-a13-sendfinished.png)
 
-[BroadcastReceiver.java 271~293행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/content/BroadcastReceiver.java#271)을 보면 non-ordered일 때는 리시버가 무엇을 썼든 `0, null, null, false`를 돌려보낸다. 결과를 조작할 길은 없어졌지만 OTP 775189는 HI 로그에 그대로 찍혔다.
+[BroadcastReceiver.java 271~293행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/content/BroadcastReceiver.java#271)을 보면 non-ordered일 때는 리시버가 무엇을 썼든 `0, null, null, false`를 돌려보낸다. 결과를 조작할 길은 없어졌지만 OTP 087121은 HI 로그에 그대로 찍혔다.
 
 ## setPackage와 서명 권한으로 수신자를 좁히자 공격자가 빠졌다
 
@@ -290,7 +294,7 @@ adb -s $S shell am broadcast -a io.seika.bcastlab.action.CHECK --ei amount 50000
 adb -s $S logcat -d -v tag -s BCASTATK BroadcastQueue | grep -E "BCASTATK|Exported Denial"
 ```
 
-![package 모드: PayActivity send mode=package otp=677805, Verifier in/out, PayActivity final code=0 ... -> DENIED, BCASTATK 줄 없음. permission 모드: send otp=315830, W/BroadcastQueue: Permission Denial: receiving Intent { act=io.seika.bcastlab.action.CHECK flg=0x10 (has extras) } to ProcessRecord{2923bde 6541:io.seika.bcastatk/u0a180} (pid=6541, uid=10180) requires io.seika.bcastlab.permission.INTERNAL due to sender io.seika.bcastlab (uid 10179) 두 번, final -> DENIED. 셸의 am broadcast -a io.seika.bcastlab.action.CHECK --ei amount 50000은 Broadcast completed: result=-1, data="APPROVED (rewritten by bcastatk LO)", logcat에 HI(999) got ... otp=null code=0 data=null, W/BroadcastQueue: Exported Denial: sending Intent ... from null (uid=2000) due to receiver ProcessRecord{25b7eb6 6638:io.seika.bcastlab/u0a179} (uid 10179) not specifying RECEIVER_EXPORTED, LO(-999) rewrote result](/assets/img/android-mastery/p1c16/11-device-ordered-defence.png)
+![package 모드: PayActivity send mode=package otp=758555, Verifier in/out, PayActivity final code=0 ... -> DENIED, BCASTATK 줄 없음. permission 모드: send otp=796175, W/BroadcastQueue: Permission Denial: receiving Intent { act=io.seika.bcastlab.action.CHECK flg=0x10 (has extras) } to ProcessRecord{f932577 6048:io.seika.bcastatk/u0a180} (pid=6048, uid=10180) requires io.seika.bcastlab.permission.INTERNAL due to sender io.seika.bcastlab (uid 10179) 두 번, final -> DENIED. 셸의 am broadcast -a io.seika.bcastlab.action.CHECK --ei amount 50000은 Broadcast completed: result=-1, data="APPROVED (rewritten by bcastatk LO)", logcat에 HI(999) got ... otp=null code=0 data=null, W/BroadcastQueue: Exported Denial: sending Intent ... from null (uid=2000) due to receiver ProcessRecord{4a6335f 3635:io.seika.bcastlab/u0a179} (uid 10179) not specifying RECEIVER_EXPORTED, LO(-999) rewrote result](/assets/img/android-mastery/p1c16/11-device-ordered-defence.png)
 
 `package` 모드에서는 공격자 리시버가 후보에도 오르지 않았다. 로그에 BCASTATK가 한 줄도 없고 결과는 DENIED다. `permission` 모드에서는 HI와 LO가 각각 `Permission Denial: receiving ... requires io.seika.bcastlab.permission.INTERNAL`로 걸러졌다.
 
@@ -306,13 +310,41 @@ adb -s $S logcat -d -v tag -s BCASTATK BroadcastQueue | grep -E "BCASTATK|Export
 
 `io.seika.bcastreg`는 플래그 없이, `RECEIVER_EXPORTED`로, `RECEIVER_NOT_EXPORTED`로 리시버 셋을 등록해 보는 프로브다. 먼저 Android 13에서 그대로 돌리고, `am compat enable`로 변경을 강제로 켠 다음 다시 돌렸다.
 
+```bash
+adb -s $S install -r out/bcastreg.apk
+adb -s $S shell dumpsys platform_compat | grep "ChangeId(161145287"
+adb -s $S logcat -c
+adb -s $S shell am start -W -n io.seika.bcastreg/.RegActivity | grep Status
+adb -s $S shell am broadcast -a io.seika.bcastreg.PING
+sleep 1
+adb -s $S logcat -d -v tag -s BCASTREG BroadcastQueue | grep -E "BCASTREG|Exported Denial"
+adb -s $S shell am compat enable DYNAMIC_RECEIVER_EXPLICIT_EXPORT_REQUIRED io.seika.bcastreg
+adb -s $S shell dumpsys platform_compat | grep "ChangeId(161145287"
+adb -s $S logcat -c
+adb -s $S shell am start -W -n io.seika.bcastreg/.RegActivity | grep Status
+adb -s $S logcat -d -v tag -s BCASTREG | grep noflag
+adb -s $S shell am compat reset DYNAMIC_RECEIVER_EXPLICIT_EXPORT_REQUIRED io.seika.bcastreg
+```
+
 ![API 33에서 dumpsys platform_compat 결과 ChangeId(161145287; name=DYNAMIC_RECEIVER_EXPLICIT_EXPORT_REQUIRED; disabled). RegActivity pkg=io.seika.bcastreg targetSdk=33 sdk=33, noflag/exported/notexported 모두 registered. am broadcast -a io.seika.bcastreg.PING 후 noflag got io.seika.bcastreg.PING, exported got PING, notexported는 W/BroadcastQueue: Exported Denial ... from null (uid=2000) ... not specifying RECEIVER_EXPORTED. am compat enable DYNAMIC_RECEIVER_EXPLICIT_EXPORT_REQUIRED io.seika.bcastreg 후 packageOverrides={io.seika.bcastreg=true}, 다시 실행하자 I/BCASTREG: noflag: SecurityException: io.seika.bcastreg: One of RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED should be specified when a receiver isn't being registered exclusively for system broadcasts, 마지막에 am compat reset](/assets/img/android-mastery/p1c16/12-device-register-flags.png)
 
-Android 13에서 플래그 없이 등록한 리시버는 셸의 `PING`을 받았다. 플래그를 빼먹으면 exported로 취급된다. 변경을 켜자 같은 호출이 `SecurityException`으로 바뀌었다. 같은 코드를 패키지명만 바꿔 targetSdk 33(`io.seika.bcastreg`)과 34(`io.seika.bcastreg34`)로 빌드해 Android 16 에뮬레이터에 깔아 보면, 기기 버전이 최신이어도 갈림길은 targetSdk라는 게 바로 보인다.
+Android 13에서 플래그 없이 등록한 리시버는 셸의 `PING`을 받았다. 플래그를 빼먹으면 exported로 취급된다. 변경을 켜자 같은 호출이 `SecurityException`으로 바뀌었다. 같은 코드를 패키지명만 바꿔 targetSdk 33(`io.seika.bcastreg`)과 34(`io.seika.bcastreg34`)로 빌드해 Android 16 에뮬레이터에 깔아 보면, 기기 버전이 최신이어도 갈림길은 targetSdk라는 게 바로 보인다. 여기서부터 `$S`는 API 36 에뮬레이터다.
+
+```bash
+S=emulator-5622
+adb -s $S install -r out/bcastreg.apk
+adb -s $S install -r out/bcastreg34.apk
+adb -s $S shell dumpsys platform_compat | grep "ChangeId(161145287"
+adb -s $S logcat -c
+adb -s $S shell am start -W -n io.seika.bcastreg/.RegActivity | grep Status
+adb -s $S shell am start -W -n io.seika.bcastreg34/io.seika.bcastreg.RegActivity | grep Status
+sleep 1
+adb -s $S logcat -d -v tag -s BCASTREG | grep BCASTREG
+```
 
 ![API 36에서 install -r out/bcastreg.apk와 out/bcastreg34.apk, ChangeId(161145287; name=DYNAMIC_RECEIVER_EXPLICIT_EXPORT_REQUIRED; enableSinceTargetSdk=34). RegActivity pkg=io.seika.bcastreg targetSdk=33 sdk=36은 noflag/exported/notexported 모두 registered, RegActivity pkg=io.seika.bcastreg34 targetSdk=34 sdk=36은 noflag: SecurityException: io.seika.bcastreg34: One of RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED should be specified ..., exported와 notexported는 registered](/assets/img/android-mastery/p1c16/13-aux36-register-flags.png)
 
-Android 16 기기에서도 targetSdk 33 앱은 플래그 없이 등록됐다. 다른 uid에서 이 리시버로 보내 보는 것은 Android 13에서만 했지만, 등록이 그대로 되니 오래된 targetSdk로 남은 앱의 `registerReceiver(receiver, filter)` 두 인자 호출은 최신 기기에서도 Android 13에서처럼 exported로 취급될 것으로 보인다. 점검할 때는 jadx에서 두 인자짜리 `registerReceiver` 호출과 세 번째 인자 값을 같이 grep한다.
+Android 16 기기에서도 targetSdk 33 앱은 플래그 없이 등록됐다. 다른 uid에서 이 리시버로 보내 보는 것은 Android 13에서만 했지만, 등록이 그대로 되니 오래된 targetSdk로 남은 앱의 `registerReceiver(receiver, filter)` 두 인자 호출은 최신 기기에서도 Android 13에서처럼 exported로 취급될 가능성이 크다. 다른 uid에서 보내 보지는 않았다. 점검할 때는 jadx에서 두 인자짜리 `registerReceiver` 호출과 세 번째 인자 값을 같이 grep한다.
 
 ## Android 16에서 우선순위는 프로세스 안에서만 지켜질까
 
@@ -330,11 +362,28 @@ Android 16 기기에서도 targetSdk 33 앱은 플래그 없이 등록됐다. �
 
 aconfig 플래그 둘 다 enabled이고, 두 ChangeId도 `disabled`나 targetSdk 조건 없이 나열돼 모든 앱에 켜진 상태다. 999와 -999는 잘리는 범위 안이라 값 제한의 영향은 없다. 이 상태에서 `forge`와 `abort`를 다시 돌렸다. 타임스탬프를 보려고 `-v time`으로 찍었다.
 
-![API 36에서 forge 모드: 17:32:44.512 PayActivity send otp=375801, 44.522 BCASTATK(5106) HI(999) got ordered=true otp=375801, 44.914 BCASTLAB(5140) Verifier(0) in/out DENIED, 44.924 LO(-999) got ... DENIED, 44.924 LO(-999) rewrote result -> code=-1 APPROVED, 46.288 PayActivity final code=-1 ... -> APPROVED. abort 모드: 55.240 send otp=206892, 55.246 HI got, 55.247 HI setResult(OK) + abortBroadcast() abort=true, 55.268 PayActivity final code=-1 data=APPROVED (set by bcastatk HI, then aborted) -> APPROVED](/assets/img/android-mastery/p1c16/15-aux36-ordered.png)
+```bash
+adb -s $S install -r out/bcastlab.apk
+adb -s $S install -r out/bcastatk.apk
+adb -s $S shell am start -n io.seika.bcastatk/.ArmActivity --es mode forge
+sleep 2
+adb -s $S logcat -c
+adb -s $S shell am start -n io.seika.bcastlab/.PayActivity --ei amount 50000
+sleep 8
+adb -s $S logcat -d -v time -s BCASTLAB BCASTATK | grep -E "BCASTLAB|BCASTATK"
+adb -s $S shell am start -n io.seika.bcastatk/.ArmActivity --es mode abort
+sleep 2
+adb -s $S logcat -c
+adb -s $S shell am start -n io.seika.bcastlab/.PayActivity --ei amount 50000
+sleep 8
+adb -s $S logcat -d -v time -s BCASTLAB BCASTATK | grep -E "BCASTLAB|BCASTATK"
+```
 
-pid 5106(공격자)과 5140(피해자)은 서로 다른 프로세스인데도 HI(999) → `Verifier`(0) → LO(-999) 순서가 그대로였고, LO의 덮어쓰기와 HI의 abort가 Android 13과 똑같이 먹혔다. 이 이미지에서는 코드 쪽 설명이 맞았다. `limitPriorityScope` 분기가 unordered 경로에만 있으니 범위 제한은 일반 브로드캐스트에만 걸리는 것으로 보이지만, API 36에서 일반 브로드캐스트의 순서는 따로 돌려 보지 않았다.
+![API 36에서 ArmActivity --es mode forge 뒤 sleep 2, PayActivity --ei amount 50000 뒤 sleep 8, logcat -v time. 04:12:05.859 BCASTLAB(4968) PayActivity send otp=857774, 05.896 BCASTATK(4934) HI(999) got ordered=true otp=857774, 06.233과 06.234 Verifier(0) in/out DENIED, 06.586 LO(-999) got ... DENIED, 06.586 LO(-999) rewrote result -> code=-1 APPROVED, 07.274 PayActivity final code=-1 ... -> APPROVED. abort 모드: 17.489 send otp=244414, 17.492 HI got, 17.493 HI setResult(OK) + abortBroadcast() abort=true, 17.508 PayActivity final code=-1 data=APPROVED (set by bcastatk HI, then aborted) -> APPROVED](/assets/img/android-mastery/p1c16/15-aux36-ordered.png)
 
-처음 찍었을 때는 이 결과를 못 봤다. 차가운 첫 실행이 3초 안에 끝나지 않아 앞 실행의 LO 줄이 뒤 실행 로그에 섞였다. 대기 시간을 8초로 늘리고 다시 찍었다. 위 캡처에서도 첫 실행은 송신부터 결과까지 1.8초쯤 걸렸는데, 왜 그렇게 느린지는 따로 파 보지 않았다.
+pid 4934(공격자)와 4968(피해자)은 서로 다른 프로세스인데도 HI(999) → `Verifier`(0) → LO(-999) 순서가 그대로였고, LO의 덮어쓰기와 HI의 abort가 Android 13과 똑같이 먹혔다. 이 이미지에서는 코드 쪽 설명이 맞았다. `limitPriorityScope` 분기가 unordered 경로에만 있으니 범위 제한은 일반 브로드캐스트에만 걸리는 것으로 보이지만, API 36에서 일반 브로드캐스트의 순서는 따로 돌려 보지 않았다.
+
+여기서도 처음엔 엉뚱한 결과가 나왔다. 두 앱을 막 다시 설치한 직후라 둘 다 프로세스가 없었고, `ArmActivity`를 띄우자마자 결제를 보내니 첫 `CHECK`에는 HI도 LO도 없이 `Verifier`만 돌아 DENIED로 끝났다. 공격자 리시버 등록이 끝나기 전에 보냈다고 짐작하지만, 등록 완료 로그가 `logcat -c`에 지워져 확인하지는 못했다. 이어서 `--es mode abort`로 다시 띄운 `ArmActivity`는 `its current task has been brought to the front` 경고만 남기고 `onCreate()`가 돌지 않아 모드가 forge로 남았고, 두 번째 결제는 abort 대신 LO 덮어쓰기를 보여 줬다. 두 문제 모두 `ArmActivity`를 띄운 뒤 `sleep 2`를 두자 사라졌다. 캡처의 forge 실행은 송신에서 결과까지 1.4초(05.859에서 07.274)가 걸렸는데, 피해자 프로세스가 막 뜬 직후였다. 다른 날 같은 forge 경로를 돌린 로그에서는 약 0.2초(56.562에서 56.767)였다. abort 실행의 19밀리초는 HI에서 바로 결과 리시버로 가고 `Verifier`와 LO를 건너뛴 경로라 이 둘과 견줄 값이 아니다.
 
 ## getSentFromUid는 동의한 발신자만 보여 준다
 
