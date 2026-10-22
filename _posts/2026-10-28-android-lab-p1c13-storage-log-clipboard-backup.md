@@ -87,9 +87,9 @@ WAL 모드로 연 DB를 `.db` 파일 하나만 pull해서 열어 봤다. Room의
 
 `app.db` 하나만 받으면 `no such table: session`이 나온다. 테이블 생성과 행 삽입이 아직 `app.db-wal`에만 있고 메인 파일로 체크포인트되지 않았기 때문이다. `grep`으로 봐도 토큰 문자열은 메인 파일에 0번, `-wal`에 1번 있다. 프레임워크의 자동 체크포인트 기준은 100페이지이고([`config.xml:2340`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/res/res/values/config.xml#2340)), 마지막 연결이 닫힐 때도 체크포인트가 일어난다. 앱이 DB를 열어 둔 채 쓰기가 적은 상태라면 최근 데이터는 계속 `-wal`에 머문다.
 
-캡처의 pull은 `adb root`로 root가 된 뒤 databases 디렉터리를 통째로 받은 것이다. root가 없으면 앞 절처럼 debuggable 앱에 한해 `adb exec-out run-as <패키지> cat databases/app.db-wal > app.db-wal` 식으로 세 파일을 하나씩 꺼내야 한다. 디렉터리째 받은 사본은 잘 열린다. 다만 분석용으로 열기 전에 원본 사본을 따로 떠 두는 편이 좋다. 마지막 `wc -c`를 보면 조회를 마치고 sqlite3가 연결을 닫으면서 `-wal`과 `-shm`이 사라지고 `app.db`가 4096에서 16384바이트로 커졌다. 조회 한 번이 증거 사본을 체크포인트해 버린 것이다.
+캡처의 pull은 `adb root`로 root가 된 뒤 databases 디렉터리를 통째로 받은 것이다. root가 없으면 앞 절처럼 debuggable 앱에 한해 `adb exec-out run-as <패키지> cat databases/app.db-wal > app.db-wal` 식으로 세 파일을 하나씩 꺼내야 한다. 디렉터리째 받은 사본은 잘 열린다. 마지막 `wc -c`를 보면 조회를 마친 sqlite3가 연결을 닫으면서 증거 사본을 체크포인트했고, `-wal`과 `-shm`이 사라지면서 `app.db`가 4096에서 16384바이트로 커졌다. 그러니 분석용으로 열기 전에 원본 사본을 따로 떠 두는 편이 좋다.
 
-기기 쪽 sqlite3는 이 userdebug 이미지에 `/system/bin/sqlite3`로 있다. AOSP는 sqlite3를 `PRODUCT_PACKAGES_DEBUG`에 넣어 eng·userdebug 빌드에만 싣는다([`base_system.mk:372`](https://android.googlesource.com/platform/build/+/refs/tags/android-13.0.0_r84/target/product/base_system.mk#372)). 같은 빌드 ID(`TE1A.240213.009`)의 user 빌드 에뮬레이터를 따로 띄워 보니 `adb root`는 `adbd cannot run as root in production builds`로 거부됐고 `/system/bin/sqlite3`와 `/system/xbin/sqlite3`가 둘 다 없었다. OEM 빌드는 또 다를 수 있으니, 호스트로 꺼내 여는 방식을 기본으로 두는 편이 낫다.
+기기 쪽 sqlite3는 이 userdebug 이미지에 `/system/bin/sqlite3`로 있다. AOSP는 sqlite3를 `PRODUCT_PACKAGES_DEBUG`에 넣어 eng·userdebug 빌드에만 싣는다([`base_system.mk:389`](https://android.googlesource.com/platform/build/+/refs/tags/android-13.0.0_r84/target/product/base_system.mk#389), 372행에서 시작하는 목록). 같은 빌드 ID(`TE1A.240213.009`)의 user 빌드 에뮬레이터를 따로 띄워 보니 `adb root`는 `adbd cannot run as root in production builds`로 거부됐고 `/system/bin/sqlite3`와 `/system/xbin/sqlite3`가 둘 다 없었다. OEM 빌드는 또 다를 수 있으니, 호스트로 꺼내 여는 방식을 기본으로 두는 편이 낫다.
 
 ## debuggable=false는 Log.d를 지우지 않는다
 
@@ -101,9 +101,9 @@ WAL 모드로 연 DB를 `.db` 파일 하나만 pull해서 열어 봤다. Room의
 
 ![터미널. cat r8/log-rules.pro 에 -assumenosideeffects class android.util.Log 의 v(...), d(...), i(...) 와 io.seika.leak 패키지를 keep 하는 규칙과 -dontobfuscate. dexdump 로 d8 dex 를 grep 하면 Log;.d: 세 번, "GET https://api.seika.test/v1/me Authorization: Bearer ", "refresh ok rt=", PrintStream;.println, Log;.e: 가 나오고, R8 dex 에서는 "refresh ok rt=", PrintStream;.println, Log;.e: 만 남는다](/assets/img/android-mastery/p1c13/01-r8-dex.png)
 
-R8은 `Log.d` 호출 세 개와 함께 Bearer 문자열 상수까지 없앴다. 메시지를 만드는 `StringBuilder` 연결도 부작용 없는 코드로 보고 같이 지웠기 때문이다. `System.out.println`과 `Log.e`는 규칙 밖이라 남았고, 기기에서도 `r8` 프로세스는 리프레시 토큰이 담긴 `System.out` 줄을 그대로 찍었다. 로그 제거 규칙을 넣은 뒤에도 `println`, `printStackTrace`, 서드파티 로거는 따로 찾아야 한다. dex에서 문자열을 grep하는 것과 별개로, 기기에서는 `adb logcat -d --pid=$(adb exec-out pidof <패키지>)`로 그 앱의 줄만 걸러 보면 된다. `safe`는 `login ok` 한 줄이었다.
+R8은 `Log.d` 호출 세 개와 함께 Bearer 문자열 상수까지 없앴다. 메시지를 만드는 `StringBuilder` 연결도 쓰이지 않는 코드가 되어 함께 지워진 것으로 보인다. `System.out.println`과 `Log.e`는 규칙 밖이라 남았고, 기기에서도 `r8` 프로세스는 리프레시 토큰이 담긴 `System.out` 줄을 그대로 찍었다. 로그 제거 규칙을 넣은 뒤에도 `println`, `printStackTrace`, 서드파티 로거는 따로 찾아야 한다. dex에서 문자열을 grep하는 것과 별개로, 기기에서는 `adb logcat -d --pid=$(adb exec-out pidof <패키지>)`로 그 앱의 줄만 걸러 보면 된다. `safe`는 `login ok` 한 줄이었다.
 
-logcat을 누가 읽을 수 있는지는 [adb 증적 글](/posts/android-lab-p1c02-adb-evidence-collection/)에서 측정했다. 일반 앱은 자기 UID 로그만 받는다. `READ_LOGS`는 adb(`pm grant`)로만 줄 수 있고, Android 13에서는 그 권한을 받은 앱도 사용자 동의 대화상자를 거쳐야 다른 앱의 로그를 받는다. 그래도 USB 디버깅이 켜진 기기를 손에 쥔 사람, 버그 리포트를 받는 사람에게는 이 로그가 다 보인다.
+logcat을 누가 읽을 수 있는지는 [adb 증적 글](/posts/android-lab-p1c02-adb-evidence-collection/)에서 측정했다. 일반 앱은 자기 UID 로그만 받는다. 일반 앱에는 `READ_LOGS`를 adb(`pm grant`)로만 줄 수 있고, Android 13에서는 그 권한을 받은 앱도 사용자 동의 대화상자를 거쳐야 다른 앱의 로그를 받는다. 그래도 USB 디버깅이 켜진 기기를 손에 쥔 사람, 버그 리포트를 받는 사람에게는 이 로그가 다 보인다.
 
 ## 클립보드에 올린 토큰은 화면에도, 포커스를 가진 앱에도 보인다
 
@@ -117,7 +117,7 @@ Android 13은 무언가 복사되면 화면 왼쪽 아래에 미리보기를 띄
 
 ![터미널. am broadcast 로 ClipReceiver 를 깨우면 E ClipboardService Denying clipboard access to io.seika.peek, application is not in focus nor is it a system service for user 0 과 PEEK background getPrimaryClip -> null. am start -S 로 PeekActivity 를 띄우면 onCreate 읽기에서 같은 Denying 줄과 null, 이어서 I ClipboardService Peek pasted from your clipboard 와 PEEK focused getPrimaryClip -> "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZSJ9.c2Vpa2EtbGFi"](/assets/img/android-mastery/p1c13/09-clip-read.png)
 
-리시버에서 읽은 것과 `onCreate`에서 읽은 것은 `null`이었고, 서버 쪽에는 `Denying clipboard access` 오류가 남았다. 창이 포커스를 얻은 뒤 읽은 값은 `IS_SENSITIVE`가 붙은 클립인데도 토큰 전체였다. 규칙은 [`ClipboardService.java:1063-1113`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/clipboard/ClipboardService.java#1063)에 있다. 읽기(`OP_READ_CLIPBOARD`)는 `READ_CLIPBOARD_IN_BACKGROUND` 권한을 가진 시스템 앱, 기본 IME, 창 포커스를 가진 앱(`mWm.isUidFocused(uid)` 또는 포커스를 가진 내부 시스템 창), 콘텐츠 캡처와 증강 자동완성 서비스에만 허용되고, 쓰기는 주석대로 "Writing is allowed without focus"다.
+리시버에서 읽은 것과 `onCreate`에서 읽은 것은 `null`이었고, 서버 쪽에는 `Denying clipboard access` 오류가 남았다. 창이 포커스를 얻은 뒤 읽은 값은 `IS_SENSITIVE`가 붙은 클립인데도 토큰 전체였다. 규칙은 [`ClipboardService.java:1063-1113`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/clipboard/ClipboardService.java#1063)에 있다. 읽기·쓰기 분기 앞에서 `READ_CLIPBOARD_IN_BACKGROUND` 권한을 가진 호출자(소스 주석대로 테스트용 셸 등)와 기본 IME를 먼저 통과시킨다. 그 밖의 앱에게 읽기(`OP_READ_CLIPBOARD`)는 창 포커스를 가진 경우(`mWm.isUidFocused(uid)` 또는 포커스를 가진 내부 시스템 창)와 콘텐츠 캡처, 증강 자동완성 서비스에만 허용되고, 쓰기는 주석대로 "Writing is allowed without focus"다.
 
 ![ClipboardService.java android-13.0.0_r84 1063~1113행. READ_CLIPBOARD_IN_BACKGROUND 권한 또는 isDefaultIme 이면 허용, OP_READ_CLIPBOARD 에서는 mWm.isUidFocused(uid) 또는 isInternalSysWindowAppWithWindowFocus, 이어서 콘텐츠 캡처와 증강 자동완성 서비스 검사, OP_WRITE_CLIPBOARD 는 Writing is allowed without focus 로 allowed = true, 거부 시 Slog.e Denying clipboard access to ... application is not in focus nor is it a system service](/assets/img/android-mastery/p1c13/03-src-clipboard-focus.png)
 
@@ -133,7 +133,7 @@ Android 13은 무언가 복사되면 화면 왼쪽 아래에 미리보기를 띄
 
 ## adb backup은 targetSdk에 따라 보는 플래그가 바뀐다
 
-adb backup이 allowBackup만 본다고 생각하고 변형 앱들을 각각 `adb backup -f backup/<이름>.ab <패키지>`로 백업하고 기기의 확인 화면에서 "Back up my data"를 눌렀다. adb는 매번 `WARNING: adb backup is deprecated and may be removed in a future release`를 먼저 찍는다. `abx.py`는 `.ab` 헤더 뒤의 zlib 스트림을 풀어 tar 목록을 보여 주고, 실습 토큰이 들어 있는 항목에 `[token]`을 붙이는 작은 스크립트다.
+처음에는 adb backup이 allowBackup만 본다고 생각했다. 변형 앱마다 `adb backup -f backup/<이름>.ab <패키지>`를 걸고 기기 확인 화면에서 "Back up my data"를 눌렀다. adb는 매번 `WARNING: adb backup is deprecated and may be removed in a future release`를 먼저 찍는다. `abx.py`는 `.ab` 헤더 뒤의 zlib 스트림을 풀어 tar 목록을 보여 주고, 실습 토큰이 들어 있는 항목에 `[token]`을 붙이는 작은 스크립트다.
 
 ![터미널. wc -c backup/*.ab 결과 leak.ab 2110, nobk.ab 2130, rel.ab 47, rules.ab 2118, t30.ab 2117, t30nobk.ab 47 바이트. abx.py 목록에서 leak, nobk, t30 은 각각 5 entries 로 _manifest, db/app.db-shm, db/app.db-wal (토큰 표시), db/app.db, sp/auth.xml (토큰 표시) 을 담고, rel.ab 와 t30nobk.ab 는 0 entries](/assets/img/android-mastery/p1c13/11-adb-backup-matrix.png)
 
@@ -151,7 +151,7 @@ allowBackup이 false인 `nobk`가 토큰째 빠져나왔고, allowBackup이 true
 
 ## 제외 규칙은 백업 채널마다 다르게 적용된다
 
-`rules` 빌드에는 두 종류의 규칙을 다 넣었다. `fullBackupContent`가 가리키는 파일은 dataExtractionRules가 있으면 Android 12 이상에서는 무시되고 Android 11 이하 기기에서 쓰이는 옛 규칙이고, `dataExtractionRules`는 Android 12 이상에서 클라우드 백업과 기기 간 전송(D2D)을 따로 적는다.
+`rules` 빌드에는 두 종류의 규칙을 다 넣었다. `fullBackupContent`는 Android 11 이하 기기가 쓰던 옛 규칙이고, Android 12 이상에서는 `dataExtractionRules`에 해당 섹션이 없을 때 폴백으로만 읽히며, Android 12 문서는 이 옛 규칙이 D2D에는 영향을 주지 않는다고 적는다. `dataExtractionRules`는 클라우드 백업과 기기 간 전송(D2D)을 섹션으로 나눠 적는다.
 
 ```xml
 <!-- res/xml/backup_rules.xml (android:fullBackupContent) -->
@@ -172,7 +172,7 @@ allowBackup이 false인 `nobk`가 토큰째 빠져나왔고, allowBackup이 true
 </data-extraction-rules>
 ```
 
-그런데 아래 채널 비교 캡처의 첫 목록처럼 adb로 받은 `rules.ab`에도 `sp/auth.xml [token]`과 `app.db-wal [token]`이 들어 있었다. 규칙이 하나도 적용되지 않은 것이다. 앞의 백업 서비스 로그 캡처 마지막 줄 `Given operation type isn't supported by backup scheme: 3`이 그때 남은 것이다.
+그런데 adb로 받은 `rules.ab`를 `abx.py`로 열어 보니 `sp/auth.xml [token]`과 `app.db-wal [token]`이 그대로 들어 있었다(목록은 뒤의 채널 비교 캡처 첫 칸에 다시 나온다). 규칙이 하나도 적용되지 않은 것이다. 앞의 백업 서비스 로그 캡처 마지막 줄 `Given operation type isn't supported by backup scheme: 3`이 그때 남은 것이다.
 
 ![FullBackup.java android-13.0.0_r84 579~627행. parseSchemeForOperationType 은 getConfigSectionForOperationType 이 null 이면 Slog.w Given operation type isn't supported by backup scheme 후 return, 이어서 mDataExtractionRules 섹션, MIGRATION 과 IGNORE_FULL_BACKUP_CONTENT_IN_D2D, mFullBackupContent 폴백 순. getConfigSectionForOperationType 은 BACKUP 이면 CLOUD_BACKUP, MIGRATION 이면 DEVICE_TRANSFER, default null](/assets/img/android-mastery/p1c13/02-src-fullbackup-section.png)
 
@@ -211,7 +211,7 @@ adb -s $S exec-out settings delete secure backup_local_transport_parameters
 
 같은 `rules` 앱이 채널마다 다른 내용을 내보냈다. adb로는 전부, 클라우드로는 `_manifest`와 `app.db-shm`만, D2D로는 `device-transfer` 섹션이 DB만 막으니 토큰이 든 `auth.xml`이 따라갔다. `database` 제외가 `app.db-wal`과 `-journal`까지 함께 지우는 것은 [`FullBackup.java:747-768`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/app/backup/FullBackup.java#747)이 경로를 자동으로 덧붙이기 때문이고, `-shm`은 그 목록에 없어서 남았다. 그래서 규칙을 바꾼 뒤에는 adb backup, LocalTransport 클라우드, LocalTransport D2D로 각각 떠서 목록에 토큰 파일과 `-shm` 같은 부속 파일이 없는지 본다.
 
-allowBackup이 false인 `safe`는 클라우드에서 `Backup is not allowed`였지만 D2D에서는 `Success`로 다섯 항목이 다 나갔다. 위 소스 캡처의 `MIGRATION` 분기에서 비시스템 앱은 `IGNORE_ALLOW_BACKUP_IN_D2D`가 켜지면(targetSdk 31 이상) allowBackup을 무시한다. 다만 이것은 재정의 가능한 호환성 변경이고, Android 12 문서도 "일부 제조사 기기에서" allowBackup=false가 Drive 백업은 막되 D2D는 막지 않는다고 적는다. AOSP 13인 이 에뮬레이터에서는 그렇게 동작했다고까지만 말할 수 있다. 문서는 옛 `fullBackupContent` 규칙이 D2D에 영향을 주지 않는다고도 적는다.
+allowBackup이 false인 `safe`는 클라우드에서 `Backup is not allowed`였지만 D2D에서는 `Success`로 다섯 항목이 다 나갔다. 위 소스 캡처의 `MIGRATION` 분기에서 비시스템 앱은 `IGNORE_ALLOW_BACKUP_IN_D2D`가 켜지면(targetSdk 31 이상) allowBackup을 무시한다. 다만 이것은 재정의 가능한 호환성 변경이고, Android 12 문서도 "일부 제조사 기기에서" allowBackup=false가 Drive 백업은 막되 D2D는 막지 않는다고 적는다. AOSP 13인 이 에뮬레이터에서는 그렇게 동작했다고까지만 말할 수 있다.
 
 `safe`의 D2D 사본에서 토큰은 `v1:` 암호문뿐이었다. 키는 앱 디렉터리 밖, keystore2가 관리하는 `/data/misc/keystore/persistent.sqlite`(이번 기기에서 122880바이트, 소유자 `keystore`)에 있어서 백업에 실리지 않는다. 새 기기로 옮겨진 암호문은 그쪽에서 풀 수 없으니 앱은 재로그인 흐름을 갖춰야 한다. 그리고 방어 빌드도 `user_email`은 평문으로 남겼고, D2D 사본에도 그 값이 그대로 실렸다.
 
@@ -223,6 +223,8 @@ allowBackup이 false인 `safe`는 클라우드에서 `Backup is not allowed`였�
 
 BFU에서는 root도 CE 저장소의 이름을 암호화된 문자열로만 보고 `auth.xml`은 없는 파일이다. 같은 시점에 기기 보호(DE) 저장소인 `/data/user_de/0`의 패키지 이름은 평문이다. PIN을 넣은 뒤로는 상태가 `RUNNING_UNLOCKED`가 되고 토큰이 읽힌다. 전원 버튼으로 화면을 끄고 키가드가 다시 떠도(`mKeyguardShowing=true`) 상태는 그대로이고 토큰도 그대로 읽혔다.
 
-화면 잠금으로는 CE 키가 내려가지 않는다. 키를 지우는 `dispatchUserLocking` → `lockUserKey`는 [`UserController.java:1206-1222`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/UserController.java#1206)에 있고, 이를 부르는 곳은 사용자 중지 경로(1012행, 1199행)뿐이다. vold 쪽 `evict_ce_key`도 [`fscrypt_lock_user_key`(FsCrypt.cpp:781-785)](https://android.googlesource.com/platform/system/vold/+/refs/tags/android-13.0.0_r84/FsCrypt.cpp#781)와 사용자 삭제 때의 [`fscrypt_destroy_user_key`(570행)](https://android.googlesource.com/platform/system/vold/+/refs/tags/android-13.0.0_r84/FsCrypt.cpp#570)에서만 불린다. 화면 잠금 경로는 없다. FBE가 막아 주는 상대는 꺼져 있다가 켜진 기기, 곧 BFU 상태의 기기를 손에 넣은 사람이다. 한 번이라도 잠금해제된 기기에서 root를 얻은 공격자나 실행 중인 앱에게 CE 저장소는 평문이다. `safe` 빌드가 토큰을 Keystore 키로 감싼 이유가 이것이고, 실제로 그 빌드의 `auth.xml`에는 `access_token`과 `refresh_token`이 `v1:rMmytQ4V/rWklyVI:zlQSV4sZ...` 같은 암호문으로만 남았다. 예전에 많이 쓰던 Jetpack EncryptedSharedPreferences는 security-crypto 1.1.0-alpha07(2025-04-09)에서 모든 API가 deprecated됐고, 릴리스 노트는 플랫폼 API와 Android Keystore를 직접 쓰라고 안내한다([릴리스 노트](https://developer.android.com/jetpack/androidx/releases/security)).
+화면 잠금으로는 CE 키가 내려가지 않는다. 키를 지우는 `dispatchUserLocking` → `lockUserKey`는 [`UserController.java:1207-1222`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/UserController.java#1207)에 있고, 이를 부르는 곳은 사용자 중지 경로(1012행, 1199행)뿐이다. vold 쪽 `evict_ce_key`도 [`fscrypt_lock_user_key`(FsCrypt.cpp:781-785)](https://android.googlesource.com/platform/system/vold/+/refs/tags/android-13.0.0_r84/FsCrypt.cpp#781)와 사용자 삭제 때의 [`fscrypt_destroy_user_key`(570행)](https://android.googlesource.com/platform/system/vold/+/refs/tags/android-13.0.0_r84/FsCrypt.cpp#570)에서만 불린다. 화면 잠금 경로는 없다. FBE가 막아 주는 상대는 꺼져 있다가 켜진 기기, 곧 BFU 상태의 기기를 손에 넣은 사람이다. 한 번이라도 잠금해제된 기기에서 root를 얻은 공격자나 실행 중인 앱에게 CE 저장소는 평문이다.
+
+그래서 `safe` 빌드는 토큰을 Keystore 키로 감쌌고, 그 빌드의 `auth.xml`에는 `access_token`과 `refresh_token`이 `v1:rMmytQ4V/rWklyVI:zlQSV4sZ...` 같은 암호문으로만 남았다. 예전에 많이 쓰던 Jetpack EncryptedSharedPreferences는 security-crypto 1.1.0-alpha07(2025-04-09)에서 모든 API가 deprecated됐고, 릴리스 노트는 플랫폼 API와 Android Keystore를 직접 쓰라고 안내한다([릴리스 노트](https://developer.android.com/jetpack/androidx/releases/security)).
 
 *다음 글: [Keystore와 BiometricPrompt 검증](/posts/android-lab-p1c14-keystore-biometricprompt/)*
