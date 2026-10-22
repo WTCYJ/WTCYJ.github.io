@@ -16,7 +16,9 @@ excerpt: "문자열 하나 바꾼 APK를 다른 키로 서명하자 Android 13 �
 
 이유로는 보통 다이제스트를 든다. v2 이상의 서명은 정렬이 끝난 바이트 배치를 서명하니 서명 뒤에 정렬하면 바이트가 밀려 다이제스트가 어긋난다는 설명이다. 직접 돌려 보니 그보다 더 크게 깨졌다. 서명한 APK에 zipalign을 돌리자 서명 블록이 통째로 사라졌다. 그리고 지금 쓰는 apksigner는 서명하면서 스스로 정렬까지 해서 서명 전에 zipalign이 넣어 둔 패딩을 자기 형식으로 다시 썼다.
 
-도구는 apktool 3.0.2와 Android SDK build-tools 36.0.0의 zipalign, apksigner다. 비교용으로 build-tools 34.0.0과 35.0.0도 썼다. 세 버전 모두 `apksigner version`이 0.9를 찍어서 버전은 build-tools 번호로 부른다. 기기는 Android 13(API 33, 2024-03-01 보안 패치) x86_64 google_apis userdebug 에뮬레이터이고 SELinux는 Enforcing이다. 플랫폼 동작은 frameworks/base 태그 `android-13.0.0_r84`에서, apksigner와 zipalign의 동작은 [apksig](https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb) 커밋 `184702d`와 [platform/build](https://android.googlesource.com/platform/build/+/045a3d6a3e359633a14853a5a5e1e4f2a11cbdae) 커밋 `045a3d6`의 소스에서 확인했다. 두 저장소에서 build-tools 36.0.0에 대응하는 공개 태그를 찾지 못해 main 브랜치의 커밋을 봤고, 아래에서 관측한 16KiB 재정렬과 `-P` 처리는 이 소스와 그대로 맞았다. 측정한 에뮬레이터 빌드(TE1A.240213.009)에는 대응하는 AOSP 태그가 없어서 마지막으로 공개된 Android 13 태그인 r84를 대신 봤고 기기가 낸 메시지 문구는 이 태그의 소스와 그대로 일치했다.
+도구는 apktool 3.0.2와 Android SDK build-tools 36.0.0의 zipalign, apksigner다. 비교용으로 build-tools 34.0.0과 35.0.0도 썼다. 세 버전 모두 `apksigner version`이 0.9를 찍어서 버전은 build-tools 번호로 부른다. 기기는 Android 13(API 33, 2024-03-01 보안 패치) x86_64 google_apis userdebug 에뮬레이터이고 SELinux는 Enforcing이다.
+
+소스는 공개 태그가 딱 맞지 않아 대신할 것을 골랐다. 플랫폼 쪽은 마지막 Android 13 태그인 frameworks/base `android-13.0.0_r84`를 봤다. 측정한 빌드 TE1A.240213.009에 대응하는 태그는 없지만 기기가 낸 메시지 문구가 이 태그의 소스와 일치했다. apksigner와 zipalign은 build-tools 36.0.0에 대응하는 태그를 찾지 못해 main 브랜치의 [apksig](https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb) 커밋 `184702d`와 [platform/build](https://android.googlesource.com/platform/build/+/045a3d6a3e359633a14853a5a5e1e4f2a11cbdae) 커밋 `045a3d6`을 봤고, 아래에서 관측한 16KiB 재정렬과 `-P` 처리는 이 소스와 맞았다.
 
 ## signature 권한으로 묶은 자작 앱 한 쌍
 
@@ -65,9 +67,9 @@ apksigner verify -v repacked.apk | head -4
 
 ![resign-lab 폴더의 터미널. apktool d -q -f -p fw original.apk -o work, grep 으로 본 strings.xml 4행 build_label 이 build: original release 에서 sed 뒤 build: repackaged 로 바뀜, apktool b -p fw work -o unsigned.apk 의 Using Apktool 3.0.2 와 Built apk into: unsigned.apk, apksigner verify unsigned.apk 의 DOES NOT VERIFY 와 ERROR: Missing META-INF/MANIFEST.MF, zipalign -c -P 16 -v 4 의 961 classes.dex (OK - compressed), 3828 resources.arsc (OK), 4521 lib/x86_64/libresign.so (BAD - 4521), Verification FAILED, 이어서 zipalign -P 16 -f 4 와 apksigner sign --out repacked.apk 뒤 ls 에 repacked.apk 와 repacked.apk.idsig, apksigner verify -v 가 Verifies 와 v1 false, v2 false, v3 true](/assets/img/android-mastery/p1c07/01-repack-pipeline.png)
 
-`apktool b`가 만든 `unsigned.apk`는 이름 그대로 서명이 없어서 `Missing META-INF/MANIFEST.MF`로 검증에 떨어진다. 정렬도 돼 있지 않다. `apktool.yml`의 `doNotCompress` 목록에 `arsc`와 `so`가 있어서 두 파일은 압축 없이 들어갔지만, `libresign.so`의 데이터가 4521바이트 지점에서 시작해 `BAD - 4521`이다. 5장에서 본 대로 apktool은 결과물을 ZIP으로 묶기만 하고 정렬 단계를 거치지 않는다.
+`apktool b`가 만든 `unsigned.apk`는 서명이 없어서 `Missing META-INF/MANIFEST.MF`로 검증에 떨어진다. 정렬도 돼 있지 않다. `apktool.yml`의 `doNotCompress` 목록에 `arsc`와 `so`가 있어서 두 파일은 압축 없이 들어갔지만, `libresign.so`의 데이터가 4521바이트 지점에서 시작해 `BAD - 4521`이다. apktool은 결과물을 ZIP으로 묶기만 하고 정렬 단계를 거치지 않는다.
 
-zipalign 인자는 잘못 읽기 쉽다. 맨 뒤 숫자 `4`는 위치 인자 `<align>`이고 압축하지 않은 모든 항목의 데이터를 4바이트 경계에 맞추라는 뜻이다. `-P 16`은 그와 별개로 압축하지 않은 `.so`만 16KiB 페이지 경계에 맞춘다. 옵션은 [ZipAlignMain.cpp 86~108행](https://android.googlesource.com/platform/build/+/045a3d6a3e359633a14853a5a5e1e4f2a11cbdae/tools/zipalign/ZipAlignMain.cpp#86)에서 페이지 크기로 바뀐다. 이름이 `.so`로 끝나는 항목에만 그 크기를 쓰는 건 [ZipAlign.cpp 39~51행](https://android.googlesource.com/platform/build/+/045a3d6a3e359633a14853a5a5e1e4f2a11cbdae/tools/zipalign/ZipAlign.cpp#39)의 `getAlignment()`다. 5장에서 쓴 `-p`는 같은 일을 4KiB로 하는 옛 플래그로, 흔히 보는 `zipalign -p 4`도 `-p` 스위치 뒤에 `<align>` 4가 따로 붙은 꼴이다. zipalign 문서는 `-p`를 deprecated로 표시하고 `-P 16`을 권한다. 검사할 때는 같은 옵션에 `-c`를 붙인다.
+zipalign 인자는 잘못 읽기 쉽다. 맨 뒤 숫자 `4`는 위치 인자 `<align>`이고 압축하지 않은 모든 항목의 데이터를 4바이트 경계에 맞추라는 뜻이다. `-P 16`은 그와 별개로 압축하지 않은 `.so`만 16KiB 페이지 경계에 맞춘다. 옵션은 [ZipAlignMain.cpp 86~108행](https://android.googlesource.com/platform/build/+/045a3d6a3e359633a14853a5a5e1e4f2a11cbdae/tools/zipalign/ZipAlignMain.cpp#86)에서 페이지 크기로 바뀐다. 이름이 `.so`로 끝나는 항목에만 그 크기를 쓰는 건 [ZipAlign.cpp 39~51행](https://android.googlesource.com/platform/build/+/045a3d6a3e359633a14853a5a5e1e4f2a11cbdae/tools/zipalign/ZipAlign.cpp#39)의 `getAlignment()`다. 예전 플래그 `-p`는 같은 일을 4KiB로 하고, 흔히 보는 `zipalign -p 4`도 `-p` 스위치 뒤에 `<align>` 4가 따로 붙은 꼴이다. zipalign 문서는 `-p`를 deprecated로 표시하고 `-P 16`을 권한다. 검사할 때는 같은 옵션에 `-c`를 붙인다.
 
 서명하고 나니 `repacked.apk.idsig`가 하나 더 생겼다. Android 11에서 들어온 v4 서명은 APK 밖의 별도 파일에 담기고 adb가 증분 설치(incremental install)에 쓴다([APK Signature Scheme v4](https://source.android.com/docs/security/features/apksigning/v4)).
 
@@ -87,7 +89,7 @@ unzip -l repacked.apk | grep META-INF
 
 서명자는 의도대로 바뀌었다. 원본은 `CN=SeiKa Lab Release`에 `bd44d387…abf51c80`, 다시 서명한 쪽은 `CN=Android Debug`에 `7515cf75…84895c53`이다. `META-INF/`에 `ANDROIDD.SF`와 `ANDROIDD.RSA`가 있으니 v1 서명은 들어 있고 `--min-sdk-version 21`을 주자 세 스킴이 모두 `true`로 바뀌었다.
 
-apksigner는 범위를 따로 주지 않으면 APK의 minSdk(여기서는 28)부터 검증한다. [ApkVerifier.java](https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb/src/main/java/com/android/apksig/ApkVerifier.java#217)는 범위 상한이 Android 7.0(N) 이상일 때만 서명 블록(v2·v3)을 보고(217행), 그 안에서도 범위에 Android 9(P) 이상이 들어 있어야 v3를 확인한다(246~249행). v2는 minSdk가 P보다 낮거나 v3 이상을 하나도 못 찾았을 때만(279~283행), v1은 minSdk가 N보다 낮거나 v2 이상이 없을 때만(340~344행) 검증 대상에 오른다. 그 범위의 플랫폼이 실제로 검증할 스킴만 골라 보는 셈이다. Android 13은 v4, v3 순으로 보고 없을 때만 v2, v1로 내려간다([ApkSignatureVerifier.java 117~181행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/util/apk/ApkSignatureVerifier.java#117)). 5장 앱은 minSdk가 26이라 v2까지 범위에 들어왔다. 서명이 다 들어갔는지 보려면 `--min-sdk-version`과 `--max-sdk-version`으로 범위를 넓힌다.
+apksigner는 범위를 따로 주지 않으면 APK의 minSdk(여기서는 28)부터 검증한다. [ApkVerifier.java](https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb/src/main/java/com/android/apksig/ApkVerifier.java#217)는 범위 상한이 Android 7.0(N) 이상일 때만 서명 블록(v2·v3)을 보고(217행), 그 안에서도 범위에 Android 9(P) 이상이 들어 있어야 v3를 확인한다(246~249행). v2는 minSdk가 P보다 낮거나 v3 이상을 하나도 못 찾았을 때만(279~283행), v1은 minSdk가 N보다 낮거나 v2 이상이 없을 때만(340~344행) 검증 대상에 오른다. Android 13은 v4, v3 순으로 보고 없을 때만 v2, v1로 내려간다([ApkSignatureVerifier.java 117~181행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/util/apk/ApkSignatureVerifier.java#117)). 앞 글의 앱은 minSdk가 26이라 v2까지 범위에 들어왔다. 서명이 다 들어갔는지 보려면 `--min-sdk-version`과 `--max-sdk-version`으로 범위를 넓힌다.
 
 `apksigner sign`은 반대로 기본값에서 스킴을 다 넣는다. [ApkSignerTool.java 146~149행](https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb/src/apksigner/java/com/android/apksigner/ApkSignerTool.java#146)에서 v1부터 v4까지 기본값이 모두 `true`다. 도움말([help_sign.txt 22~25행](https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb/src/apksigner/java/com/android/apksigner/help_sign.txt#22))은 v1이 min/max SDK에 따라 켜진다고 적지만, minSdk 28인 이 앱에도 v1 파일이 들어갔다. v2와 v3는 아래에서 볼 APK Signing Block에, v4는 `.idsig`에 들어 있다.
 
@@ -180,11 +182,11 @@ original.apk: size=29142 central-dir@28672 signing-block@24576 len=4096 [v2:1436
 
 `signed.apk`에는 24576바이트(4096의 6배) 지점에 4096바이트짜리 블록이 있고 그 안에 v2 서명 1449바이트, v3 서명 1449바이트, 패딩 항목 1130바이트가 들어 있다. 블록 앞의 23271~24575 구간 1305바이트는 전부 0이었다. zipalign을 거친 쪽은 central directory가 23271로 당겨졌고 서명 블록이 없다. 줄어든 5401바이트는 블록 4096바이트와 그 앞 1305바이트를 더한 값이다.
 
-zipalign은 입력 파일을 고치지 않고 새 파일에 항목을 하나씩 옮겨 담는다. [ZipAlign.cpp의 `copyAndAlign()`](https://android.googlesource.com/platform/build/+/045a3d6a3e359633a14853a5a5e1e4f2a11cbdae/tools/zipalign/ZipAlign.cpp#56)(56~102행)은 `getNumEntries()`만큼 돌며 항목마다 `pZout->add()`를 부르고 압축하지 않은 항목에만 정렬 값을 넘긴다. APK Signing Block은 ZIP 항목이 아니고 마지막 항목과 central directory 사이에 끼워 둔 바이트라서 옮겨 담을 목록에 처음부터 없다. 반면 v1 파일들은 평범한 항목이라 그대로 따라온다. 그래서 남은 `.SF`가 v2와 v3로도 서명됐다고 주장하는데 정작 그 서명은 없는 APK가 된다. `.SF`에 `X-Android-APK-Signed`를 두는 이유는 [v2 문서의 rollback 보호 절](https://source.android.com/docs/security/features/apksigning/v2#rollback-protections)에 나온다. 공격자가 v2 서명을 떼어 내고 v1만으로 검증받으려는 시도를 막으려고 v1 검증기는 `.SF`가 가리키는 더 강한 서명이 없으면 거부해야 한다. 5장에서 apktool `--copy-original`로 원래 `META-INF`를 붙여 다시 묶었을 때 본 메시지도 같은 경로였다.
+zipalign은 입력 파일을 고치지 않고 새 파일에 항목을 하나씩 옮겨 담는다. [ZipAlign.cpp의 `copyAndAlign()`](https://android.googlesource.com/platform/build/+/045a3d6a3e359633a14853a5a5e1e4f2a11cbdae/tools/zipalign/ZipAlign.cpp#56)(56~102행)은 `getNumEntries()`만큼 돌며 항목마다 `pZout->add()`를 부르고 압축하지 않은 항목에만 정렬 값을 넘긴다. APK Signing Block은 ZIP 항목이 아니고 마지막 항목과 central directory 사이에 끼워 둔 바이트라서 옮겨 담을 목록에 처음부터 없다. 반면 v1 파일들은 평범한 항목이라 그대로 따라온다. 그래서 남은 `.SF`가 v2와 v3로도 서명됐다고 주장하는데 정작 그 서명은 없는 APK가 된다. `.SF`에 `X-Android-APK-Signed`를 두는 이유는 [v2 문서의 rollback 보호 절](https://source.android.com/docs/security/features/apksigning/v2#rollback-protections)에 나온다. 공격자가 v2 서명을 떼어 내고 v1만으로 검증받으려는 시도를 막으려고 v1 검증기는 `.SF`가 가리키는 더 강한 서명이 없으면 거부해야 한다.
 
 ## 패딩 한 바이트도 v2와 v3가 지킨다
 
-zipalign이 서명 블록까지 옮겨 담는 도구였다고 쳐도 문제는 그대로다. 경고 상자 아래 문장대로 zipalign은 로컬 파일 헤더의 extra 필드 크기를 바꿔 데이터 위치를 맞춘다. 데이터가 아닌 그 패딩 바이트를 v1과 v2·v3가 어떻게 다루는지 보려고 서명된 `repacked.apk`에서 extra 필드 한 바이트만 바꿨다. 쓴 스크립트는 이것이다.
+zipalign이 서명 블록까지 옮겨 담는 도구였다고 쳐도 문제가 남는다. 경고 상자 아래 문장대로 zipalign은 로컬 파일 헤더의 extra 필드 크기를 바꿔 데이터 위치를 맞춘다. 데이터가 아닌 그 패딩 바이트를 v1과 v2·v3가 어떻게 다루는지 보려고 서명된 `repacked.apk`에서 extra 필드 한 바이트만 바꿨다. 쓴 스크립트는 이것이다.
 
 ```python
 """Show or poke the local-header "extra" field of one APK entry (the bytes zipalign/apksigner use as padding).
@@ -254,7 +256,7 @@ apksigner verify -v jar29-aligned.apk | head -2
 
 ![cp unsigned.apk jar.apk 뒤 jarsigner -digestalg SHA-256 -sigalg SHA256withRSA 가 jar signed., zipalign -c 가 5887 resources.arsc (BAD - 3), 6580 lib/x86_64/libresign.so (BAD - 6580), zipalign -P 16 -f 4 뒤 5888 resources.arsc (OK), 16384 lib/x86_64/libresign.so (OK), jarsigner -verify 가 jar verified., apksigner verify -v jar-aligned.apk 가 DOES NOT VERIFY 와 ERROR: Target SDK version 33 requires a minimum of signature scheme v2; the APK is not signed with this or a later signature scheme, apktool.yml 의 targetSdkVersion 을 29 로 바꿔 만든 jar29-aligned.apk 는 Verifies 와 v1 true](/assets/img/android-mastery/p1c07/05-jarsigner-v1-align-after.png)
 
-jarsigner는 정렬을 신경 쓰지 않아서 서명 직후 resources.arsc가 `BAD - 3`, `.so`가 `BAD - 6580`이다. 그 뒤에 zipalign을 돌리면 둘 다 맞춰지고 `jar verified.`도 그대로다. v1이 지키는 건 항목 내용과 `META-INF` 파일이라 extra 필드 길이가 바뀌어도 서명은 멀쩡하고 그래서 문서도 jarsigner에는 반대 순서를 시킨다.
+jarsigner는 정렬을 신경 쓰지 않아서 서명 직후 resources.arsc가 `BAD - 3`, `.so`가 `BAD - 6580`이다. 그 뒤에 zipalign을 돌리면 둘 다 맞춰지고 `jar verified.`도 계속 나온다. v1이 지키는 건 항목 내용과 `META-INF` 파일이라 extra 필드 길이가 바뀌어도 서명은 멀쩡하고 그래서 문서도 jarsigner에는 반대 순서를 시킨다.
 
 다만 이 APK는 apksigner 검증에서 `Target SDK version 33 requires a minimum of signature scheme v2`로 떨어졌다. `apktool.yml`의 targetSdk만 29로 바꿔 다시 묶은 사본은 같은 절차로 `Verifies`, v1 `true`가 나왔다.
 
@@ -304,7 +306,7 @@ build-tools 34.0.0의 apksigner는 `.so`를 `BAD - 4521`로 그대로 두었고 
 
 ![android.googlesource.com 의 platform/tools/apksig 커밋 f1682abcc0752e3231fc65f727f94b4f821e2d05 페이지. author Michael Groover, Fri Nov 03 2023, 메시지 제목 Set defaults to align native libraries to 16k 와 본문 to not preserve existing alignment for files within an APK, but instead native library files will be aligned on a 16k boundary and all other uncompressed files will use 4 bytes, 아래에 바뀐 파일 ApkSignerTool.java, help_sign.txt, ApkSigner.java, Constants.java](/assets/img/android-mastery/p1c07/07-web-apksig-16k-commit.png)
 
-zipalign이 만든 패딩도 그대로 두지 않는다. zipalign만 거친 `aligned.apk`에서 `.so`의 extra 필드는 11863바이트가 모두 0인데, 그것을 서명한 `repacked.apk`에서는 11855바이트이고 `35 d9 4b 2e 00 40`으로 시작한다. 헤더 ID `0xd935`, 데이터 길이 `0x2e4b`(11851), 정렬 단위 `0x4000`(16384)인 apksigner 자신의 정렬 필드다. `--alignment-preserved`를 주면 옛 동작대로 `.so`가 `BAD - 4521`로 남는다. 서명 전 zipalign이 남긴 패딩이 결과물에 살아남는 건 이 옵션을 주거나 build-tools 34 이하로 서명할 때다.
+zipalign이 만든 패딩도 손댄다. zipalign만 거친 `aligned.apk`에서 `.so`의 extra 필드는 11863바이트가 모두 0인데, 그것을 서명한 `repacked.apk`에서는 11855바이트이고 `35 d9 4b 2e 00 40`으로 시작한다. 헤더 ID `0xd935`, 데이터 길이 `0x2e4b`(11851), 정렬 단위 `0x4000`(16384)인 apksigner 자신의 정렬 필드다. `--alignment-preserved`를 주면 옛 동작대로 `.so`가 `BAD - 4521`로 남는다. 서명 전 zipalign이 남긴 패딩이 결과물에 살아남는 건 이 옵션을 주거나 build-tools 34 이하로 서명할 때다.
 
 ## 정렬이 어긋나면 기기는 어디서 막나
 
@@ -368,7 +370,7 @@ adb -s $S logcat -d -v raw -s ResignLab:I
 
 해시는 smali에 두 번 나온다. `static final` 필드의 초깃값(7행)과, javac가 컴파일 타임 상수를 인라인해 넣은 `onCreate`의 `const-string`(513행)이다. 둘 다 바꾸고 같은 debug 키로 서명하자 `install -r`이 성공했고 서명자는 여전히 `7515cf75…84895c53`인데 자체 검사는 `OK, signed with release key`를 찍었다.
 
-vault 권한은 플랫폼이 서명자를 직접 비교해 정하므로 `DENIED` 그대로였다. 원본이 깔려 있을 때 `dumpsys package`로 보면 두 앱 모두 `signatures:[41b7cfa1]`이었고 `io.seika.resign`에는 `io.seika.vault.permission.READ: granted=true`가 찍혔다. 같은 상태에서 뜬 전체 `dumpsys package` 출력에서 서명과 그 권한 줄만 추리면 이렇다.
+vault 권한은 플랫폼이 서명자를 직접 비교해 정하므로 여전히 `DENIED`였다. 자체 검사를 고친 앱을 깐 지금 `dumpsys package`를 보면 서명은 `8f0ad5a3`이고 권한은 `granted=false`다.
 
 ```bash
 adb -s $S shell dumpsys package io.seika.resign | grep -E "signatures|io.seika.vault.permission.READ"
@@ -380,9 +382,17 @@ adb -s $S shell dumpsys package io.seika.resign | grep -E "signatures|io.seika.v
       io.seika.vault.permission.READ: granted=false
 ```
 
-서버 쪽에서는 Play Integrity의 `appRecognitionVerdict`가 앱과 인증서가 Play 배포본과 맞으면 `PLAY_RECOGNIZED`, 인증서나 패키지 이름이 Play 기록과 다르면 `UNRECOGNIZED_VERSION`을 준다([판정 문서](https://developer.android.com/google/play/integrity/verdicts), [Play Integrity(C48)](/posts/android-concept-atlas-c48-play-integrity/)). 판정 토큰은 앱 서버가 Google 서버에 보내 복호화하거나(기본) 자체 키로 직접 복호화해 검증하니 앱 안의 상수처럼 고쳐 넘기기 어렵지만, Play 배포본도 Play Integrity가 붙은 이미지도 없어 여기서는 측정하지 못했다. Google Cloud API 키의 패키지 이름·SHA-1 제한은 그 값을 요청의 `X-Android-Package`, `X-Android-Cert` 헤더로 받는데, 리패키징한 앱이 원본 값을 그대로 실어 보내면 막을 방법이 없어 보인다. 여기서 시험하지는 않았다. [API 키 문서](https://cloud.google.com/docs/authentication/api-keys)도 API 제한과 사용량 감시를 같이 걸라고 권한다.
+원본이 깔려 있을 때 같은 명령으로 보면 두 앱 모두 `signatures:[41b7cfa1]`이었고 `io.seika.resign`은 `granted=true`였다.
 
-재서명이 TLS certificate pinning을 깬다는 말도 종종 보는데 Network Security Config의 pin-set은 APK 안 `res/xml`에 있는 리소스라 서명과는 상관이 없다. 리패키징하는 쪽은 `strings.xml`을 바꾼 것처럼 그 파일도 고칠 수 있다([TLS·NSC 피닝(C46)](/posts/android-concept-atlas-c46-tls-nsc-pinning/)). 리패키징한 앱으로 실제로 무엇을 노리고 막는지는 5부 2장에서 다시 다룬다.
+```text
+    signatures=PackageSignatures{1e186fb version:3, signatures:[41b7cfa1], past signatures:[]}
+      io.seika.vault.permission.READ
+      io.seika.vault.permission.READ: granted=true
+```
+
+서버 쪽에서는 Play Integrity의 `appRecognitionVerdict`가 앱과 인증서가 Play 배포본과 맞으면 `PLAY_RECOGNIZED`, 인증서나 패키지 이름이 Play 기록과 다르면 `UNRECOGNIZED_VERSION`을 준다([판정 문서](https://developer.android.com/google/play/integrity/verdicts), [Play Integrity(C48)](/posts/android-concept-atlas-c48-play-integrity/)). 판정 토큰은 앱 서버가 Google 서버에 보내 복호화하거나(기본) 자체 키로 직접 복호화해 검증하니 앱 안의 상수처럼 고쳐 넘기기 어렵지만, Play 배포본도 Play Integrity가 붙은 이미지도 없어 여기서는 측정하지 못했다. Google Cloud API 키의 패키지 이름·SHA-1 제한은 그 값을 요청의 `X-Android-Package`, `X-Android-Cert` 헤더로 받는데, 리패키징한 앱이 원본 값을 실어 보내면 서버는 구별할 수 없다. [API 키 문서](https://cloud.google.com/docs/authentication/api-keys)의 주석부터 이 제한은 우회하기 쉽다(Bypassing this restriction is straightforward)고 적고 API 제한과 사용량 감시를 함께 걸라고 권한다. 여기서 직접 시험하지는 않았다.
+
+재서명이 TLS certificate pinning을 깬다는 말도 종종 보는데 Network Security Config의 pin-set은 APK 안 `res/xml`에 있는 리소스라 서명과는 상관이 없다. 리패키징하는 쪽은 `strings.xml`을 바꾼 것처럼 그 파일도 고칠 수 있다([TLS·NSC 피닝(C46)](/posts/android-concept-atlas-c46-tls-nsc-pinning/)).
 
 ## 막혔을 때 메시지로 원인 찾기
 
@@ -393,8 +403,8 @@ adb -s $S shell dumpsys package io.seika.resign | grep -E "signatures|io.seika.v
 | `digest of contents did not verify` | 서명 뒤 바이트가 바뀌었다(패딩 포함) | 서명 전 APK에서 다시 만든다 |
 | `verify -v`의 v1, v2 `false` | 그 SDK 범위에서 확인하지 않았다 | `--min-sdk-version 21`로 범위를 넓혀 본다 |
 | `version 2 or newer` | targetSdk 30 이상인데 v1 서명뿐이다 | apksigner로 v2 이상을 넣는다 |
-| `res=-2` (native libraries) | `extractNativeLibs`가 false인데 `.so`가 압축돼 있거나 페이지 경계에 없다 | `.so`를 STORED로 두고 `zipalign -P 16`, 또는 정렬하는 apksigner |
-| `-124` (resources.arsc) | resources.arsc가 압축돼 있거나 4바이트 경계에 없다 (targetSdk 30 이상) | 압축하지 않고(doNotCompress) `<align>` 4로 정렬한다 |
+| `res=-2` (네이티브 라이브러리) | `extractNativeLibs`가 false인데 `.so`가 압축돼 있거나 페이지 경계에 없다 | `.so`를 STORED로 두고 `zipalign -P 16`, 또는 정렬하는 apksigner |
+| `-124` (resources.arsc 정렬) | resources.arsc가 압축돼 있거나 4바이트 경계에 없다 (targetSdk 30 이상) | 압축하지 않고(doNotCompress) `<align>` 4로 정렬한다 |
 
 참고 자료: [zipalign](https://developer.android.com/tools/zipalign) · [apksigner](https://developer.android.com/tools/apksigner) · [APK 서명 개요](https://source.android.com/docs/security/features/apksigning) · [APK Signature Scheme v2](https://source.android.com/docs/security/features/apksigning/v2) · [APK Signature Scheme v4](https://source.android.com/docs/security/features/apksigning/v4) · [Android 11 동작 변경](https://developer.android.com/about/versions/11/behavior-changes-11) · [APK 서명 v1~v4(C08)](/posts/android-concept-atlas-c08-apk-signing/) · [DEX·multidex·resources.arsc(C07)](/posts/android-concept-atlas-c07-dex-multidex-resources-arsc/)
 
