@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Burp/mitmproxy 로컬 인터셉션 — 유저 CA가 막히는 곳, 핀이 막는 곳"
+title: "mitmproxy 로컬 인터셉션 — 유저 CA가 막히는 곳, 핀이 막는 곳"
 date: 2026-10-26 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
@@ -12,7 +12,7 @@ excerpt: "Android 13 에뮬레이터에서 유저 저장소의 mitmproxy CA는 t
 
 직접 만든 앱 몇 벌로 같은 HTTPS 요청을 보내면서 CA를 유저 저장소에서 시스템 저장소로 옮기고 단계마다 어느 앱이 어디서 끊기는지 봤다. 유저 CA가 안 먹히는 이유는 플랫폼 소스 한 줄로 설명된다. 시스템 저장소로 옮긴 뒤에도 핀셋(pin-set)을 건 앱은 여전히 실패했고, 임베디드 Cronet을 쓰는 앱은 전혀 다른 이유로 실패했다.
 
-기기는 `-read-only`로 띄워 끄면 변경이 모두 사라지는 Android 13(API 33, 빌드 TE1A.240213.009, 2024-03-01 보안 패치) x86_64 google_apis userdebug 에뮬레이터로, `adb root`가 되고 SELinux는 Enforcing이다. Android 14 이후의 동작은 Android 16(API 36, BE2A.250530.026.F3) 에뮬레이터에서 확인했다. 프록시는 mitmproxy 11.0.2다. 제목에 Burp를 넣었지만 이 환경에는 Burp Suite가 없어서, 화면과 출력은 전부 mitmproxy의 것이고 Burp가 다르게 동작하는 대목은 PortSwigger 문서로 대신한다. 그 밖에 OpenSSL 3.5.5, apktool 3.0.2, build-tools 36.0.0, Frida 17.17.0과 frida-tools 14.8.1을 썼다. 플랫폼 소스는 frameworks/base의 android13-release(`d27f996`)와 android14-release(`6e47c70`)에서, Cronet 쪽은 앱에 넣은 것과 같은 Chromium 143.0.7445.0 태그에서 봤다. TLS 신뢰 체인과 NSC의 개념은 [C46](/posts/android-concept-atlas-c46-tls-nsc-pinning/)에 있다.
+기기는 `-read-only`로 띄워 끄면 변경이 모두 사라지는 Android 13(API 33, 빌드 TE1A.240213.009, 2024-03-01 보안 패치) x86_64 google_apis userdebug 에뮬레이터로, `adb root`가 되고 SELinux는 Enforcing이다. Android 14 이후의 동작은 Android 16(API 36, BE2A.250530.026.F3) 에뮬레이터에서 확인했다. 프록시는 mitmproxy 11.0.2다. 이 환경에는 Burp Suite가 없어서 화면과 출력은 전부 mitmproxy의 것이고 Burp가 다르게 동작하는 대목은 PortSwigger 문서로 대신한다. 그 밖에 OpenSSL 3.5.5, apktool 3.0.2, build-tools 36.0.0, Frida 17.17.0과 frida-tools 14.8.1을 썼다. 플랫폼 소스는 frameworks/base의 android13-release(`d27f996`)와 android14-release(`6e47c70`)에서, Cronet 쪽은 앱에 넣은 것과 같은 Chromium 143.0.7445.0 태그에서 봤다. TLS 신뢰 체인과 NSC의 개념은 [C46](/posts/android-concept-atlas-c46-tls-nsc-pinning/)에 있다.
 
 ## 자작 앱 여섯 벌과 프록시가 직접 답하는 api.lab.test
 
@@ -37,7 +37,7 @@ static String fetch(String url, String variant) {
 }
 ```
 
-같은 코드를 targetSdk, debuggable, NSC만 바꿔 여러 벌로 빌드했다. Cronet을 쓰는 두 벌은 `openConnection` 줄만 `engine.openConnection(new URL(url))`로 바꾸고 `org.chromium.net:cronet-embedded:143.7445.0`을 APK에 넣었다. Play 서비스가 제공하는 Cronet 대신 APK에 든 것을 쓰도록 `CronetProvider.PROVIDER_NAME_APP_PACKAGED` 공급자를 골라 엔진을 만든다.
+같은 코드를 targetSdk, debuggable, NSC만 바꿔 여러 벌로 빌드했다. Cronet을 쓰는 두 벌은 `fetch`가 `CronetEngine`을 함께 받아 `engine.openConnection(new URL(url))`로 연결을 열고, 결과 줄에 엔진 버전(`cronet/<버전>`)이 더 붙는다. `org.chromium.net:cronet-embedded:143.7445.0`은 APK에 넣었다. Play 서비스가 제공하는 Cronet 대신 APK에 든 것을 쓰도록 `CronetProvider.PROVIDER_NAME_APP_PACKAGED` 공급자를 골라 엔진을 만든다.
 
 | 빌드 | targetSdk | debuggable | Network Security Config | HTTP 스택 |
 |---|---|---|---|---|
@@ -137,7 +137,7 @@ mitmweb --listen-host 127.0.0.1 -p 18110 --web-host 127.0.0.1 --web-port 18111 -
   --set 'allow_hosts=api\.lab\.test' > mitm.log 2>&1
 ```
 
-`allow_hosts`는 정규식을 받아서 점을 이스케이프했고, 처음에는 이 옵션을 넣지 않았다. 기기 프록시를 호스트로 돌리자마자 에뮬레이터의 구글 앱들이 `www.googleapis.com`, `youtubei.googleapis.com`, `android.googleapis.com` 같은 호스트로 연결을 쏟아냈고, 2분 남짓 사이에 로그가 `does not trust the proxy's certificate` 줄로 가득 찼다. CA를 시스템 저장소에 넣은 뒤였다면 핀을 걸지 않은 앱의 트래픽은 복호까지 됐을 것이다. `allow_hosts`를 주면 mitmproxy는 맞는 호스트만 가로채고 나머지는 열어 보지 않고 넘긴다.
+`allow_hosts`는 정규식을 받아서 점을 이스케이프했다. 뒤에 띄운 두 번째 프록시들에는 `allow_hosts=api.lab.test`처럼 이스케이프 없이 넘겼는데, 정규식의 `.`은 점 자체에도 맞으므로 결과는 같다. 처음에는 이 옵션을 넣지 않았다. 기기 프록시를 호스트로 돌리자마자 에뮬레이터의 구글 앱들이 `www.googleapis.com`, `youtubei.googleapis.com`, `android.googleapis.com` 같은 호스트로 연결을 쏟아냈고, 2분 남짓 사이에 로그가 `does not trust the proxy's certificate` 줄로 가득 찼다. CA를 시스템 저장소에 넣은 뒤였다면 핀 없이 플랫폼 스택을 쓰는 앱의 트래픽은 복호됐을 가능성이 크지만, Cronet 기반 클라이언트는 아래에서 보듯 1년짜리 리프를 여전히 거절했을 것이다. `allow_hosts`를 주면 mitmproxy는 맞는 호스트만 가로채고 나머지는 열어 보지 않고 넘긴다.
 
 기기 준비는 앱 설치와 파일 세 개 올리기다. `c8750f0d.0`은 위 캡처에서 만든 CA 파일이고 `usercert.sh`, `syscert.sh`의 내용은 아래에서 차례로 나온다.
 
@@ -152,7 +152,7 @@ adb -s $S push c8750f0d.0 usercert.sh syscert.sh /data/local/tmp/
 
 앱이 쓰는 프록시는 시스템 설정 `http_proxy`([Settings.Global.HTTP_PROXY](https://developer.android.com/reference/android/provider/Settings.Global#HTTP_PROXY))다. 앱 프로세스가 뜰 때 [ActivityThread.java 6690행](https://android.googlesource.com/platform/frameworks/base/+/d27f9960456403533af0a0d5d9f14cf71c9c8cf6/core/java/android/app/ActivityThread.java#6690)이 연결 관리자의 기본 프록시를 [Proxy.java 203행](https://android.googlesource.com/platform/frameworks/base/+/d27f9960456403533af0a0d5d9f14cf71c9c8cf6/core/java/android/net/Proxy.java#203)의 `setHttpProxyConfiguration(ProxyInfo)`에 넘기고, 이 메서드가 부르는 218~231행의 오버로드가 `http.proxyHost`, `https.proxyHost` 시스템 속성을 채운다. 실험 앱이 찍는 `proxy=[HTTP @ ...]`는 이 속성을 읽은 `ProxySelector`의 결과다. 첫 실행에서는 `settings put` 뒤 1분쯤 앱이 `proxy=[DIRECT]`를 찍었다. 새로 부팅해 다시 돌렸을 때는 바로 반영돼 원인은 확인하지 못했다.
 
-이번 에뮬레이터는 프록시 옵션 없이 띄웠으니 `-http-proxy` 쪽 동작은 문서 설명만 옮긴다. [에뮬레이터 프록시 문서](https://developer.android.com/studio/run/emulator-networking-proxy)는 이 옵션을 네트워크 계층에서 동작하는 프록시로 설명하고, HTTPS를 복호하지 않은 채 TCP로 터널링한다고 적으며, 앱 트래픽 검사에는 Android 시스템 프록시를 권한다.
+이번 에뮬레이터는 프록시 옵션 없이 띄웠으니 `-http-proxy` 쪽 동작은 문서 설명만 옮긴다. [에뮬레이터 프록시 문서](https://developer.android.com/studio/run/emulator-networking-proxy)에 따르면 이 옵션은 TCP 터널을 만들어 SSL 검사를 할 수 없게 하고, 앱 트래픽을 검사하려면 Android 시스템 프록시 쪽을 권한다.
 
 어느 주소가 호스트의 프록시에 닿는지는 평문 HTTP 주소로 먼저 봤다.
 
@@ -170,7 +170,7 @@ grep -o 'lab origin answered.*' mitm.log
 
 ![기기 프록시 주소 실험 터미널. settings put global http_proxy 127.0.0.1:18110 뒤 t23 은 프록시를 HTTP @ 127.0.0.1:18110 으로 읽고도 UnknownHostException: Unable to resolve host "api.lab.test": No address associated with hostname, adb reverse tcp:18110 tcp:18110 뒤 같은 127.0.0.1 설정으로 200 hello from lab origin (http /plain), http_proxy 10.0.2.2:18110 으로 바꾸자 t23 200, t33 은 IOException: Cleartext HTTP traffic to api.lab.test not permitted, mitm.log 에는 lab origin answered GET http://api.lab.test/plain for t23 두 줄](/assets/img/android-mastery/p1c11/02-proxy-address.png)
 
-`127.0.0.1:18110`을 주자 앱은 프록시를 제대로 읽었는데(`proxy=[HTTP @ 127.0.0.1:18110]`) 결과는 DNS 오류인 `UnknownHostException: Unable to resolve host "api.lab.test"`였다. 에뮬레이터 안의 127.0.0.1은 기기 자신이고 그 포트에는 아무것도 없다. Android에 들어 있는 OkHttp는 경로를 고를 때 `ProxySelector`가 준 프록시를 차례로 시도하고 맨 끝에 `Proxy.NO_PROXY`, 곧 직접 연결을 한 번 더 붙여 둔다([RouteSelector.java 117~124행](https://android.googlesource.com/platform/external/okhttp/+/fba9ea2fbda5e85b0ffd671b2a819ebf26a7917b/okhttp/src/main/java/com/squareup/okhttp/internal/http/RouteSelector.java#117)). 프록시 연결이 실패하자 직접 연결로 넘어갔고, 직접 연결은 `api.lab.test`를 풀지 못해 DNS 오류로 끝난 것으로 보인다. 이 폴백을 기기에서 추적하지는 않았고 오류 문구와 소스로 미루어 본 것이다. 실제 서비스였다면 이름이 풀려 요청이 프록시를 건너뛰고 곧장 나갔을 테니, 주소가 틀렸을 때 보이는 증상은 프록시에 아무것도 안 잡히는 것뿐일 것이다.
+`127.0.0.1:18110`을 주자 앱은 프록시를 제대로 읽었는데(`proxy=[HTTP @ 127.0.0.1:18110]`) 결과는 DNS 오류인 `UnknownHostException: Unable to resolve host "api.lab.test"`였다. 에뮬레이터 안의 127.0.0.1은 기기 자신이고 그 포트에는 아무것도 없다. Android에 들어 있는 OkHttp는 경로를 고를 때 `ProxySelector`가 준 프록시를 차례로 시도하고 맨 끝에 `Proxy.NO_PROXY`, 곧 직접 연결을 한 번 더 붙여 둔다([RouteSelector.java 117~124행](https://android.googlesource.com/platform/external/okhttp/+/fba9ea2fbda5e85b0ffd671b2a819ebf26a7917b/okhttp/src/main/java/com/squareup/okhttp/internal/http/RouteSelector.java#117)). 프록시 연결이 실패하자 직접 연결로 넘어갔고, 직접 연결이 `api.lab.test`를 풀지 못해 DNS 오류로 끝났다고 본다. 폴백을 기기에서 추적하지는 않았고 오류 문구와 소스로 미루어 짐작했다. 실제 서비스였다면 이름이 풀려 요청이 프록시를 건너뛰고 곧장 나갔을 테니, 주소가 틀렸을 때는 프록시에 아무것도 안 잡히는 증상만 남는다.
 
 `adb reverse tcp:18110 tcp:18110`으로 기기의 18110을 adb 연결 너머 호스트의 18110에 이어 주자 같은 127.0.0.1 설정으로 200이 나왔다. 루프백에만 묶인 리스너를 쓸 때 쓸 만한 방법이다. 에뮬레이터에서는 `10.0.2.2`가 호스트 루프백의 별칭이라([에뮬레이터 네트워크 주소 문서](https://developer.android.com/studio/run/emulator-networking-address)) `10.0.2.2:18110`도 바로 통했다. 이후 실험은 모두 이 주소로 했다.
 
@@ -356,7 +356,7 @@ kill $!
 
 ![핀 대조 실험 터미널. mitmdump -p 18112 --certs api.lab.test=origin/origin-chain.pem 실행, cat origin/pins.txt 에 origin gUgCOxOv2KkQ1bq+Tja8Ky9kItI6o7Xh0o38mjlDa9g= 와 backup b7EJcPjmkmgJTzspsO8zbUV+la2ucbU0Q1+3eMS8FME=, 리프 공개키 해시는 18110 pq8uSY4VTWIDpwc5YR8A4kvSDoaxuGnRX3dNQeUatDw= 와 18112 gUgCOxOv2KkQ1bq+Tja8Ky9kItI6o7Xh0o38mjlDa9g=, http_proxy 10.0.2.2:18112 로 rel 은 200 hello from lab origin, 10.0.2.2:18110 으로 돌리면 SSLHandshakeException: Pin verification failed](/assets/img/android-mastery/p1c11/11-pin-control.png)
 
-18110이 내민 리프의 해시 `pq8uSY4V…`는 mitmproxy CA 자신의 공개키 해시와 같다. mitmproxy는 호스트마다 리프를 새로 만들지만 키는 CA의 것을 다시 쓴다([certs.py 307행](https://github.com/mitmproxy/mitmproxy/blob/v11.0.2/mitmproxy/certs.py#L307)의 `builder.public_key(cacert.public_key())`). 18112의 리프는 origin 핀 `gUgCOx…`와 같고 rel은 18112를 거치면 200, 18110으로 돌아오면 다시 `Pin verification failed`였다. [checkPins()](https://android.googlesource.com/platform/frameworks/base/+/d27f9960456403533af0a0d5d9f14cf71c9c8cf6/core/java/android/security/net/config/NetworkSecurityTrustManager.java#118)는 검증된 체인의 인증서마다 SPKI 해시를 구해 핀 목록과 대조하므로(128~145행), 이번처럼 핀이 서버 키일 때는 기기가 어떤 CA를 믿든 그 키의 개인키 없이 만든 리프는 맞출 수 없다. 121행은 핀셋의 expiration이 지나면 검사를 통째로 건너뛴다.
+18110이 내민 리프의 해시 `pq8uSY4V…`는 mitmproxy CA 자신의 공개키 해시와 같다. mitmproxy는 호스트마다 리프를 새로 만들지만 키는 CA의 것을 다시 쓴다([certs.py 307행](https://github.com/mitmproxy/mitmproxy/blob/v11.0.2/mitmproxy/certs.py#L307)의 `builder.public_key(cacert.public_key())`). 18112의 리프는 origin 핀 `gUgCOx…`와 같고 rel은 18112를 거치면 200, 18110으로 돌아오면 다시 `Pin verification failed`였다. [checkPins()](https://android.googlesource.com/platform/frameworks/base/+/d27f9960456403533af0a0d5d9f14cf71c9c8cf6/core/java/android/security/net/config/NetworkSecurityTrustManager.java#118)는 검증된 체인의 인증서마다 SPKI 해시를 구해 핀 목록과 대조하므로(128~145행), 이번처럼 핀이 서버 키일 때는 기기가 어떤 CA를 믿든 그 키의 개인키 없이 만든 리프는 맞출 수 없다. rel의 핀셋에는 expiration을 달지 않았지만, 달아 두었다면 그 날짜가 지난 뒤에는 121행에서 핀 검사 전체를 건너뛴다.
 
 ## Frida로 checkPins 하나만 건너뛰기
 
@@ -398,7 +398,9 @@ Cronet은 NSC를 읽지 않는다는 말을 종종 보는데 이번 결과는 �
 
 Chromium 소스가 이 동작을 설명한다. [net/features.gni 53행](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/features.gni#53)의 `chrome_root_store_optional = is_android && !is_cronet_build` 때문에 Android용 Cronet에는 Chrome Root Store가 들어가지 않고 인증서 검증은 플랫폼에 맡긴다. [X509Util.java](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/android/java/src/org/chromium/net/X509Util.java#202)는 기본 신뢰 관리자를 `createTrustManager(null)`로 만들고(202행), 그 안에서 `TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())`로 팩토리를 얻는다(266~285행). 앱 프로세스에서 이 팩토리를 내주는 쪽이 NSC다. 앱이 뜰 때 [ActivityThread.java 6711행](https://android.googlesource.com/platform/frameworks/base/+/d27f9960456403533af0a0d5d9f14cf71c9c8cf6/core/java/android/app/ActivityThread.java#6711)이 `NetworkSecurityConfigProvider.install()`을 부르고, [NetworkSecurityConfigProvider.java 31~47행](https://android.googlesource.com/platform/frameworks/base/+/d27f9960456403533af0a0d5d9f14cf71c9c8cf6/core/java/android/security/net/config/NetworkSecurityConfigProvider.java#31)은 `TrustManagerFactory.PKIX`를 NSC의 `RootTrustManagerFactorySpi`로 등록한 보안 제공자를 1순위에 끼운다. X509Util은 받은 신뢰 관리자를 [X509TrustManagerExtensions](https://android.googlesource.com/platform/frameworks/base/+/d27f9960456403533af0a0d5d9f14cf71c9c8cf6/core/java/android/net/http/X509TrustManagerExtensions.java#53)로 감싸 호스트 이름이 붙은 `checkServerTrusted`를 부르고 이 호출은 [RootTrustManager.java 127~134행](https://android.googlesource.com/platform/frameworks/base/+/d27f9960456403533af0a0d5d9f14cf71c9c8cf6/core/java/android/security/net/config/RootTrustManager.java#127)에서 그 호스트의 도메인 설정으로 넘어간다. 앞에서 본 핀 검사까지 같은 길로 간다. 평문 허용 여부도 [AndroidNetworkLibrary.java 381~386행](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/android/java/src/org/chromium/net/AndroidNetworkLibrary.java#381)에서 `NetworkSecurityPolicy`에 묻는다. cr 프로세스의 logcat에도 다른 앱처럼 `NetworkSecurityConfig: No Network Security Config specified, using platform default`가 찍혀 있었다.
 
-CA를 시스템 저장소로 옮긴 뒤 cr이 낸 `ERR_CERT_VALIDITY_TOO_LONG`은 유저 CA 때의 AUTHORITY_INVALID와 코드부터 다르다(-213). Chromium [cert_verify_proc.cc 557~560행](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/cert/cert_verify_proc.cc#557)은 체인이 알려진 루트(known root)로 끝나면 리프의 유효 기간이 너무 긴지 한 번 더 검사한다. 상한은 [HasTooLongValidity() 791~860행](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/cert/cert_verify_proc.cc#791)이 정하고 2026년 3월 15일 이후 발급된 인증서는 200일이다(850~854행). Android에서 알려진 루트란 [X509Util.java 383~413행](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/android/java/src/org/chromium/net/X509Util.java#383)의 `isKnownRoot()`가 시스템 키스토어에서 `system:` 별칭으로 찾아내는 루트다. 유저 저장소의 CA는 여기 들지 않아 crnsc는 이 검사를 받지 않았고, 시스템 저장소에 넣은 mitmproxy CA는 해당된다. mitmproxy 11.0.2의 [certs.py](https://github.com/mitmproxy/mitmproxy/blob/v11.0.2/mitmproxy/certs.py#L310)는 리프의 시작 시각을 발급 시점보다 이틀 앞으로, 만료를 발급 시점에서 `CERT_EXPIRY`(34행, 365일) 뒤로 잡는다(310~311행). 실제로 받은 리프도 `notBefore=Oct 13 15:46:34 2026 GMT`, `notAfter=Oct 15 15:46:34 2027 GMT`였다. 시각 옆에 GMT가 붙어 있지만 숫자는 리프를 발급한 순간의 호스트 한국 시각에서 이틀을 뺀 값이라, 같은 순간의 UTC로 적었어야 할 값보다 9시간 크다. 309행이 시간대 없는 `datetime.now()`를 넘기고 cryptography가 그 값을 UTC로 받아들여서 생긴 일로 보인다. 시작 시각을 이틀 당겨 둔 덕에 검증에는 영향이 없었다.
+CA를 시스템 저장소로 옮긴 뒤 cr이 낸 `ERR_CERT_VALIDITY_TOO_LONG`은 유저 CA 때의 AUTHORITY_INVALID와 코드부터 다르다(-213). Chromium [cert_verify_proc.cc 557~560행](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/cert/cert_verify_proc.cc#557)은 체인이 알려진 루트(known root)로 끝나면 리프의 유효 기간이 너무 긴지 한 번 더 검사한다. 상한은 [HasTooLongValidity() 791~860행](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/cert/cert_verify_proc.cc#791)이 정하고 2026년 3월 15일 이후 발급된 인증서는 200일이다(850~854행). Android에서 알려진 루트란 [X509Util.java 383~413행](https://chromium.googlesource.com/chromium/src/+/refs/tags/143.0.7445.0/net/android/java/src/org/chromium/net/X509Util.java#383)의 `isKnownRoot()`가 시스템 키스토어에서 `system:` 별칭으로 찾아내는 루트다. 유저 저장소의 CA는 여기 들지 않아 crnsc는 이 검사를 받지 않았고, 시스템 저장소에 넣은 mitmproxy CA는 해당된다.
+
+mitmproxy 11.0.2의 [certs.py](https://github.com/mitmproxy/mitmproxy/blob/v11.0.2/mitmproxy/certs.py#L310)는 리프의 시작 시각을 발급 시점보다 이틀 앞으로, 만료를 발급 시점에서 `CERT_EXPIRY`(34행, 365일) 뒤로 잡는다(310~311행). 실제로 받은 리프도 `notBefore=Oct 13 15:46:34 2026 GMT`, `notAfter=Oct 15 15:46:34 2027 GMT`였다. 시각 옆에 GMT가 붙어 있지만 숫자는 리프를 발급한 순간의 호스트 한국 시각에서 이틀을 뺀 값이라, 같은 순간의 UTC로 적었어야 할 값보다 9시간 크다. 309행이 시간대 없는 `datetime.now()`를 넘기고 cryptography가 그 값을 UTC로 받아들여서 생긴 일로 보인다. 시작 시각을 이틀 당겨 둔 덕에 검증에는 영향이 없었다.
 
 리프 수명만 줄이면 되는지 보려고 mitmproxy의 `CERT_EXPIRY`를 90일로 바꾸는 애드온을 붙인 두 번째 프록시를 18112에 띄웠다. 애드온 `short_leaf.py`는 주석과 import를 빼면 `mitmproxy.certs.CERT_EXPIRY = datetime.timedelta(days=90)` 한 줄이다.
 
@@ -425,7 +427,7 @@ NSC를 정말로 비켜 가는 쪽은 신뢰 판단을 스스로 하는 코드�
 
 여기까지는 Android 13이다. Android 14부터 루트 CA는 Conscrypt APEX 모듈에 들어가 모듈 업데이트로 바뀔 수 있게 됐다([Conscrypt 문서](https://source.android.com/docs/core/ota/modular-system/conscrypt)). 플랫폼이 읽는 디렉터리도 그에 맞춰 바뀌었다.
 
-![frameworks/base android14-release(6e47c70) 의 SystemCertificateSource.java 28~51행, 강조된 41행 getDirectory(). system.certs.enabled 속성이 "true" 면 ANDROID_ROOT 의 /etc/security/cacerts 를 쓰고, 아니면 /apex/com.android.conscrypt/cacerts 가 존재하고 비어 있지 않을 때 그 디렉터리를 반환, 둘 다 아니면 /etc/security/cacerts 로 돌아감](/assets/img/android-mastery/p1c11/12-src-a14-system-ca-apex.png)
+![frameworks/base android14-release(6e47c70) 의 SystemCertificateSource.java 28~51행, 강조된 41행 getDirectory() (캡처는 51행까지라 52행의 닫는 중괄호는 잘림). system.certs.enabled 속성이 "true" 면 ANDROID_ROOT 의 /etc/security/cacerts 를 쓰고, 아니면 /apex/com.android.conscrypt/cacerts 가 존재하고 비어 있지 않을 때 그 디렉터리를 반환, 둘 다 아니면 /etc/security/cacerts 로 돌아감](/assets/img/android-mastery/p1c11/12-src-a14-system-ca-apex.png)
 
 android14-release의 [`getDirectory()`](https://android.googlesource.com/platform/frameworks/base/+/6e47c7075b91983ae501114425ea25e6df7690c8/core/java/android/security/net/config/SystemCertificateSource.java#41)(41~52행)는 `system.certs.enabled` 속성이 `true`가 아니면 `/apex/com.android.conscrypt/cacerts`가 있고 비어 있지 않을 때 그쪽을 쓴다. /system 쪽 디렉터리는 대체 경로로 밀려났다. Android 14와 15 이미지는 띄우지 못했고, Android 16 에뮬레이터에서 t33 하나로 같은 순서를 밟았다. 이 기기에는 t33만 설치하고 `c8750f0d.0`과 `syscert.sh`를 올린 뒤 프록시를 `10.0.2.2:18110`으로 맞춰 두었다.
 
@@ -463,7 +465,7 @@ Android 16에서는 두 디렉터리에 똑같이 149개 파일이 있었다. An
 
 [mitmproxy의 안드로이드 시스템 CA 안내](https://docs.mitmproxy.org/stable/howto/install-system-trusted-ca-android/)에 있는 Magisk 모듈 방식은 부팅 때 인증서를 `/system/etc/security/cacerts/`에 복사한다고 적혀 있다. Magisk는 써 보지 않았지만, 위 결과대로라면 Android 14 이상에서는 그 위치만으로 앱에 닿지 않을 것으로 보인다.
 
-## 앱을 만드는 쪽에서 막고 확인하는 법
+## user 앵커는 debug-overrides에만, 핀셋에는 백업 핀을
 
 개발 중에 프록시를 쓰려고 user 앵커를 넣는다면 `<debug-overrides>` 안에만 둔다. rel처럼 debuggable이 꺼진 빌드에서는 그 블록이 통째로 무시되니 개발용 편의가 릴리스로 새지 않는다. 반대로 릴리스 빌드에 debuggable이 실수로 켜져 있으면 그 앵커가 살아나므로, 배포 APK의 badging 출력에 `application-debuggable`이 없는지, 설치 뒤 `dumpsys package`의 `pkgFlags`에 `DEBUGGABLE`이 없는지 본다. 이번 빌드에서는 둘 다 dbg에만 있었다. `<base-config>`에 `<certificates src="user"/>`가 있으면 그 앱은 기기에 깔린 유저 CA를 무엇이든 믿는다.
 
