@@ -5,7 +5,7 @@ date: 2026-10-18 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, apksigner, aapt2, bundletool, APK서명, AXML, AAB]
-excerpt: "정답을 아는 자작 앱을 서명 조합별로 만들어 Android 13 에뮬레이터에 깔아 봤다. META-INF에 v1 서명이 있는데도 verify는 v1을 false로 찍었다. v1만 서명한 같은 앱은 targetSdk 33에서 설치를 거부당했고 29로 낮추자 들어갔다."
+excerpt: "서명 조합을 달리한 자작 앱을 Android 13 에뮬레이터에 깔아 보니 META-INF에 v1 서명이 있는데도 apksigner verify는 v1을 false로 찍었다. v1만 서명한 같은 앱은 targetSdk 33에서는 설치를 거부당했고 29로 낮추자 들어갔다."
 ---
 
 [지난 글](/posts/android-lab-p1c02-adb-evidence-collection/)에서는 기기에 깔린 앱의 UID와 권한, 로그와 저장소를 받아 적었다. 이번에는 손에 APK 파일 하나만 있다. 코드를 열기 전에 누가 서명했고 어떤 서명 스킴이 들어 있는지, 매니페스트가 어떤 컴포넌트를 밖으로 열어 두었는지, split으로 쪼개져 있거나 네이티브 라이브러리를 품고 있는지를 먼저 적는다.
@@ -14,7 +14,7 @@ excerpt: "정답을 아는 자작 앱을 서명 조합별로 만들어 Android 1
 
 ## 정답을 알고 만든 실험 앱
 
-실험 앱 `io.seika.triage`는 Gradle 8.9와 AGP 8.5.2로 빌드한 작은 Java 앱이다. minSdk 26, targetSdk 33, versionCode 3, versionName `1.3-lab`이다. targetSdk만 29로 바꾼 빌드를 하나 더 뽑았다. x86_64와 arm64-v8a용 JNI 라이브러리 `libtriage.so`는 자기가 어느 ABI용으로 빌드됐는지 문자열로 돌려준다. 여기에 mdpi·xxhdpi 아이콘과 한국어 `values-ko` 문자열을 넣어 bundletool이 ABI, 화면 밀도, 언어별 split을 만들게 했다. 라이브러리 소스 `jni/triage.c`는 `"lib built for "` 뒤에 ABI 이름을 붙인 문자열을 돌려주는 함수 하나뿐이고, NDK 27 clang으로 빌드해 `proj/app/src/main/jniLibs/` 아래 ABI 폴더에 넣었다. 매니페스트에는 triage에서 걸러내야 할 것들을 일부러 섞었다.
+실험 앱 `io.seika.triage`는 Gradle 8.9와 AGP 8.5.2로 빌드한 작은 Java 앱이다. minSdk 26, targetSdk 33, versionCode 3, versionName `1.3-lab`이다. targetSdk만 29로 바꾼 빌드를 하나 더 뽑았다. x86_64와 arm64-v8a용 JNI 라이브러리 `libtriage.so`(소스 `jni/triage.c`)는 `"lib built for "` 뒤에 ABI 이름을 붙인 문자열을 돌려주는 함수 하나뿐이고, NDK 27 clang으로 빌드해 `proj/app/src/main/jniLibs/` 아래 ABI 폴더에 넣었다. 여기에 mdpi·xxhdpi 아이콘과 한국어 `values-ko` 문자열을 넣어 bundletool이 ABI, 화면 밀도, 언어별 split을 만들게 했다. 매니페스트에는 triage에서 걸러내야 할 것들을 일부러 섞었다.
 
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -49,7 +49,7 @@ excerpt: "정답을 아는 자작 앱을 서명 조합별로 만들어 Android 1
 
 `MainActivity`는 런처라서 열려 있어야 하고 `LinkActivity`는 `seika://triage` 딥링크를 받는다. `TokenReceiver`는 아무 권한 없이 export된 리시버다. `SyncService`도 export됐지만 signature 보호 수준의 커스텀 권한 `SYNC`가 막는다. `NotesProvider`는 닫혀 있다. 그러니 권한 없이 밖에서 닿는 컴포넌트는 MainActivity, LinkActivity, TokenReceiver다. triage 도구가 이 목록을 그대로 돌려주는지가 확인 거리다.
 
-릴리스 빌드는 서명 없이 나오게 두고 `make_variants.sh`에서 zipalign한 뒤 apksigner로 서명 조합을 바꿔 가며 서명했다. `$NDK_BIN`은 NDK 27의 `toolchains/llvm/prebuilt/windows-x86_64/bin`이고 targetSdk는 `app/build.gradle.kts`가 `-Ptsdk` 속성으로 정한다(기본 33). 두 번째 키 `CN=Attacker Lab, O=SeiKa Lab`(RSA 2048)은 키 교체와 키 불일치 실험에 쓴다. keytool은 실행할 때마다 새 키를 만드니 따라 하면 Attacker Lab 인증서의 다이제스트가 글의 `863afb43…0d9a`와 다르게 나온다. debug 키의 다이제스트(`766e4a4c…feb1`)도 각자의 `debug.keystore`에 따라 달라진다.
+릴리스 빌드는 서명 없이 나오게 두고 `make_variants.sh`에서 zipalign한 뒤 apksigner로 서명 조합을 바꿔 가며 서명했다. `$NDK_BIN`은 NDK 27의 `toolchains/llvm/prebuilt/windows-x86_64/bin`이고 targetSdk는 `app/build.gradle.kts`가 `-Ptsdk` 속성으로 정한다(기본 33). 두 번째 키 `CN=Attacker Lab, O=SeiKa Lab`(RSA 2048)은 키 교체와 키 불일치 실험에 쓴다. 여기서 쓴 Attacker Lab 키는 아래 목록과 같은 keytool 옵션으로 미리 만들어 둔 것이고, 목록의 keytool 줄은 그 키를 다시 만드는 방법이다. keytool은 실행할 때마다 새 키를 만드니 따라 하면 Attacker Lab 인증서의 다이제스트가 글의 `863afb43…0d9a`와 다르게 나온다. debug 키의 다이제스트(`766e4a4c…feb1`)도 각자의 `debug.keystore`에 따라 달라진다.
 
 ```bash
 mkdir -p proj/app/src/main/jniLibs/x86_64 proj/app/src/main/jniLibs/arm64-v8a
@@ -133,7 +133,7 @@ v1이 false였던 이유는 `ApkVerifier.java`에 있다. 아래 화면은 apksi
 
 ![334~348행 소스 화면. 강조된 340행에서 시작해 343행까지 이어지는 주석이 Android N 이전 플랫폼은 v2 서명을 무시하고 항상 JAR 서명을 검증하며 N 이후는 v2 이상 서명이 없을 때만 JAR 서명을 검증한다고 설명하고, 344행 if 문은 minSdkVersion < AndroidSdkVersion.N 이거나 foundApkSigSchemeIds.isEmpty() 일 때만 V1SchemeVerifier.verify 를 부른다](/assets/img/android-mastery/p1c03/08-src-apkverifier-v1-skip.png)
 
-verify가 찍은 v1 `false`는 "v1 서명으로 검증하지 않았다"는 보고다. API 24 이상 기기는 v2 서명이 있는 APK의 v1을 보지 않고 API 28 이상은 v3만 있어도 그렇다. 이 APK에는 v2와 v3가 다 있으니 minSdk 26 앱에서 v1을 보는 기기는 없고 META-INF의 v1 서명은 쓰이지 않은 채 남아 있다. v1을 실제로 검증한 실행에서는 경고 두 줄이 더 붙었다.
+verify가 찍은 v1 `false`는 "v1 서명으로 검증하지 않았다"는 보고다. API 24 이상 기기는 v2 서명이 있는 APK의 v1을 보지 않고 API 28 이상은 v3만 있어도 그렇다. 이 APK에는 v2와 v3가 다 있으니 minSdk 26 앱에서 v1을 보는 기기는 없고 META-INF의 v1 서명은 쓰이지 않은 채 남아 있다. `--min-sdk-version 23`을 줘서 v1까지 검증한 실행에는 경고 두 줄이 더 붙었다.
 
 ```text
 WARNING: META-INF/com/android/build/gradle/app-metadata.properties not protected by signature. Unauthorized modifications to this JAR entry will not be detected. Delete or move the entry outside of META-INF/.
@@ -348,7 +348,7 @@ badging에서 triage에 쓸 줄은 권한, 런처, `native-code`, `locales`, `de
 
 `.aab`는 Play에 올리는 발행 포맷이라 APK와 생김새가 다르다.
 
-![unzip -Z1 out/triage.aab 이 BundleConfig.pb, base/dex/classes.dex, base/lib/arm64-v8a·x86_64/libtriage.so, base/manifest/AndroidManifest.xml, base/native.pb, base/resources.pb 를 보이고, 매니페스트 xxd 가 0a80 200a 390a 0761 6e64 726f 6964 122a 로 시작하며, aapt2 dump xmltree out/triage.aab 는 could not identify format of APK 를 찍은 터미널](/assets/img/android-mastery/p1c03/04a-aab-layout.png)
+![unzip -Z1 out/triage.aab 이 BundleConfig.pb, base/dex/classes.dex, base/lib/arm64-v8a·x86_64/libtriage.so, base/manifest/AndroidManifest.xml, base/native.pb, base/resources.pb 를 보이고, 매니페스트 xxd 가 0a80 200a 390a 0761 6e64 726f 6964 122a 로 시작하며, aapt2 dump xmltree out/triage.aab --file base/manifest/AndroidManifest.xml 는 could not identify format of APK 를 찍은 터미널](/assets/img/android-mastery/p1c03/04a-aab-layout.png)
 
 루트에 `AndroidManifest.xml`도 `resources.arsc`도 없다. 매니페스트는 `base/manifest/` 아래에 있고 형식은 protobuf다. 첫 바이트 `0a`는 1번 필드(길이 구분 타입)의 태그이고 이어지는 `80 20`은 varint로 적은 길이 4096이다. aapt2 [Resources.proto](https://android.googlesource.com/platform/frameworks/base/+/1cdfff555f4a21f71ccc978290e2e212e2f8b168/tools/aapt2/Resources.proto#582)에서 이 필드는 `XmlNode.element`다. 그다음 `0a 39`는 `XmlElement.namespace_declaration`(57바이트)다. 그 안에 `0a 07` 뒤로 `android`(prefix), `12 2a` 뒤로 42바이트짜리 `http://schemas.android.com/apk/res/android`(uri)가 UTF-8 그대로 보인다. APK의 AXML과 달리 문자열에 NUL이 끼지 않는다.
 
@@ -554,7 +554,7 @@ com.android.tools.build.bundletool.model.exceptions.CommandExecutionException: I
 
 `pm path`는 `base.apk` 하나를 돌려줬고 pull로 10,083,052바이트를 받았다. 서명은 v1, v2, v3가 모두 `true`이고 minSdk가 23이라 v1도 검증됐다. 서명자 다이제스트를 보고 바로 멈췄다. `766e4a4c…feb1`은 이 실험 앱과 같은 debug 키다. 호스트에 있던 Allsafe 원본은 `b1c87b48…b8ae`에 v3가 `false`였으니 다른 빌드다. 해시를 대 보니 이 이미지의 Allsafe는 예전 실습에서 패치하고 이 debug 키로 다시 서명한 사본(sha256 `852a0792…2ed2`)이었다. 패키지 이름도 버전 문자열(`1.5`)도 같아서 badging만 봤다면 원본으로 적었을 파일이다.
 
-badging에는 minSdk 23, targetSdk 35, 권한 일곱 줄(`RECORD_AUDIO`, `QUERY_ALL_PACKAGES` 포함), 런처 `MainActivity`, ABI 네 개짜리 `native-code`가 나왔다. 컴포넌트는 앞의 xmltree 필터로 보려 했다. 패키지 부분만 `infosecadventures.allsafe`로 바꿔 돌리자 `challenges` 하위 패키지와 androidx·Firebase 컴포넌트는 `android:name` 줄이 빠지고 원소 줄과 `exported` 줄만 남았고, 대신 `<application>`의 이름(`ArbitraryCodeExecution`) 줄이 섞여 나왔다. 이름 조건이 패키지 바로 아래 클래스만 통과시킨 탓이다. xmltree는 `<application>` 바로 아래 원소의 속성을 공백 12칸 들여 찍으니 이름 조건을 들여쓰기로 바꿨다.
+badging에는 minSdk 23, targetSdk 35, 권한 일곱 줄(`RECORD_AUDIO`, `QUERY_ALL_PACKAGES` 포함), 런처 `MainActivity`, ABI 네 개짜리 `native-code`가 나왔다. 컴포넌트는 앞의 xmltree 필터로 보려 했다. 패키지 부분만 `infosecadventures.allsafe`로 바꿔 돌렸더니 `challenges` 하위 패키지와 androidx·Firebase 컴포넌트는 `android:name` 줄이 빠져 원소 줄과 `exported` 줄만 남았다. 거꾸로 `<application>`의 이름(`ArbitraryCodeExecution`) 줄은 섞여 나왔다. 이름 조건이 패키지 바로 아래 클래스만 통과시킨 탓이다. xmltree는 `<application>` 바로 아래 원소의 속성을 공백 12칸 들여 찍으니 이름 조건을 들여쓰기로 바꿨다.
 
 ```bash
 aapt2 dump xmltree pulled/allsafe.apk --file AndroidManifest.xml \
