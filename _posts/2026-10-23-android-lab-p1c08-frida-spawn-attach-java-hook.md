@@ -39,13 +39,15 @@ frida-server 바이너리는 기기 ABI에 맞춰 고른다. 이 에뮬레이터
 
 ![adb -s $S shell su -c id 가 su: invalid uid/gid '-c' 로 실패하고 su 0 id 는 uid=0(root) ... context=u:r:su:s0 를 출력. adb root 가 restarting adbd as root, frida-server --version 이 17.17.0, stdin 을 /dev/null 로 돌린 frida-server -D 로 띄운 프로세스가 ps -A -Z 에서 레이블 u:r:su:s0 의 root 10658 frida-server, 호스트 frida --version 17.17.0, frida-ps -ai 결과는 Name 'Frida Lab' Identifier 'io.seika.fridalab'](/assets/img/android-mastery/p1c08/02-server-setup.png)
 
-기본 AVD에는 frida-server가 이미 `/data/local/tmp`에 올라가 있었다. 아래 블록의 push는 Android 16 에뮬레이터에 [Frida 릴리스](https://github.com/frida/frida/releases)의 `frida-server-17.17.0-android-x86_64.xz`를 풀어 올릴 때 친 것이고 나머지는 위 캡처에서 친 순서 그대로다. 릴리스 파일은 xz로 묶여 있어 호스트에서 먼저 `unxz`로 풀어야 하고 기기에서 실행 권한이 없으면 `chmod 755`를 준다. 에뮬레이터가 여러 대 붙어 있어서 adb는 `-s`, Frida는 `-D`에 adb 시리얼을 줬다. 기기가 하나뿐이면 Frida 쪽은 `-U`로 충분하다.
+기본 AVD에는 frida-server가 이미 `/data/local/tmp`에 올라가 있어서 위 캡처에서는 `adb root`부터 쳤다. 바이너리가 없는 기기라면 그 사이에 push와 `chmod 755`가 들어간다. Android 16 에뮬레이터(`emulator-5622`)에는 호스트에 미리 풀어 둔 17.17.0 사본을 이렇게 올렸다. [Frida 릴리스](https://github.com/frida/frida/releases)에서 받는 `frida-server-17.17.0-android-x86_64.xz`는 xz로 묶여 있으니 처음 받았다면 호스트에서 `unxz`로 먼저 풀어야 한다(이번 작업에서는 이미 풀린 사본을 썼다). 에뮬레이터가 여러 대 붙어 있어서 adb는 `-s`, Frida는 `-D`에 adb 시리얼을 줬다. 기기가 하나뿐이면 Frida 쪽은 `-U`로 충분하다.
 
 ```bash
 S=emulator-5602
+# 릴리스 .xz 를 처음 받았다면 먼저 푼다
 unxz frida-server-17.17.0-android-x86_64.xz
 adb -s $S root
 adb -s $S wait-for-device
+# 기기에 바이너리가 없을 때만 (이번에는 emulator-5622 에서 실행)
 adb -s $S push frida-server-17.17.0-android-x86_64 /data/local/tmp/frida-server
 adb -s $S shell chmod 755 /data/local/tmp/frida-server
 adb -s $S shell /data/local/tmp/frida-server --version
@@ -81,9 +83,9 @@ spawn 예제로 흔히 보이는 `frida -U -f <패키지> -l hook.js --no-pause`
 
 Android에서는 앱 프로세스를 zygote가 fork해서 만들기 때문에([Atlas C12](/posts/android-concept-atlas-c12-zygote/)), spawn도 리눅스처럼 멈춘 프로세스를 새로 만드는 방식으로 돌지 않는다. frida-core의 Android 런처는 대상 패키지를 멈췄다가 다시 시작시키고 20초 안에 zygote 자식이 연락해 오기를 기다린다([linux-host-session.vala 1479~1530행](https://github.com/frida/frida-core/blob/17.17.0/src/linux/linux-host-session.vala#L1479-L1530)). 연락하는 쪽은 frida-server가 zygote에 미리 심어 둔 zymbiote라는 작은 페이로드다. zygote의 `selinux_android_setcontext`와 `android.os.Process.setArgV0()`의 JNI 구현을 가로채 둔다(같은 파일 [1845행](https://github.com/frida/frida-core/blob/17.17.0/src/linux/linux-host-session.vala#L1845), [1863행](https://github.com/frida/frida-core/blob/17.17.0/src/linux/linux-host-session.vala#L1863)).
 
-![GitHub frida-core 17.17.0 src/linux/helpers/zymbiote.c 64~108행. 68~71행에서 setcontext 때 받은 이름을 zymbiote.process_name 에 복사하고, 77~108행 강조 구간의 frida_zymbiote_replacement_setargv0 가 zymbiote.original_set_argv0 를 부른 뒤 process_name 이 있으면 그것을 name_utf8 로 쓰고 frida_wait_for_permission_to_resume(name_utf8, &revert_now) 를 부르며, revert_now 이면 frida_stop_and_return_from_setargv0 로 꼬리 호출](/assets/img/android-mastery/p1c08/s1-zymbiote-setargv0-gate.png)
+![GitHub 파일 화면 frida-core / src / linux / helpers / zymbiote.c 64~108행. 68~71행에서 setcontext 때 받은 이름을 zymbiote.process_name 에 복사하고, 77~108행 강조 구간의 frida_zymbiote_replacement_setargv0 가 zymbiote.original_set_argv0 를 부른 뒤 process_name 이 있으면 그것을 name_utf8 로 쓰고 frida_wait_for_permission_to_resume(name_utf8, &revert_now) 를 부르며, revert_now 이면 frida_stop_and_return_from_setargv0 로 꼬리 호출](/assets/img/android-mastery/p1c08/s1-zymbiote-setargv0-gate.png)
 
-fork된 자식이 처음으로 `setArgV0`를 부르면 대체 함수가 원래 함수를 부른 다음 frida-server의 abstract 유닉스 소켓에 pid와 프로세스 이름을 보내고 1바이트 응답이 올 때까지 `recv`에서 기다린다([zymbiote.c 114~187행](https://github.com/frida/frida-core/blob/17.17.0/src/linux/helpers/zymbiote.c#L114-L187)). spawn 대상이면 서버가 응답을 미루는데, 그동안 에이전트를 올리고 스크립트를 로드한다. resume하면 응답이 가고 자식은 `frida_stop_and_return_from_setargv0`에서 SIGSTOP으로 스스로 한 번 멈춘 뒤 서버가 뒷정리를 마치면 계속 간다. 프로세스 이름으로는 `setcontext` 때 잡아 둔 값을 먼저 쓰는데(zymbiote.c 87~88행), 이게 아래에서 쓸모가 있었다.
+fork된 자식이 처음으로 `setArgV0`를 부르면 대체 함수가 원래 함수를 부른 다음 frida-server의 abstract 유닉스 소켓에 pid·ppid와 프로세스 이름을 보내고 1바이트 응답이 올 때까지 `recv`에서 기다린다([zymbiote.c 114~187행](https://github.com/frida/frida-core/blob/17.17.0/src/linux/helpers/zymbiote.c#L114-L187)). spawn 대상이면 서버가 응답을 미루는데, 그동안 에이전트를 올리고 스크립트를 로드한다. resume하면 응답이 가고 자식은 `frida_stop_and_return_from_setargv0`에서 SIGSTOP으로 스스로 한 번 멈춘 뒤 서버가 뒷정리를 마치면 계속 간다. 프로세스 이름으로는 `setcontext` 때 잡아 둔 값을 먼저 쓴다(zymbiote.c 87~88행). argv[0]이 엉뚱하게 찍혀도 Frida가 대상을 놓치지 않은 건 이 덕분이었다.
 
 게이트에 선 순간 프로세스 안에 무엇이 있는지 보려고 `hooks/spawn.js`를 썼다. 스크립트 최상위는 게이트에서 돌고 `Java.perform` 콜백은 브리지가 앱 클래스 로더를 쓸 수 있게 될 때까지 미뤄진다.
 
@@ -238,7 +240,7 @@ frida를 백그라운드로 띄우고 6초 간격으로 `check` 브로드캐스�
 
 클래스를 먼저 초기화한 경우도 같은 방법으로 봤다. 후킹 직전 진입점이 이미 `ExecuteNterpImpl`이었고 `replace()`가 그걸 `art_quick_to_interpreter_bridge`로 바꿨다. 그 뒤에는 ART가 진입점을 다시 고칠 일이 없어서 GC 없이도 여섯 번째 호출까지 훅이 유지됐다. spawn 단계에서 static 메서드를 바꿀 때 훅이 한 번만 걸린다면 후킹 전에 `Class.forName(이름, true, Java.classFactory.loader)`로 클래스를 초기화해 두는 게 이 환경에서 통한 처리다. 다만 그 클래스의 static 초기화가 앱이 의도한 때보다 일찍, `handleBindApplication` 안에서 돈다는 건 감안해야 한다.
 
-API 36(ART 360527520)에서도 두 심볼은 없었다. 그런데 거기서는 `Gate.checkLicense` 진입점이 처음부터 끝까지 `art_quick_to_interpreter_bridge`였고 GC 없이 시작 단계 다섯 곳 모두에서 훅이 불렸다. 같은 브리지가 왜 API 36에서는 진입점을 interpreter bridge에 묶어 두는지는 찾지 못했다. 아래 인라인 실험에서 같은 현상을 한 번 더 만난다. ARM64 기기에서 `instrumentArtFixupStaticTrampolines()`가 실제로 걸리는지는 이 랩이 x86_64 에뮬레이터뿐이라 확인하지 못했다.
+API 36(ART 360527520)에서도 두 심볼은 없었다. 그런데 거기서는 `Gate.checkLicense` 진입점이 처음부터 끝까지 `art_quick_to_interpreter_bridge`였고 GC 없이 시작 단계 다섯 곳 모두에서 훅이 불렸다. 같은 브리지가 왜 API 36에서는 진입점을 interpreter bridge에 묶어 두는지는 찾지 못했다. ARM64 기기에서 `instrumentArtFixupStaticTrampolines()`가 실제로 걸리는지는 이 랩이 x86_64 에뮬레이터뿐이라 확인하지 못했다.
 
 ## attach는 시작 코드를 이미 지나 있다
 
@@ -504,22 +506,8 @@ ART 14부터는 try/catch가 있는 콜리도 인라인한다. [android-14.0.0_r
 
 ## 앱을 지키는 쪽에서 본 것
 
-이 실습에서 Frida가 바꾼 건 기기 안의 boolean 하나였고, spawn으로 붙으면 앱의 첫 static 초기화부터 그 값이 바뀌었다. 유료 기능을 여는 판정을 서버가 내리는 앱이라면 이 훅으로 바뀌는 건 화면뿐이다(서버 검증 흐름은 [Atlas C48](/posts/android-concept-atlas-c48-play-integrity/)). 앞에서 쓴 `gate.js` 같은 훅을 자기 릴리스 빌드에 걸어 놓고 서버가 그 상태에서도 유료 기능을 거절하는지 보면 그 차이가 드러난다.
+이 실습에서 Frida가 바꾼 건 기기 안의 boolean 하나였고, spawn으로 붙으면 앱의 첫 static 초기화부터 그 값이 바뀌었다. 유료 기능을 여는 판정을 서버가 내리는 앱이라면 이 훅으로 바뀌는 건 화면뿐이다(서버 검증 흐름은 [Atlas C48](/posts/android-concept-atlas-c48-play-integrity/)). 확인은 `gate.js` 같은 훅을 자기 릴리스 빌드에 걸어 둔 채 유료 기능 API를 불러 서버가 거절하는지 보면 된다.
 
 `Probe` 같은 검사는 이번 실험에서 실제로 에이전트를 봤다. spawn했을 때는 `App.<clinit>`에서 이미 `frida_maps=9`였고, attach 뒤에는 `frida-agent-64.so` memfd와 `gdbus`, `gmain`, `pool-frida` 스레드가 보였다. 다만 `Probe`에 박아 둔 이름 중 `gum-js-loop`은 attach 뒤 목록에 없었고 이름에 frida가 든 `pool-frida`가 대신 걸렸다. 스레드 이름 몇 개에 기대는 검사는 Frida 버전이 바뀌면 빗나갈 수 있다. 그리고 이 검사도 같은 프로세스 안의 Java 코드라서 `Gate`를 바꾼 것과 같은 방식으로 반환값을 바꿀 수 있다. 그 우회를 직접 돌려 보지는 않았다.
-
-## 훅을 걸다 막힌 곳
-
-| 증상 | 이 랩에서 확인한 원인 | 처리 |
-|--|--|--|
-| `unrecognized arguments: --no-pause` | frida-tools 12.0.0부터 `-f`가 기본으로 재개 | 옵션을 빼고 멈춰 두려면 `--pause` |
-| `su: invalid uid/gid '-c'` | AOSP `su`는 첫 인자를 사용자로 읽음 | `adb root` 또는 `su 0` |
-| `-D`를 준 adb shell이 안 끝남 | stdin이 열린 채였음 | `</dev/null` |
-| `please ensure that major versions match` | 클라이언트와 서버의 메이저 버전 불일치 | 같은 버전으로 맞춤 |
-| `unable to find process with name` | `-n`은 앱 라벨로 찾음 | `-N` 식별자 또는 `-p` |
-| 게이트에서 `ClassNotFoundException` | 앱 클래스 로더가 아직 없음 | `Java.perform` 안에서 사용 |
-| `has more than one overload` | 오버로드를 고르지 않음 | `.overload('[B')`처럼 지정 |
-| spawn한 static 훅이 한 번만 불림 | 클래스 초기화 뒤 진입점이 nterp로 바뀜 | 후킹 전에 `Class.forName`으로 초기화 |
-| 훅이 한 번도 안 불림 | 호출자의 AOT 코드에 인라인됨 | 호출자를 `deoptimizeMethod` |
 
 *다음 글: [ClassLoader와 동적 로딩](/posts/android-lab-p1c09-classloader-dynamic-loading/)*
