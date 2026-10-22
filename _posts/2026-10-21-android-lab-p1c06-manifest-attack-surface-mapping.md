@@ -20,7 +20,7 @@ excerpt: "exported가 true이고 권한이 없는 컴포넌트만 거르는 스�
 
 | 경로 | 검사를 부르는 곳 |
 |--|--|
-| 액티비티 시작 | [ActivityTaskSupervisor.java 1234행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/wm/ActivityTaskSupervisor.java#1234) |
+| 액티비티 시작 | [ActivityTaskSupervisor.java 1234행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/wm/ActivityTaskSupervisor.java#1234) (그 앞 [1077~1083행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/wm/ActivityTaskSupervisor.java#1077)에서 START_ANY_ACTIVITY 보유자는 먼저 통과) |
 | 서비스 바인드 | [ActiveServices.java 3538행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ActiveServices.java#3538) |
 | 매니페스트 리시버로 가는 브로드캐스트 | [BroadcastQueue.java 1585행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/BroadcastQueue.java#1585) |
 | provider 연결 | [ContentProviderHelper.java 1532행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ContentProviderHelper.java#1532) |
@@ -29,7 +29,9 @@ excerpt: "exported가 true이고 권한이 없는 컴포넌트만 거르는 스�
 
 ![android-13.0.0_r84 ActivityManager.java 4210~4250행. 4216행 checkComponentPermission(String permission, int uid, int owningUid, boolean exported) 선언, 4220행 ROOT_UID 또는 SYSTEM_UID 면 PERMISSION_GRANTED, 4224행 isolated 프로세스는 DENIED, 4229행 isSameApp 이면 GRANTED, 4233행 !exported 면 DENIED, 4242행 permission == null 이면 GRANTED, 4246~4247행 나머지는 checkUidPermission 으로 넘기는 코드](/assets/img/android-mastery/p1c06/08-src-checkcomponentpermission.png)
 
-판정은 위에서 아래로 내려간다. 그 앞에서 AMS 쪽 래퍼가 시스템 서버 자신의 프로세스(`MY_PID`)는 바로 통과시키고 호출자 프로세스의 `deniedPermissions`에 그 권한이 들어 있으면 바로 거부한다([5878~5895행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ActivityManagerService.java#5878)). 나머지가 위 화면이다. root와 system UID는 무조건 통과하고 isolated 프로세스는 막힌다. 같은 앱(같은 UID)이면 통과하는데, `android:sharedUserId`로 UID를 나눠 쓰는 앱끼리도 이 분기에서 exported 검사 없이 지나간다. 이번에 돌린 앱들에는 sharedUserId가 없었고 뒤에 나올 매퍼는 이 속성을 보면 INFO 줄만 찍는다. 그다음 exported가 false면 거부, permission이 비어 있으면 허용이고 남은 경우만 호출자가 그 권한을 가졌는지 본다. 앱 코드가 끼어들기 전에 매니페스트의 두 값으로 허용과 거부가 갈리니, 매니페스트를 제대로 읽기만 하면 다른 앱이 어디까지 닿는지 상당히 정확하게 예측할 수 있다. 컴포넌트와 Binder 호출의 큰 그림은 [Atlas C21](/posts/android-concept-atlas-c21-components-binder/)에 있다.
+판정은 위에서 아래로 내려간다. 그 앞에서 AMS 쪽 래퍼가 시스템 서버 자신의 프로세스(`MY_PID`)는 바로 통과시키고 호출자 프로세스의 `deniedPermissions`에 그 권한이 들어 있으면 바로 거부한다([5878~5895행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/am/ActivityManagerService.java#5878)). 나머지가 위 화면이다. root와 system UID는 무조건 통과하고 isolated 프로세스는 막힌다. 같은 앱(같은 UID)이면 통과하는데, `android:sharedUserId`로 UID를 나눠 쓰는 앱끼리도 이 분기에서 exported 검사 없이 지나간다.
+
+이번에 돌린 앱들에는 sharedUserId가 없었고 뒤에 나올 매퍼는 이 속성을 보면 INFO 줄만 찍는다. 그다음 exported가 false면 거부, permission이 비어 있으면 허용이고 남은 경우만 호출자가 그 권한을 가졌는지 본다. 앱 코드는 이 판정이 끝난 뒤에야 불리니, 다른 앱이 어디까지 닿는지는 매니페스트의 permission과 exported로 거의 정해진다. 컴포넌트와 Binder 호출의 큰 그림은 [Atlas C21](/posts/android-concept-atlas-c21-components-binder/)에 있다.
 
 ## exported가 true이고 권한이 없는 것만 거르면
 
@@ -158,7 +160,7 @@ provider는 기본값 규칙이 다르다. 속성이 없으면 [`ParsedProviderU
 </manifest>
 ```
 
-`MainActivity`, `LinkActivity`, `SyncReceiver`는 exported 없이 intent-filter만 달았다. 위 규칙을 빌드 단계에서 잡는지는 빌드 경로마다 달랐다. 이 매니페스트를 targetSdk만 30과 33으로 바꿔 Gradle 없이 javac, d8, aapt, zipalign, apksigner를 직접 이어 붙여 두 번 빌드했다. 옛 aapt를 쓰는 이 경로는 두 빌드 모두 오류 없이 서명된 APK를 내놓았고(`apksigner verify` 통과), 바이너리 매니페스트를 비교하면 다른 곳은 targetSdk 한 줄이다. 빌드 명령은 `mkapk`로 묶어 두었고(프로브 앱도 뒤에서 같은 스크립트로 빌드한다) 변형마다 소스와 매니페스트를 새 폴더에 복사해 돌렸다.
+`MainActivity`, `LinkActivity`, `SyncReceiver`는 exported 없이 intent-filter만 달았다. 위 규칙을 빌드 단계에서 잡는지는 빌드 경로마다 달랐다. 이 매니페스트를 targetSdk만 30과 33으로 바꿔 Gradle 없이 javac, d8, aapt, zipalign, apksigner를 직접 이어 붙여 두 번 빌드했다. 옛 aapt를 쓰는 이 경로는 두 빌드 모두 오류 없이 서명된 APK를 내놓았고(`apksigner verify` 통과), 바이너리 매니페스트를 비교하면 다른 곳은 targetSdk 한 줄이다. 빌드 명령은 `mkapk`로 묶어 두었고 변형마다 소스와 매니페스트를 새 폴더에 복사해 돌렸다.
 
 ```bash
 for v in surface-t30:vuln.xml:30 surface-t33-implicit:vuln.xml:33 surface-fixed:fixed.xml:33; do
@@ -199,13 +201,13 @@ android {
 
 ![agp 폴더에서 diff ../apps/surface/manifests/vuln.xml app/src/main/AndroidManifest.xml 결과 3d2 package="io.seika.surface" 한 줄만 다름, grep 으로 본 build.gradle.kts 8행 targetSdk = (project.findProperty("target") ...), gradle --no-daemon --offline -q -Ptarget=33 assembleDebug 출력에서 AndroidManifest.xml 16:9-21:20, 40:9-49:20, 51:9-55:20 세 곳의 Error: android:exported needs to be explicitly specified for element activity#io.seika.surface.MainActivity, activity#io.seika.surface.LinkActivity, receiver#io.seika.surface.SyncReceiver 와 Execution failed for task ':app:processDebugMainManifest', Manifest merger failed with multiple errors, BUILD FAILED in 24s. 이어서 -Ptarget=30 빌드는 exit=0, aapt2 dump badging 은 package name='io.seika.surface' versionName='1.0-vuln' 과 targetSdkVersion:'30'](/assets/img/android-mastery/p1c06/12-agp-missing-exported.png)
 
-targetSdk 33에서는 매니페스트 병합 단계(`processDebugMainManifest`)가 `android:exported needs to be explicitly specified` 오류를 MainActivity, LinkActivity, SyncReceiver에 하나씩 내고 빌드를 멈췄다. exported 없이 intent-filter만 단 세 컴포넌트 그대로다. intent-filter가 있어도 `exported="true"`를 적어 둔 `ShareAlias`는 걸리지 않았다. targetSdk만 30으로 내리면 같은 매니페스트가 `exit=0`으로 빌드되고 badging에 `targetSdkVersion:'30'`이 찍힌다. AGP 8.5.2로는 targetSdk 33과 30만 빌드해 봤고 다른 AGP 버전의 동작은 확인하지 않았다.
+targetSdk 33에서는 매니페스트 병합 단계(`processDebugMainManifest`)가 `android:exported needs to be explicitly specified` 오류를 MainActivity, LinkActivity, SyncReceiver에 하나씩 내고 빌드를 멈췄다. 걸린 것은 exported 없이 intent-filter만 단 세 컴포넌트였다. intent-filter가 있어도 `exported="true"`를 적어 둔 `ShareAlias`는 걸리지 않았다. targetSdk만 30으로 내리면 같은 매니페스트가 `exit=0`으로 빌드되고 badging에 `targetSdkVersion:'30'`이 찍힌다. AGP 8.5.2로는 targetSdk 33과 30만 빌드해 봤고 다른 AGP 버전의 동작은 확인하지 않았다.
 
 옛 aapt가 통과시킨 targetSdk 33 APK는 기기에서 막힌다. 먼저 `adb -s $S uninstall io.seika.prober`, `adb -s $S uninstall io.seika.surface`로 두 앱을 지워 두고 두 APK를 Android 13 에뮬레이터에 차례로 깔았다.
 
 ![에뮬레이터 대상 터미널. adb -s $S shell getprop ro.build.version.sdk 결과 33, adb -s $S install out/surface-t33-implicit.apk 는 Failure 뒤 대괄호 안에 INSTALL_PARSE_FAILED_MANIFEST_MALFORMED: Failed parse during installPackageLI: /data/app/vmdl1487434048.tmp/base.apk (at Binary XML file line #22): io.seika.surface.MainActivity: Targeting S+ (version 31 and above) requires that an explicit value for android:exported be defined when intent filters are present, 이어서 adb -s $S install out/surface-t30.apk 는 Success](/assets/img/android-mastery/p1c06/05-device-install-gate.png)
 
-targetSdk 33 빌드는 `INSTALL_PARSE_FAILED_MANIFEST_MALFORMED`로 거부됐고 대괄호 안 끝부분은 467~471행이 만드는 메시지 그대로다. 이름이 찍힌 컴포넌트는 MainActivity 하나다. 472~474행이 처음 오류가 난 컴포넌트에서 파싱을 끝내서, AGP처럼 셋을 한꺼번에 알려 주지 않는다. targetSdk만 30인 같은 매니페스트는 `Success`로 깔렸다. 그래서 Android 12 이상 기기에 깔린 앱 가운데 암시적 export가 남는 것은 InsecureShop(targetSdk 29)처럼 targetSdk 30 이하인 앱이다.
+targetSdk 33 빌드는 `INSTALL_PARSE_FAILED_MANIFEST_MALFORMED`로 거부됐고 대괄호 안 끝부분은 467~471행이 만드는 메시지와 같다. 이름이 찍힌 컴포넌트는 MainActivity 하나다. 472~474행이 처음 오류가 난 컴포넌트에서 파싱을 끝내서, AGP처럼 셋을 한꺼번에 알려 주지 않는다. targetSdk만 30인 같은 매니페스트는 `Success`로 깔렸다. 그래서 Android 12 이상 기기에 깔린 앱 가운데 암시적 export가 남는 것은 InsecureShop(targetSdk 29)처럼 targetSdk 30 이하인 앱이다.
 
 ## 기본값을 반영한 매퍼로 다시 본 InsecureShop
 
@@ -334,7 +336,7 @@ targetSdk는 `apktool.yml`에서 읽고 매니페스트에 `<uses-sdk>`가 남�
 
 ## 다른 키로 서명한 앱으로 지도를 맞춰 보기
 
-지도대로라면 다른 앱은 `ShareAlias`를 컴포넌트 이름으로 지정한 인텐트만으로(액션 없이) exported="false"인 `InternalActivity`를 띄운다. ADMIN을 요청하기만 하면 `AdminService`에 바인드하고, 읽기 권한이 없어도 `NotesProvider`에 insert한다. `VaultService`와 `NotesProvider` 읽기는 같은 키로 서명한 앱만 통과한다. 이걸 맞춰 보려고 프로브 앱 `io.seika.prober`를 만들었다. ADMIN과 VAULT를 둘 다 요청하고 자작 앱과 다른 키(`CN=Attacker Lab`)로 서명했다. 빌드는 자작 앱과 같은 javac, d8, aapt, zipalign, apksigner 경로를 묶어 둔 스크립트(`mkapk`)로 targetSdk 33에 맞췄고, 자작 앱(targetSdk 30)을 깐 다음 같은 에뮬레이터에 깔았다.
+지도대로라면 다른 앱은 `ShareAlias`를 컴포넌트 이름으로 지정한 인텐트만으로(액션 없이) exported="false"인 `InternalActivity`를 띄운다. ADMIN을 요청하기만 하면 `AdminService`에 바인드하고, 읽기 권한이 없어도 `NotesProvider`에 insert한다. `VaultService`와 `NotesProvider` 읽기는 같은 키로 서명한 앱만 통과한다. 이걸 맞춰 보려고 프로브 앱 `io.seika.prober`를 만들었다. ADMIN과 VAULT를 둘 다 요청하고 자작 앱과 다른 키(`CN=Attacker Lab`)로 서명했다. 빌드는 앞의 `mkapk`로 targetSdk 33에 맞췄고, 자작 앱(targetSdk 30)을 깐 다음 같은 에뮬레이터에 깔았다.
 
 ```bash
 mkapk apps/prober out/prober.apk --key attacker --min 26 --target 33
@@ -369,7 +371,7 @@ normal인 ADMIN은 `granted=true`, signature인 VAULT는 `granted=false`다. 프
 
 exported="false"인 `InternalActivity`를 직접 띄운 줄은 `SecurityException`이었고 위 로그 첫 줄이 그 거부(`not exported from uid 10179`)다. [activity 요소 문서](https://developer.android.com/guide/topics/manifest/activity-element)는 이 경우 `ActivityNotFoundException`이 난다고 쓰지만 Android 13에서 돌아온 건 [`ActivityTaskSupervisor.java` 1101~1113행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/wm/ActivityTaskSupervisor.java#1101)이 던지는 `SecurityException`이었다. `ActivityNotFoundException`은 꺼져 있는 `DisabledActivity`에서만 나왔다.
 
-InsecureShop을 띄울 때 `su shell`을 붙인 이유를 자작 앱으로 확인했다. `adb root`가 켜진 userdebug 에뮬레이터에서는 `adb shell`이 root UID라 `checkComponentPermission()` 맨 위 분기에서 exported 검사를 건너뛴다.
+InsecureShop을 띄울 때 `su shell`을 붙인 이유를 자작 앱으로 확인했다. `adb root`가 켜진 userdebug 에뮬레이터에서는 `adb shell`이 root UID라 `checkStartAnyActivityPermission()`이 먼저 묻는 START_ANY_ACTIVITY 권한이 `checkComponentPermission()` 맨 위 root 분기에서 허용되고([ActivityTaskSupervisor.java 1077~1083행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/wm/ActivityTaskSupervisor.java#1077)), 1234행의 exported 검사까지 내려가지 않는다.
 
 ![adb -s $S shell id -u 결과 0, adb -s $S shell am start -W -n io.seika.surface/.InternalActivity 는 Status: ok 와 Activity: io.seika.surface/.InternalActivity, adb -s $S shell su shell am start -W -n io.seika.surface/.InternalActivity 는 Exception occurred while executing 'start': java.lang.SecurityException: Permission Denial: starting Intent { flg=0x10000000 cmp=io.seika.surface/.InternalActivity } from null (pid=5218, uid=2000) not exported from uid 10179, adb -s $S shell su shell am start -W -n io.seika.surface/.ShareAlias 는 Status: ok 와 Activity: io.seika.surface/.InternalActivity](/assets/img/android-mastery/p1c06/11-device-am-root-shell.png)
 
@@ -489,7 +491,7 @@ FLAG     cleartext via @xml/network_security_config: base-config false (no base-
             }
 ```
 
-필터를 만드는 부분은 파서의 속성 매핑을 옮겨 적은 것이고 매칭은 프레임워크 코드 그대로다. layoutlib의 `build.prop`은 Android 16(API 36), 빌드 ID `BLR4.251003.038`이라 r84와 버전이 다르다.
+필터를 만드는 부분은 파서의 속성 매핑을 옮겨 적은 것이고 매칭은 프레임워크 코드를 손대지 않고 부른다. layoutlib의 `build.prop`은 Android 16(API 36), 빌드 ID `BLR4.251003.038`이라 r84와 버전이 다르다.
 
 그래서 [`android-16.0.0_r1`의 `IntentFilter.java`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/content/IntentFilter.java)를 받아 `matchData()`를 r84와 diff로 비교했다. 다른 곳은 API 35에서 들어온 `UriRelativeFilterGroup` 분기뿐이었다. 16.0.0_r1은 이 jar보다 앞선 태그라 jar 안의 클래스도 `javap -c -p`로 풀어 봤고 `matchData()`가 `mUriRelativeFilterGroups`를 읽고 `Flags.relativeReferenceIntentFilters()`로 갈라지는 16.0.0_r1 소스와 같은 모양이었다. 필터에 그 그룹이 없으면 두 분기 모두 r84와 같은 식(path 목록이 없으면 authority 결과, path가 맞으면 `MATCH_CATEGORY_PATH`, 아니면 `NO_MATCH_DATA`)으로 줄어들고 자작 앱 필터에는 그룹이 없다.
 
@@ -523,7 +525,7 @@ java -cp "$LL;$KX;ifmatch" IfMatch apps/surface/manifests/fixed.xml .LinkActivit
 
 필터를 둘로 나눈 방어 빌드를 호스트 하네스에 넣으면 `seika://cb`가 둘째 필터에 `MATCH_CATEGORY_HOST`로 맞고 `https://cb/open/x`는 어느 필터에도 맞지 않는다. 예상하지 못한 줄이 하나 있었다. `seika://cb/open`도 둘째 필터에 맞았다. path를 하나도 적지 않은 필터는 `mDataPaths`가 null이라 1636행에서 authority 결과를 그대로 쓴다. 방어 빌드의 seika 필터가 바로 그런 모양이라 `seika://cb` 아래의 어떤 경로든 `LinkActivity`로 온다. 경로를 좁히려면 이 필터에도 path를 적어야 한다. 방어 빌드에서는 거기까지 손대지 않았다. 기기에서 `adb -s $S uninstall io.seika.surface`로 취약 빌드를 지우고 방어 빌드를 새로 깐 뒤 같은 질문을 해도 같았다.
 
-![취약 빌드(versionCode=1 targetSdk=30 versionName=1.0-vuln)에서 adb -s $S shell pm get-app-links io.seika.surface 는 출력 없음, pm get-app-links --user 0 은 Selection state: Disabled: app.seika.test. 화면에 찍히지 않은 adb -s $S uninstall io.seika.surface 뒤 adb -s $S install out/surface-fixed.apk Success, sleep 15 뒤 pm get-app-links 는 Domain verification state: app.seika.test: 1024. for 루프 query-activities 결과 seika://cb 와 seika://cb/open 은 io.seika.surface/.LinkActivity, https://cb/open/x 는 com.android.chrome/com.google.android.apps.chrome.IntentDispatcher 하나](/assets/img/android-mastery/p1c06/18-device-applinks.png)
+![취약 빌드(versionCode=1 targetSdk=30 versionName=1.0-vuln)에서 adb -s $S shell pm get-app-links io.seika.surface 는 출력 없음, pm get-app-links --user 0 은 Selection state: Disabled: app.seika.test. adb -s $S install out/surface-fixed.apk Success, sleep 15 뒤 pm get-app-links 는 Domain verification state: app.seika.test: 1024. for 루프 query-activities 결과 seika://cb 와 seika://cb/open 은 io.seika.surface/.LinkActivity, https://cb/open/x 는 com.android.chrome/com.google.android.apps.chrome.IntentDispatcher 하나](/assets/img/android-mastery/p1c06/18-device-applinks.png)
 
 `seika://cb`와 `seika://cb/open`은 `LinkActivity`로, `https://cb/open/x`는 Chrome 하나로 갔다. 같은 화면 위쪽은 App Links 검증 상태다. 두 빌드 모두 https 링크를 받는 필터에 `autoVerify="true"`를 달았지만 취약 빌드에서는 `pm get-app-links`가 아무것도 찍지 않았다.
 
