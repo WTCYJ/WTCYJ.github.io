@@ -5,10 +5,10 @@ date: 2026-11-05 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, Ghidra, Rizin, JNI, RegisterNatives, ESIL, NativeRE]
-excerpt: "심볼을 지운 libnativere.so에서 JNI_OnLoad의 RegisterNatives 호출을 따라가 등록 표를 Rizin과 Ghidra 헤드리스 스크립트로 읽었다. 같은 소스라도 ABI마다 함수 오프셋이 달랐고, 스택에서 조립한 표는 Rizin ESIL 에뮬레이션으로 이름과 비밀값을 꺼냈다."
+excerpt: "심볼을 지운 libnativere.so에서 JNI_OnLoad의 RegisterNatives 호출을 따라가 상수 등록 표를 Rizin과 Ghidra 헤드리스 스크립트로 읽었다. 같은 소스라도 ABI마다 함수 오프셋이 달랐고, 스택에서 조립한 Vault 표의 이름과 check_guess의 비교 문자열은 Rizin ESIL 에뮬레이션으로 꺼냈다."
 ---
 
-[10장](/posts/android-lab-p1c10-jni-native-observation/)에서는 앱을 띄워 놓고 libart의 RegisterNatives 순간을 Frida로 잡아 스트립된 함수의 주소를 알아냈다. 그 방법은 프로세스가 돌아야 하고, 등록이 끝난 뒤 attach하면 아무것도 못 본다. 그런데 RegisterNatives에 넘기는 표는 대부분 라이브러리 파일 안에 상수로 박혀 있다. 그렇다면 기기 없이 `.so`만 열어서도 같은 매핑을 읽을 수 있어야 한다. 이번에는 그걸 Rizin과 Ghidra로 해 봤고, 어디서 막히는지도 일부러 만들어 봤다.
+[10장](/posts/android-lab-p1c10-jni-native-observation/)에서는 앱을 띄워 놓고 libart의 RegisterNatives 순간을 Frida로 잡아 스트립된 함수의 주소를 알아냈다. 그 방법은 프로세스가 돌아야 하고, 등록이 끝난 뒤 attach하면 아무것도 못 본다. 그런데 RegisterNatives에 넘기는 표는 대부분 라이브러리 파일 안에 상수로 박혀 있다. 그렇다면 기기 없이 `.so`만 열어서도 같은 매핑을 읽을 수 있어야 한다. 이번에는 그걸 Rizin과 Ghidra로 해 봤고, 정적 분석이 막히는 경우(스택에서 조립하는 표)도 일부러 하나 넣어 두었다.
 
 도구는 Rizin 0.9.1(rz-ghidra 플러그인 없음), Ghidra 12.1.4(헤드리스, JDK 21.0.10), NDK r27d의 clang 18.0.4다. 대상은 직접 만든 `io.seika.nativere` 앱이고, APK 안에 `arm64-v8a`, `armeabi-v7a`, `x86_64` 세 ABI의 `libnativere.so`가 들어 있다. 선수 개념은 10장과 [ELF·linker(C33)](/posts/android-concept-atlas-c33-elf-linker-plt-got/)이다.
 
@@ -225,7 +225,7 @@ JNINativeMethod는 [jni.h L128~132](https://android.googlesource.com/platform/li
 
 ![analyzeHeadless.bat를 arm64-v8a, armeabi-v7a, x86_64에 돌린 RecoverJniNatives.java 출력. AARCH64는 slot 215 -> offset 0x6b8, call @ 0010198c blr x8, methods = 00102d18 count 3 class io/seika/nativere/Native, nativeCheck -> 00101b30, nativeScore -> 00101c68, nativeBuild -> 00101c80. ARM 32-bit는 offset 0x35c, blx r12, 00012914, 0001174c, 0001186c, 00011880. x86 64-bit는 CALL qword ptr R8 + 0x6b8, 00102e20, 00101c60, 00101d70, 00101d90. 세 ABI 모두 두 번째 호출에서 methods = sp-56, sp-44, RSP-40 (built at run time on the stack) -> table not in the file. 아래 llvm-nm 정답지 build_tag 1c80, check_guess 1b30, score 1c68, vault_open 1c94](/assets/img/android-mastery/p1c21/04-ghidra-headless-three-abis.png)
 
-세 ABI에서 정리한 결과다. Ghidra 주소에서 이미지 베이스를 빼면 런타임 오프셋이 된다.
+세 ABI의 결과를 표로 옮겼다. 주소는 Ghidra가 찍은 그대로다.
 
 | ABI | RegisterNatives 호출 | 표 주소(Ghidra) | nativeCheck | nativeScore | nativeBuild |
 |---|---|---|---|---|---|
@@ -233,7 +233,7 @@ JNINativeMethod는 [jni.h L128~132](https://android.googlesource.com/platform/li
 | armeabi-v7a | `blx r12` (0x35c) | 00012914 | 0x174c | 0x186c | 0x1880 |
 | x86_64 | `CALL [R8 + 0x6b8]` | 00102e20 | 0x1c60 | 0x1d70 | 0x1d90 |
 
-Ghidra는 64비트 PIE `.so`를 이미지 베이스 0x100000에, armv7은 0x10000에 올린다. Rizin은 0에 올리니 같은 함수가 Rizin에서는 0x1b30, Ghidra에서는 00101b30으로 찍힌다. Frida 같은 동적 도구에 넘길 값은 "모듈 베이스 + 0x1b30"이다. 표를 보면 소스가 같아도 nativeCheck가 arm64 0x1b30, armv7 0x174c, x86_64 0x1c60으로 다 다르다. arm64 라이브러리에서 뽑은 오프셋을 x86_64 에뮬레이터 프로세스에 걸면 엉뚱한 곳에 후크가 걸린다.
+Ghidra는 64비트 PIE `.so`를 이미지 베이스 0x100000에, armv7은 0x10000에 올린다. Rizin은 0에 올리니 같은 함수가 Rizin에서는 0x1b30, Ghidra에서는 00101b30으로 찍힌다. Frida 같은 동적 도구에 넘길 값은 "모듈 베이스 + 0x1b30"이다. 표를 보면 소스가 같아도 nativeCheck가 arm64 0x1b30, armv7 0x174c, x86_64 0x1c60으로 다 다르다. arm64 라이브러리에서 뽑은 오프셋을 x86_64 에뮬레이터 프로세스에 걸면 다른 함수 중간을 가리키게 된다(표의 오프셋 차이로 본 것이고 기기에서 걸어 보지는 않았다).
 
 x86_64 쪽은 지우기 전 사본의 심볼과도 대 보았다.
 
@@ -264,17 +264,17 @@ ERROR: Command 'pdg' does not exist.
 
 `pdc`는 radare2의 의사 C 출력이고, Rizin은 포크 직후 [PR #105](https://github.com/rizinorg/rizin/pull/105)에서 이걸 지웠다. `pdg`는 [rz-ghidra](https://github.com/rizinorg/rz-ghidra) 플러그인을 설치해야 생기는 명령이다. 플러그인 없이 디컴파일이 필요하면 Ghidra 쪽으로 넘어가는 게 빠르다.
 
-Ghidra 디컴파일러로 `JNI_OnLoad`를 그냥 뽑으면 앞에서 본 오프셋이 그대로 C 문법으로 바뀔 뿐이다. 그래서 NDK의 `jni.h`를 전처리해 Ghidra가 읽을 수 있게 다듬은 뒤(`__attribute__`, `_Nonnull` 제거) `ApplyJniTypes.java`로 파싱하고, `JNI_OnLoad`를 `jint JNI_OnLoad(JavaVM *vm, void *reserved)`로, GetEnv가 채우는 지역 변수를 `JNIEnv *env`로, 등록 표에서 찾은 `JNI_*` 함수들을 JNI 시그니처대로 타입을 입혔다. 정적인지 인스턴스인지는 시그니처만으로 알 수 없어서 두 번째 인자는 `jobject thiz_or_clazz`로 뒀다.
+Ghidra 디컴파일러로 `JNI_OnLoad`를 그냥 뽑으면 앞에서 본 오프셋이 그대로 C 문법으로 바뀔 뿐이다. 그래서 NDK의 `jni.h`를 전처리해 Ghidra가 읽을 수 있게 다듬고(`__attribute__`, `_Nonnull` 제거) `ApplyJniTypes.java`로 파싱했다. 이 스크립트가 `JNI_OnLoad`의 프로토타입을 `jint JNI_OnLoad(JavaVM *vm, void *reserved)`로 바꾸고, GetEnv가 채우는 지역 변수를 `JNIEnv *env`로 잡고, 등록 표에서 찾은 `JNI_*` 함수들에 JNI 시그니처대로 타입을 입힌다. 정적인지 인스턴스인지는 시그니처만으로 알 수 없어서 두 번째 인자는 `jobject thiz_or_clazz`로 뒀다.
 
 ![analyzeHeadless.bat -readOnly로 DecompileJni.java와 ApplyJniTypes.java를 돌린 뒤, 타입 없는 decomp/plain/JNI_OnLoad.c에 param_1 + 0x30 칸 호출(param_1,&local_8,0x10006), local_8 + 0x30 칸 호출(local_8,"io/seika/nativere/Native"), local_8 + 0x6b8 칸 호출(local_8,lVar3,JNINativeMethods_io_seika_nativere_Native,3)이 보이고, 타입을 입힌 결과 grep에는 (*vm)->GetEnv(vm,&env,0x10006), (*env)->FindClass, (*env)->RegisterNatives, JNI_Native_nativeCheck의 GetStringUTFChars와 ReleaseStringUTFChars, JNI_Native_nativeBuild의 NewStringUTF(env,"nativere-1105")가 보이는 화면](/assets/img/android-mastery/p1c21/05-ghidra-decompile-before-after-jni-types.png)
 
 타입을 입히기 전에는 `(*param_1 + 0x30)`과 `(*local_8 + 0x30)`이 똑같이 생겨서 어느 쪽이 GetEnv인지 머릿속으로 계산해야 한다. 그나마 세 번째 인자 자리에 `JNINativeMethods_io_seika_nativere_Native`가 보이는 건 앞의 스크립트가 붙인 라벨 덕분이다. 타입을 입힌 뒤에는 `(*(*vm)->GetEnv)`, `(*(*env)->FindClass)`, `(*(*env)->RegisterNatives)`로 바로 읽히고, `nativeCheck` 본체에서는 `GetStringUTFChars`로 받은 문자열을 `strcmp`에 넘기는 흐름이, `nativeBuild`에서는 `"nativere-1105"`가 드러난다.
 
-Ghidra 12.1.4는 JDK 21 이상을 요구하고(`application.properties`의 `application.java.min=21`), 기본 배포에 Jython이 빠져 있다(GP-6754, [ChangeHistory](https://github.com/NationalSecurityAgency/ghidra/blob/Ghidra_12.1.4_build/Ghidra/Configurations/Public_Release/src/global/docs/ChangeHistory.md)). 여기서 쓴 스크립트는 전부 Java라 상관이 없었다.
+Ghidra 12.1.4는 JDK 21 이상을 요구하고(`application.properties`의 `application.java.min=21`), Jython은 확장으로 분리돼 기본으로는 설치돼 있지 않다(File → Install Extensions에서 켜야 한다, GP-6754, [ChangeHistory](https://github.com/NationalSecurityAgency/ghidra/blob/Ghidra_12.1.4_build/Ghidra/Configurations/Public_Release/src/global/docs/ChangeHistory.md)). 여기서 쓴 스크립트는 전부 Java라 상관이 없었다.
 
 ## 스택에서 조립한 표는 상수 전파로 안 풀린다
 
-Ghidra 결과의 두 번째 호출을 다시 보자. 세 ABI 모두 두 번째 호출이 스택 상대값(arm64 `sp-56`, armv7 `sp-44`, x86_64 `RSP-40`)과 `(built at run time on the stack)`으로 끝났다. `register_vault`는 표를 스택에 만들고, 그 안의 이름·시그니처 포인터는 런타임에 `.bss`로 풀어 낸 문자열을 가리킨다. 상수 전파는 "스택 포인터에서 56 아래"까지만 알려 주고, 거기 무엇이 쓰일지는 모른다. 파일에 등록 표가 없으니 표를 읽는 방식은 여기서 끝난다.
+Ghidra 출력에서 세 ABI 모두 두 번째 RegisterNatives 호출은 스택 상대값(arm64 `sp-56`, armv7 `sp-44`, x86_64 `RSP-40`)과 `(built at run time on the stack)`으로 끝났다. `register_vault`는 표를 스택에 만들고, 그 안의 이름·시그니처 포인터는 런타임에 `.bss`로 풀어 낸 문자열을 가리킨다. 상수 전파는 "스택 포인터에서 56 아래"까지만 알려 주고, 거기 무엇이 쓰일지는 모른다. 파일에 등록 표가 없으니 표를 읽는 방식은 여기서 끝난다.
 
 Rizin으로 돌아가면 길이 남아 있다. `pd 9 @ 0x1ad8`에서 `stp x8, x11, [var_38h]`가 이름과 시그니처 포인터를 스택에 쓰고, `adrp x9, 0x1000; add x9, x9, 0xc94; str x9, [var_38h + 0x10]`이 fnPtr 0x1c94를 그 옆에 쓴다. 함수 주소는 코드에 상수로 남아 있다. 문자열은 Rizin의 ESIL 에뮬레이터로 `register_vault` 시작(0x19a8)부터 FindClass 호출 직전(0x1ad8)까지 돌린 다음 `.bss`의 0x3f20, 0x3f30, 0x3f38을 읽었더니 `nativeOpen`, `(I)Z`, `io/seika/nativere/Vault`가 나왔다.
 
@@ -294,9 +294,11 @@ Rizin으로 돌아가면 길이 남아 있다. `pd 9 @ 0x1ad8`에서 `stp x8, x1
 
 ## 라이브러리를 만드는 쪽에서 확인할 것
 
-등록 표를 상수로 두면, 심볼을 지워도 `JNI_OnLoad` → slot 215 → 표 주소 → 항목 순회라는 기계적인 경로로 매핑이 나온다. 위의 Ghidra 스크립트는 아무 힌트 없이 세 ABI에서 같은 결과를 냈다. 표를 런타임에 만들면 상수 전파는 멈추지만, 디코드 루프가 라이브러리 안에 있는 한 에뮬레이션이 그걸 대신 돌려 준다. 이번 `check_guess`도 XOR을 풀어 둔 비교 문자열이 ESIL 한 번에 나왔으니, 통과 여부를 가르는 비밀은 서버나 하드웨어 키 저장소 쪽에 두고 네이티브 난독화는 분석 시간을 늘리는 정도로 보는 편이 맞다고 생각한다.
+등록 표를 상수로 두면, 심볼을 지워도 `JNI_OnLoad` → slot 215 → 표 주소 → 항목 순회라는 기계적인 경로로 매핑이 나온다. 위의 Ghidra 스크립트는 아키텍처별 인자 레지스터만 알려 주자 세 ABI 모두에서 같은 이름·시그니처 매핑을 뽑아냈다(주소는 ABI마다 달랐다). 표를 런타임에 만들면 상수 전파는 멈추지만, 디코드 루프가 라이브러리 안에 있는 한 에뮬레이션이 그걸 대신 돌려 준다. 이번 `check_guess`도 XOR을 풀어 둔 비교 문자열이 ESIL 한 번에 나왔으니, 통과 여부를 가르는 비밀은 서버나 하드웨어 키 저장소 쪽에 두고 네이티브 난독화는 분석 시간을 늘리는 정도로 보는 편이 맞다고 생각한다.
 
 확인하는 방법도 이 실험 그대로다. 릴리스 빌드의 각 ABI `.so`에 `RecoverJniNatives.java`를 헤드리스로 돌려 등록 표가 그대로 출력되는지 보고, 출력된 이름 집합이 Java 쪽 `native` 선언과 같은지 대조하면 "정적으로 얼마나 드러나는가"를 빌드마다 회귀 검사로 돌릴 수 있다. `table not in the file`이 나오면 다음 단계로 Rizin ESIL을 디코드 루프에 돌려 문자열이 나오는지 본다. `strings`나 `iE`에서 의도하지 않은 이름이 보이는지도 같이 본다. 이번 빌드에서는 `-fvisibility=hidden` 덕분에 export가 `JNI_OnLoad`와 일부러 연 `Java_` 하나뿐이었다.
+
+## -mbranch-protection과 16 KB 정렬이 바꾼 것
 
 arm64 빌드 옵션도 정적 분석 화면을 바꾼다. NDK r27d 기본 설정으로 만든 arm64 라이브러리는 `llvm-readelf`로 보면 LOAD 세그먼트 정렬이 0x1000이고, 우리 코드에는 `paciasp`/`autiasp`가 없었다. 디스어셈블에 보인 `bti c`는 NDK가 붙이는 crt 오브젝트 쪽뿐이었고 GNU property 노트도 없었다. `-mbranch-protection=standard`와 `-Wl,-z,max-page-size=16384`를 주고 다시 빌드하자 정렬이 0x4000으로 바뀌고, PAC/BTI 명령이 6개에서 17개로 늘었으며, 노트에 `aarch64 feature: BTI, PAC`가 찍혔다.
 
@@ -313,4 +315,4 @@ arm64 빌드 옵션도 정적 분석 화면을 바꾼다. NDK r27d 기본 설정
 
 `paciasp`와 `bti c`는 힌트 공간 명령이라 디스어셈블과 디컴파일 흐름에는 영향이 없었다. [16 KB 페이지 문서](https://developer.android.com/guide/practices/page-sizes)에 따르면 r28부터는 16 KB 정렬이 기본이니, 최신 앱의 arm64 `.so`에서는 0x4000 정렬을 보는 게 정상이다. PAC가 실제로 포인터를 서명하고 검사하는 런타임 동작은 x86_64 에뮬레이터에서는 관측할 수 없어서 보지 못했다.
 
-*다음 글: [ASan·HWASan·UBSan JNI 오류 분석](/posts/android-lab-p1c22-sanitizer-jni-analysis/)*
+*다음 글: [ASan·IntSan으로 JNI 버그 읽기](/posts/android-lab-p1c22-sanitizer-jni-analysis/)*
