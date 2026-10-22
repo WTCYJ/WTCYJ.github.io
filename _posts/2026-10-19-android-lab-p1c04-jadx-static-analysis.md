@@ -5,12 +5,12 @@ date: 2026-10-19 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, jadx, R8, 난독화, Kotlin, 정적분석]
-excerpt: "같은 Kotlin 앱을 디버그와 R8 릴리스로 빌드해 jadx 1.5.5로 풀었다. 이름이 a.a.a로 바뀐 빌드에서도 매니페스트와 사용처 검색으로 하드코딩 키와 JS 브리지에 닿았지만, jadx가 복원을 포기한 코루틴 메서드 속 토큰은 grep에 잡히지 않았다. XOR 패커로 숨긴 DEX는 Frida와 /proc/pid/mem 덤프로 원본과 같은 해시로 떠냈다."
+excerpt: "같은 Kotlin 앱의 R8 빌드를 jadx 1.5.5로 열어 a.a.a 같은 이름 아래 숨은 하드코딩 키와 JS 브리지를 찾았지만, jadx가 복원을 포기한 코루틴 메서드 속 토큰은 grep에 잡히지 않았다. XOR 패커로 숨긴 DEX는 Frida와 /proc/pid/mem으로 떠내 원본과 해시가 같음을 확인했다."
 ---
 
 [지난 글](/posts/android-lab-p1c03-apk-triage/)에서 서명과 매니페스트를 훑었으니 이번에는 코드를 연다. 앱을 받으면 습관처럼 jadx부터 돌리는데, jadx가 보여 주는 Java는 DEX 바이트코드를 보고 다시 지은 코드다. jadx README 맨 앞에도 대부분의 경우 코드를 100% 디컴파일하지는 못해 오류가 난다는 경고가 붙어 있다([README v1.5.5, 19행](https://github.com/skylot/jadx/blob/v1.5.5/README.md?plain=1#L19)).
 
-다시 지은 코드라는 사실이 분석 중 언제 발목을 잡는지 직접 보고 싶었다. 그래서 정답을 아는 앱을 만들어 jadx 1.5.5에 넣었다. 같은 소스를 디버그와 R8 릴리스로 빌드해 이름이 어디까지 사라지는지 비교했고 일부러 꼬아 둔 코루틴 메서드가 디컴파일에서 어떻게 무너지는지, 장난감 패커를 씌우면 jadx에 무엇이 남고 숨긴 DEX를 메모리에서 어떻게 다시 꺼내는지도 확인했다. 디컴파일과 검색은 호스트(Windows, Git Bash)에서 했고 JDK는 Android Studio에 딸린 JBR 21이다. 디버그 APK를 실제로 돌린 에뮬레이터는 Android 13(API 33) x86_64 AVD였다. 패커 덤프도 같은 시리얼의 에뮬레이터에서 했지만 그때 어느 AVD였는지는 기록해 두지 않았다.
+다시 지은 코드라는 사실이 분석 중 언제 발목을 잡는지 직접 보고 싶었다. 그래서 정답을 아는 앱을 만들어 jadx 1.5.5에 넣고, 디버그 빌드와 R8 빌드에서 결과가 어떻게 다른지부터 봤다. 디컴파일과 검색은 호스트(Windows, Git Bash)에서 했고 JDK는 Android Studio에 딸린 JBR 21이다. 디버그 APK 실행과 패커 덤프는 root 셸과 frida-server(x86_64)를 올린 Android 13 x86_64 에뮬레이터에서 했다.
 
 ## 키와 JS 브리지를 일부러 심은 Kotlin 앱
 
@@ -194,8 +194,6 @@ io.seika.jadxlab.TokenBridge -> a.g:
     11:29:java.lang.String io.seika.jadxlab.Session.toString():0:0 -> token
 ```
 
-jadx-gui에는 이름을 직접 바꾸는 rename 기능도 있다. 바꾼 이름이 사용처까지 따라가는지는 이번에 써 보지 않아 확인하지 못했다.
-
 ## 키 문자열은 `SecretKeySpec` 줄에 없었다
 
 `a.a`가 암호화 함수라는 건 몸통의 `Cipher`와 `SecretKeySpec`만 봐도 안다. 하드코딩 키를 찾을 때 흔히 쓰는 grep을 R8 빌드 출력에 돌려 봤다. sink 이름과 16자 넘는 base64 꼴 문자열을 한 번에 찾는 식이다.
@@ -325,7 +323,7 @@ public abstract class CryptoBox {
 
 이제 디버그 빌드 전체를 풀었다. 디버그 정보가 다 있는 빌드인데도 마지막에 `ERROR - finished with errors, count: 28`이 찍혔다. `Sync.java`를 열어 보니 `pullAll`과 `fakeFetch` 몸통이 둘 다 사라지고 예외를 던지는 한 줄이 그 자리를 차지하고 있었다.
 
-![터미널, 디버그 APK 분석. jadx --log-level error -d jd jadxlab-debug.apk 가 ERROR - finished with errors, count: 28 을 내고, Sync.java 87행 Method dump skipped, instruction units count: 642, 90행과 192행 throw new UnsupportedOperationException(Method not decompiled: io.seika.jadxlab.Sync.pullAll 과 fakeFetch 가 보인다. grep -rl seika-upl jd/ 결과를 wc -l 로 세면 0, --show-bad-code --single-class io.seika.jadxlab.Sync 로 다시 풀면 TuplesKt.to(X-Upload-Token, seika-upl-2c9e41d7) 이 잡히고, unzip -p jadxlab-debug.apk classes3.dex 를 grep -a 로 훑으면 seika-upl-2c9e41d7 이 나온다](/assets/img/android-mastery/p1c04/05-failed-method-grep-miss.png)
+![터미널, 디버그 APK 분석. jadx --log-level error -d jd jadxlab-debug.apk 가 ERROR - finished with errors, count: 28 을 내고, grep -n 으로 본 Sync.java 87행 Method dump skipped, instruction units count: 642, 90행과 192행 throw new UnsupportedOperationException(Method not decompiled: io.seika.jadxlab.Sync.pullAll 과 fakeFetch 가 보인다](/assets/img/android-mastery/p1c04/05-failed-method-not-decompiled.png)
 
 jadx는 실패한 메서드를 몰래 버리지 않는다. 메서드 머리에는 `Code decompiled incorrectly, please refer to instructions dump.` 주석과 `--show-bad-code`를 쓰라는 안내가 붙는다([MethodGen.java 119~132행](https://github.com/skylot/jadx/blob/v1.5.5/jadx-core/src/main/java/jadx/core/codegen/MethodGen.java#L119-L132)). 몸통은 `throw new UnsupportedOperationException("Method not decompiled: ...")` 문장 하나로 대체된다([373~388행](https://github.com/skylot/jadx/blob/v1.5.5/jadx-core/src/main/java/jadx/core/codegen/MethodGen.java#L373-L388)). `--show-bad-code`가 꺼져 있으면 이렇게 표시된 메서드는 처음부터 이 대체 코드 생성기로 넘어간다([ClassGen.java 397~406행](https://github.com/skylot/jadx/blob/v1.5.5/jadx-core/src/main/java/jadx/core/codegen/ClassGen.java#L397-L406)). 예외 줄 위에는 jadx 자체 명령 덤프가 주석으로 붙는데, 명령 단위가 200을 넘으면 덤프도 생략하고 `Method dump skipped, instruction units count: N`만 남긴다([390~403행](https://github.com/skylot/jadx/blob/v1.5.5/jadx-core/src/main/java/jadx/core/codegen/MethodGen.java#L390-L403)). `pullAll`은 642단위라 덤프가 없었고 200단위 아래인 `fakeFetch`에는 덤프가 주석으로 붙었다. `--show-bad-code`의 기본값은 false이고([JadxCLIArgs.java 111~112행](https://github.com/skylot/jadx/blob/v1.5.5/jadx-cli/src/main/java/jadx/cli/JadxCLIArgs.java#L111-L112)), jadx-gui에서는 설정의 "Show inconsistent code"가 같은 역할을 한다.
 
@@ -333,11 +331,13 @@ jadx는 실패한 메서드를 몰래 버리지 않는다. 메서드 머리에�
 
 ## grep과 jadx-gui 검색이 놓친 토큰
 
-출력에 표시가 남는다고 안심할 일은 아니다. 몸통이 throw 문으로 대체되면 그 안에 있던 문자열과 호출도 출력에서 함께 빠진다. 위 캡처에서 `grep -rl "seika-upl" jd/`는 0개 파일을 돌려줬다. jadx-gui의 코드 검색도 결과가 같았다. 전체 디컴파일이 끝날 때까지 기다린 뒤 검색했다.
+출력에 표시가 남는다고 안심할 일은 아니다. 몸통이 throw 문으로 대체되면 그 안에 있던 문자열과 호출도 출력에서 함께 빠진다. 디버그 빌드 출력 폴더에 `grep -rl "seika-upl" jd/`를 돌리면 0개 파일이 나온다. jadx-gui의 코드 검색도 결과가 같았다. 전체 디컴파일이 끝날 때까지 기다린 뒤 검색했다.
 
 ![jadx-gui 텍스트 검색 창, 검색어 seika-upl, 정의 검색 범위는 코드만 체크되어 있고 결과 목록은 비어 있으며 아래에 0개 찾음 (검색 완료) 이 표시되어 있다](/assets/img/android-mastery/p1c04/06-jadxgui-search-miss-failed-method.png)
 
 토큰은 APK 안에 멀쩡히 있다. `unzip -p jadxlab-debug.apk classes3.dex`를 `grep -a`로 훑으면 바로 나오고 `--show-bad-code`로 다시 풀면 `TuplesKt.to("X-Upload-Token", "seika-upl-2c9e41d7")`가 보인다. jadx-gui에서는 Java 대신 Smali 보기로 바꾸면 바이트코드의 `const-string`이 그대로 드러난다.
+
+![터미널, 같은 디버그 APK 에서 토큰 찾기. grep -rl seika-upl jd/ 를 wc -l 로 세면 0, jadx -q --show-bad-code --single-class io.seika.jadxlab.Sync -d jd-bad jadxlab-debug.apk 로 다시 풀고 grep -rhoE 로 찾으면 TuplesKt.to(X-Upload-Token, seika-upl-2c9e41d7), unzip -p jadxlab-debug.apk classes3.dex 를 grep -a -o 로 훑으면 seika-upl-2c9e41d7 이 나온다](/assets/img/android-mastery/p1c04/05b-grep-miss-token-in-dex.png)
 
 ![jadx-gui 에 jadxlab-debug.apk 를 열고 io.seika.jadxlab.Sync 를 Smali 로 본 화면. 737행 const-string v11, X-Upload-Token, 강조된 739행 const-string v12, seika-upl-2c9e41d7, 741행 invoke-static TuplesKt->to, 728행 .local v8, ids:Ljava/util/List 같은 디버그 정보가 보이고 왼쪽 아래에 경고 22개가 표시되어 있다](/assets/img/android-mastery/p1c04/06b-jadxgui-smali-const-string.png)
 
@@ -353,9 +353,7 @@ jfb/sources/io/seika/jadxlab/Sync.java:362:            java.lang.String r11 = "X
 jfb/sources/io/seika/jadxlab/Sync.java:363:            java.lang.String r12 = "seika-upl-2c9e41d7"
 ```
 
-R8 빌드에서도 같은 일이 벌어졌다. `Sync`는 `a.f`가 됐고 `pullAll`과 `fakeFetch`에 해당하는 `a.f.b`와 `a.f.a`가 둘 다 `Method not decompiled`로 바뀌었다. `a.f.b`에는 디버그 빌드처럼 다중 진입 루프 경고가 붙었고 명령 단위는 473이었다. 기본 출력에는 토큰이 없었고 `--show-bad-code`로 다시 풀자 `new b.b("X-Upload-Token", "seika-upl-2c9e41d7")`가 나왔다. 매핑을 보면 `kotlin.TuplesKt`는 지워졌고 `TuplesKt.to`가 `pullAll` 안으로 인라인되어 `kotlin.Pair`(`b.b`)의 생성자를 바로 부르는 꼴이 됐다.
-
-jadx 출력만 grep 했다면 보고서에 "토큰 없음"이라고 적었을 것이다.
+R8 빌드에서도 같은 일이 벌어졌다. `Sync`는 `a.f`가 됐고 `pullAll`과 `fakeFetch`에 해당하는 `a.f.b`와 `a.f.a`가 둘 다 `Method not decompiled`로 바뀌었다. `a.f.b`에는 디버그 빌드처럼 다중 진입 루프 경고가 붙었고 명령 단위는 473이었다. 기본 출력에는 토큰이 없었고 `--show-bad-code`로 다시 풀자 `new b.b("X-Upload-Token", "seika-upl-2c9e41d7")`가 나왔다. 매핑을 보면 `kotlin.TuplesKt`는 지워졌고 `TuplesKt.to`가 `pullAll` 안으로 인라인되어 `kotlin.Pair`(`b.b`)의 생성자를 바로 부르는 꼴이 됐다. 두 빌드 모두 기본 출력만 grep 했다면 토큰을 놓쳤다.
 
 ## 코루틴 상태 기계가 만든 입구 여럿인 루프
 
@@ -377,7 +375,7 @@ jadx가 구조화하지 못한 메서드가 실제로도 망가진 코드인지 
 
 d8의 DEX 변환이 이 실패에 끼어드는지도 궁금했다. 그래서 d8에 들어가기 전의 kotlinc 산출물 `Sync.class`, `Sync$pullAll$1.class`, `Sync$fakeFetch$1.class`를 jadx에 바로 넣었다. 그런데 작은따옴표로 감싸 넘겼는데도 jadx가 `Sync-d.class`라는 없는 파일을 찾다가 멈췄다. PATH에 잡힌 `jadx`가 sh 시작 스크립트라 인자를 한 번 더 해석하면서 `$pullAll`은 빈 문자열, `$1`은 첫 인자 `-d`가 된 것으로 보인다. 클래스 파일을 jar로 묶어 넘기자 이 문제는 사라졌다.
 
-jar로 넘겨도 jadx는 `pullAll`과 `fakeFetch`를 풀지 못했다. `pullAll`은 실패한 이유가 달랐다. DEX에서는 다중 진입 루프 경고 뒤에 포기했고, 클래스 파일에서는 예외 핸들러 연결을 만드는 블록 분할 단계에서 예외로 멈췄다. `fakeFetch`는 두 입력 모두 별다른 경고 없이 실패 표시만 붙었다.
+jar로 넘겨도 jadx는 `pullAll`과 `fakeFetch`를 풀지 못했다. `pullAll`은 실패한 이유가 달랐다. DEX에서는 다중 진입 루프 경고 뒤에 포기했고, 클래스 파일에서는 예외 핸들러 연결을 만드는 블록 분할 단계에서 예외로 멈췄다. `fakeFetch`는 두 입력 모두 다중 진입 루프 경고나 예외 없이, 블록 중복 제거 경고(`Removed duplicated region`) 한 줄과 실패 표시만 붙었다.
 
 ```text
 /*  JADX ERROR: JadxRuntimeException in pass: BlockSplitter
@@ -388,7 +386,7 @@ jar로 넘겨도 jadx는 `pullAll`과 `fakeFetch`를 풀지 못했다. `pullAll`
 
 명령 단위도 DEX의 642와 달리 894였다. 입력 바이트코드 형식이 다르니 세는 단위도 달라진 것으로 보이는데 따져 보지는 않았다.
 
-이 비교가 뜻을 가지려면 jar에 넣은 클래스 파일이 APK 속 `Sync`와 같은 코드여야 한다. 빌드 때와 같은 D8로 다시 변환해 보면 되는데, Gradle 캐시에서 이름에 r8이 들어간 jar를 찾으면 아무것도 나오지 않는다. AGP 8.5.2는 D8과 R8을 `builder-8.5.2.jar` 안에 넣어 두고 있었다. 이 jar를 클래스패스에 넣고 `com.android.tools.r8.D8 --version`을 부르면 `D8 8.5.35`가 찍히고 매핑 파일 머리의 `# compiler_version: 8.5.35`와 같다.
+이 비교가 의미 있으려면 jar에 넣은 클래스 파일이 APK 속 `Sync`와 같은 코드여야 한다. 빌드 때와 같은 D8로 다시 변환해 보면 되는데, Gradle 캐시에서 이름에 r8이 들어간 jar를 찾으면 아무것도 나오지 않는다. AGP 8.5.2는 D8과 R8을 `builder-8.5.2.jar` 안에 넣어 두고 있었다. 이 jar를 클래스패스에 넣고 `com.android.tools.r8.D8 --version`을 부르면 `D8 8.5.35`가 찍히고 매핑 파일 머리의 `# compiler_version: 8.5.35`와 같다.
 
 이 D8로 클래스 파일 세 개를 `--debug --min-api 26`으로 다시 DEX로 만들고 APK의 `classes3.dex`와 함께 `dexdump -d`로 풀어 `Sync` 세 클래스만 견줬다. 두 DEX는 문자열·메서드 인덱스 표가 달라 인덱스 번호는 지우고 비교했다. 정규화한 덤프는 양쪽 다 974줄이었고 다른 줄은 메서드 머리의 code_item 파일 오프셋 9줄뿐이었다. 그 오프셋까지 가리자 명령, 레지스터 수(`pullAll` 24개), 분기 대상, try/catch 표, 줄 번호와 지역 변수 정보, 문자열 상수, 호출 대상이 모두 같았다. `pullAll`은 642 코드 유닛으로 jadx가 보고한 값과도 맞는다. 같은 코드를 DEX로 넣어도 클래스 파일로 넣어도 jadx는 풀지 못했다. d8 변환은 이 실패와 상관이 없었다.
 
@@ -517,11 +515,15 @@ Java.perform(() => {
 });
 ```
 
-에뮬레이터는 root 셸로 바꾸고 frida-server 17.17.0을 띄워 둔 상태에서 시작했다. `S`에는 에뮬레이터 시리얼이 들어 있다.
+에뮬레이터는 root 셸로 바꾸고 frida-server 17.17.0을 띄운 뒤, 앱을 멈추고 이전 덤프와 logcat을 비운 상태에서 시작했다. `S`에는 에뮬레이터 시리얼이 들어 있다.
 
 ```bash
 adb -s $S root
 adb -s $S shell "pidof frida-server >/dev/null || /data/local/tmp/frida-server >/dev/null 2>&1 &"
+# reset: stop the app, drop earlier dumps, clear old logcat lines
+adb -s $S shell am force-stop io.seika.packed
+adb -s $S shell rm -rf /data/data/io.seika.packed/files
+adb -s $S logcat -c
 ```
 
 `frida -f`로 앱을 새로 띄우게 했다. 프로세스를 멈춘 채 만들고 스크립트를 올린 뒤에 재개하므로, `MainActivity.onCreate`가 `Loader.boot`를 부르기 전에 후킹이 걸려 있다.
@@ -548,7 +550,7 @@ adb -s "$S" shell "grep 'dalvik-DEX data' /proc/$pid/maps" </dev/null | tr -d '\
 done
 ```
 
-이렇게 뜬 4096바이트 페이지는 `dex\n038\0`으로 시작했고 헤더의 `file_size`는 1744였다. Frida로 받은 파일, `/proc/<pid>/mem`에서 떠낸 파일, 그리고 빌드 스크립트가 XOR 하기 전에 남겨 둔 원본 `payload-plain.dex`의 해시를 나란히 놓았다.
+이렇게 뜬 4096바이트 페이지는 `dex\n038\0`으로 시작했고 헤더의 `file_size`는 1744였다. Frida로 받은 파일, `/proc/<pid>/mem`에서 떠낸 파일, 그리고 빌드 스크립트가 XOR 하기 전에 남겨 둔 원본 `payload-plain.dex`의 해시를 나란히 놓았다. 덤프 파일을 호스트에 받아 `sha256sum`으로 계산했고, 덤프 파일 경로 앞의 작업 폴더 이름은 줄였다.
 
 ```text
 f5e7d3cdae8f2a86afbe868c5db4ddeec198e7053e8493eb14c41660efaec489 *payload-plain.dex
