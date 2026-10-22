@@ -5,7 +5,7 @@ date: 2026-11-04 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, DeepLink, AppLink, DomainVerification, WebView, JavascriptInterface, IntentScheme, PackageVisibility]
-excerpt: "Android 13에서 커스텀 스킴을 베낀 공격자 앱은 priority 999가 0으로 깎여, 사용자가 선택창에서 고르거나 원래 앱이 없을 때만 토큰을 받았다. exported WebView에 남이 고른 URL을 넣자 서드파티 iframe까지 JS 브리지로 세션 토큰을 꺼냈고, intent: 링크 하나로 export하지 않은 화면이 열렸다."
+excerpt: "Android 13에서 커스텀 스킴을 베낀 공격자 앱은 priority 999가 0으로 깎여, 사용자가 선택창에서 고르거나 원래 앱이 없을 때만 토큰을 받았다. exported WebView에서는 남이 넣은 공격자 페이지도, 앱 자기 페이지에 낀 서드파티 iframe도 JS 브리지로 세션 토큰을 꺼냈고, intent: 링크로는 export하지 않은 화면까지 열렸다."
 ---
 
 [앞 글](/posts/android-lab-p1c19-pendingintent-uri-grant/)에서는 PendingIntent와 URI grant가 남의 이름으로 권한을 내주는 경로를 봤다. 앱 바깥에서 들어오는 링크와 앱 안에서 웹 콘텐츠를 띄우는 WebView는 둘 다 외부에서 온 문자열 하나가 앱의 어떤 코드까지 닿느냐의 문제다. 커스텀 스킴(`seikalab://`)은 누구나 등록할 수 있는데, 실제로 다른 앱이 콜백을 가로채려면 무엇이 더 필요한지가 이번 실습에서 처음 생각과 달랐다. https 링크는 도메인 검증을 거쳐야 앱으로 오고, WebView는 JavaScript 브리지와 파일 접근과 `intent:` 처리를 어떻게 켜 두었느냐에 따라 웹 페이지가 앱의 권한으로 움직인다.
@@ -91,21 +91,23 @@ adb -s $S shell am start -W -a android.intent.action.VIEW -c android.intent.cate
 
 ![두 앱 설치 후 pm list packages가 linklab uid 10179와 linkthief uid 10180을 보이고, query-activities가 seikalab://cb에 LinkLab CallbackActivity와 LinkThief ThiefActivity 두 개를 모두 priority=0으로 나열하며, am start -W 결과 Activity가 android/com.android.internal.app.ResolverActivity인 터미널](/assets/img/android-mastery/p1c20/10-device-scheme.png)
 
-두 군데가 예상과 달랐다. 매니페스트에 999로 적은 LinkThief의 우선순위가 `priority=0`으로 나온다. 그리고 `am start`가 도착한 곳은 시스템 선택창인 `ResolverActivity`였다. 우선순위가 깎이는 이유는 `ComponentResolver.adjustPriority`에 있다. 권한 있는(privileged) 시스템 앱이 아니면 0보다 큰 우선순위를 둘 수 없다는 주석과 함께 `setPriority(0)`을 호출한다.
+두 군데가 예상과 달랐다. 매니페스트에 999로 적은 LinkThief의 우선순위가 `priority=0`으로 나온다. 그리고 `am start`가 도착한 곳은 시스템 선택창인 `ResolverActivity`였다. 우선순위가 깎이는 이유는 [`ComponentResolver.adjustPriority`](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/resolution/ComponentResolver.java#492)에 있다. 권한 있는(privileged) 시스템 앱이 아니면 0보다 큰 우선순위를 둘 수 없다는 주석과 함께 `setPriority(0)`을 호출한다.
 
 ![AOSP android-13.0.0_r84 ComponentResolver.java 492~515행 adjustPriority 함수. intentFilter.getPriority()가 0 이하면 그대로 두고, privilegedApp이 아니면 "non-privileged applications can never define a priority >0" 주석 뒤 intentFilter.setPriority(0)을 호출하는 코드](/assets/img/android-mastery/p1c20/03-src-a13-priority-cap.png)
-
-([ComponentResolver.java L492-515](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/resolution/ComponentResolver.java#492))
 
 우선순위가 같은 후보가 둘이니 시스템은 사용자에게 묻는다. 화면에는 "Open with" 시트가 떴고, 아무것도 고르지 않은 상태라 "Just once"와 "Always"는 비활성이었다.
 
 ![에뮬레이터 홈 화면 위에 뜬 Open with 시트. LinkLab과 LinkThief 두 줄이 같은 기본 안드로이드 아이콘으로 나열되고 아래 Just once와 Always 버튼이 회색으로 비활성](/assets/img/android-mastery/p1c20/11-device-chooser.png)
 
-여기서 LinkThief를 고르고 "Just once"를 눌러야 비로소 토큰이 공격자 화면에 찍혔다.
+여기서 LinkThief를 고르고 "Just once"를 눌러야 비로소 토큰이 공격자 화면에 찍혔다. 선택창에서 그렇게 누른 뒤 로그를 읽었다.
+
+```bash
+adb -s $S logcat -d -v tag -s LINKTHIEF LINKLAB
+```
 
 ![LinkThief 화면에 LinkThief ThiefActivity, received data=seikalab://cb?token=LAB-OAUTH-1234, stolen token=LAB-OAUTH-1234, referrer=android-app://com.android.shell 줄이 표시된 모습](/assets/img/android-mastery/p1c20/12-device-thief-token.png)
 
-같은 내용이 logcat에도 남는다.
+logcat에도 같은 내용이 남는다.
 
 ```
 W/LINKTHIEF: LinkThief ThiefActivity
@@ -114,7 +116,17 @@ W/LINKTHIEF: stolen token=LAB-OAUTH-1234
 W/LINKTHIEF: referrer=android-app://com.android.shell
 ```
 
-대조를 위해 LinkLab을 지우고 같은 링크를 다시 쐈다. 이번에는 선택창 없이 바로 `io.seika.linkthief/.ThiefActivity`가 떴고 `stolen token=LAB-OAUTH-5678`이 찍혔다. 그러니 Android 13에서 커스텀 스킴 하이재크가 성립하는 경우는 사용자가 선택창에서 잘못 고르거나, 예전에 "Always"로 공격자 앱을 기본값으로 박아 두었거나, 진짜 앱이 아직 설치되지 않은 경우다. 마지막 경우가 생각보다 현실적이다. 로그인 흐름이 브라우저에서 시작돼 앱으로 돌아오는 구조라면, 앱이 없는 기기에 같은 스킴을 가진 앱이 깔려 있기만 하면 된다. 방어하는 쪽이 선택창에 기대면 안 되는 이유도 여기 있다. 이 확인을 마친 뒤 LinkLab을 다시 설치했고, 이때 uid가 10179에서 10181로 바뀌었다.
+대조를 위해 LinkLab을 지우고 토큰만 바꾼 같은 링크를 다시 쏜 뒤, LinkLab을 다시 설치했다.
+
+```bash
+adb -s $S uninstall io.seika.linklab
+adb -s $S shell am start -W -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d seikalab://cb?token=LAB-OAUTH-5678
+adb -s $S logcat -d -v tag -s LINKTHIEF
+adb -s $S install out/linklab.apk
+adb -s $S shell pm list packages -U io.seika
+```
+
+LinkLab이 없을 때는 선택창 없이 바로 `io.seika.linkthief/.ThiefActivity`가 떴고 `stolen token=LAB-OAUTH-5678`이 찍혔다. 그러니 Android 13에서 커스텀 스킴 하이재크가 성립하는 경우는 사용자가 선택창에서 잘못 고르거나, 예전에 "Always"로 공격자 앱을 기본값으로 박아 두었거나, 진짜 앱이 아직 설치되지 않은 경우다. 마지막 경우가 생각보다 현실적이다. 로그인 흐름이 브라우저에서 시작돼 앱으로 돌아오는 구조라면, 앱이 없는 기기에 같은 스킴을 가진 앱이 깔려 있기만 하면 된다. 다시 설치한 LinkLab은 uid가 10179에서 10181로 바뀌었다.
 
 ## https 링크는 도메인 검증 상태가 행선지를 정한다
 
@@ -136,11 +148,11 @@ adb -s $S shell pm resolve-activity --brief --query-flags 0x10000 -a android.int
 
 상태값은 `1024`라는 숫자로 나왔다. 숫자가 낯설어 소스를 찾아보니 `DomainVerificationState.STATE_FIRST_VERIFIER_DEFINED = 0b10000000000`(1024)이었다([DomainVerificationState.java L97](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/content/pm/verify/domain/DomainVerificationState.java#97)). 검증 에이전트가 실패를 기록할 때 쓰는 값의 시작점이고, 이 범위의 값은 전부 미검증으로 취급한다고 적혀 있다([DomainVerificationInfo.java L82-88](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/content/pm/verify/domain/DomainVerificationInfo.java#82)). 검증기가 돌긴 했고 실패했다는 뜻으로 읽힌다. LinkThief 쪽은 `autoVerify` 도메인이 없으니 패키지 헤더와 서명 줄 없이 사용자 선택 블록만 나온다.
 
-`resolve-activity`에 `--query-flags 0x10000`(MATCH_DEFAULT_ONLY)을 붙인 것은 `am start`와 같은 조건으로 해석시키려는 것이다. 이 플래그가 없으면 App Link 필터 처리 자체를 건너뛴다([DomainVerificationUtils.java L76-84](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/verify/domain/DomainVerificationUtils.java#76)). 결과는 Chrome의 `IntentDispatcher`였고, 두 앱은 어느 쪽도 뽑히지 않았다. Android 12부터 웹 Intent는 그 도메인에 승인된 앱이 있을 때만 앱으로 가고, 없으면 기본 브라우저로 간다([Android 12 동작 변경, 웹 인텐트 확인](https://developer.android.com/about/versions/12/behavior-changes-all#web-intent-resolution)). 해석 코드에서는 승인된 앱 목록이 비면 브라우저만 남기는 분기가 그 일을 한다.
+`resolve-activity`에 `--query-flags 0x10000`(MATCH_DEFAULT_ONLY)을 붙인 것은 `am start`와 같은 조건으로 해석시키려는 것이다. 카테고리가 BROWSABLE 하나뿐인 이 질의에서는 이 플래그가 없으면 App Link 처리를 건너뛴다([DomainVerificationUtils.java L76-84](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/verify/domain/DomainVerificationUtils.java#76)). 결과는 Chrome의 `IntentDispatcher`였고, 두 앱은 어느 쪽도 뽑히지 않았다. Android 12부터 웹 Intent는 그 도메인에 승인된 앱이 있을 때만 앱으로 가고, 없으면 기본 브라우저로 간다([Android 12 동작 변경, 웹 인텐트 확인](https://developer.android.com/about/versions/12/behavior-changes-all#web-intent-resolution)). 해석 코드에서는 승인된 앱 목록이 비면 브라우저만 남기는 분기가 그 일을 한다.
 
 ![cs.android.com android-13.0.0_r84 ComputerEngine.java 1059~1098행. isDomainVerificationIntent가 아니면 undefinedList를 전부 더하고 includeBrowser = true, 맞으면 mDomainVerificationManager.filterToApprovedApp을 부르고 "If no apps are approved for the domain, resolve only to browsers" 주석 아래 approvedInfos가 비면 includeBrowser = true로 두는 코드](/assets/img/android-mastery/p1c20/04-src-a13-applink-browser-only.png)
 
-([ComputerEngine.java L1082-1088](https://cs.android.com/android/platform/superproject/+/android-13.0.0_r84:frameworks/base/services/core/java/com/android/server/pm/ComputerEngine.java;l=1082)) 브라우저가 하나도 없는 기기라면 후보를 전부 돌려준다는 분기도 있다([L1145-1147](https://cs.android.com/android/platform/superproject/+/android-13.0.0_r84:frameworks/base/services/core/java/com/android/server/pm/ComputerEngine.java;l=1145)). 이 이미지에는 Chrome이 있어서 그쪽은 관측하지 못했다.
+브라우저만 남기는 분기는 [ComputerEngine.java L1082-1088](https://cs.android.com/android/platform/superproject/+/android-13.0.0_r84:frameworks/base/services/core/java/com/android/server/pm/ComputerEngine.java;l=1082)이고, 브라우저가 하나도 없는 기기라면 후보를 전부 돌려준다는 분기도 있다([L1145-1147](https://cs.android.com/android/platform/superproject/+/android-13.0.0_r84:frameworks/base/services/core/java/com/android/server/pm/ComputerEngine.java;l=1145)). 이 이미지에는 Chrome이 있어서 그쪽은 관측하지 못했다.
 
 ## 검증은 암시적 해석만 바꾼다
 
@@ -169,7 +181,7 @@ LinkThief가 띄운 LinkLab Activity에서는 `getReferrer()`가 매번 `null`�
 
 ![AOSP android-13.0.0_r84 ActivityRecord.java 9890~9901행 getFilteredReferrer. javadoc "This method returns null if the given package is not visible to this activity", referrerPackage가 null이거나 자기 packageName이 아니면서 mWmService.mPmInternal.filterAppAccess(referrerPackage, info.applicationInfo.uid, mUserId)가 참이면 return null, 아니면 referrerPackage를 돌려주는 코드](/assets/img/android-mastery/p1c20/07-src-a13-filtered-referrer.png)
 
-([ActivityRecord.java L9890-9901](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/wm/ActivityRecord.java#9890)) 소스대로라면 LinkLab이 LinkThief를 볼 수 있게만 하면 같은 호출에서 이름이 나와야 한다. 그래서 `<queries><package android:name="io.seika.linkthief"/></queries>` 한 줄만 더하고 같은 디버그 키로 서명한 `linklab-q.apk`를 만들어, 같은 공격을 앞뒤로 돌렸다.
+[ActivityRecord.java L9890-9901](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/wm/ActivityRecord.java#9890)대로라면 LinkLab이 LinkThief를 볼 수 있게만 하면 같은 호출에서 이름이 나와야 한다. 그래서 `<queries><package android:name="io.seika.linkthief"/></queries>` 한 줄만 더하고 같은 디버그 키로 서명한 `linklab-q.apk`를 만들어, 같은 공격을 앞뒤로 돌렸다.
 
 ```bash
 adb -s $S shell am force-stop io.seika.linklab
@@ -210,11 +222,11 @@ adb -s $S shell am start -W -a android.intent.action.VIEW -c android.intent.cate
 
 사용자 선택만으로 미검증 LinkThief가 도메인을 가져갔다(`io.seika.linkthief/.ThiefActivity`). 승인 수준 상수에서 사용자 선택은 3, 검증은 4다([DomainVerificationManagerInternal.java L115](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/verify/domain/DomainVerificationManagerInternal.java#115)). 아무도 검증되지 않은 동안에는 3이 최고점이라 LinkThief가 이긴 것이다. LinkLab을 `STATE_APPROVED`로 올리자 해석은 LinkLab으로 바뀌었고, LinkThief의 선택 상태는 `Enabled`에서 `Disabled`로 되돌아가 있었다.
 
-처음에는 이 뒤집힘을 의외로 받아들였다. 다른 앱의 선택 취소 결과를 무시하는 셸 경로를 소스에서 본 기억이 있었는데, 다시 열어 보니 그건 `set-app-links-user-selection` 쪽 코드였다. `set-app-links`는 `DomainVerificationService`의 상태 기록 경로를 타고, 새 상태가 검증된 상태(`STATE_APPROVED`도 여기에 든다)이면서 그 도메인이 전에는 검증되지 않았다면 상태를 쓴 다음 `removeUserStatesForDomain`을 부른다. 주석이 이유를 적어 둔다. 승인된 도메인에 대해서는 사용자 선택을 취소하는 SystemApi 동작을 따른다는 것이다.
+처음에는 이 뒤집힘을 의외로 받아들였다. 다른 앱의 선택 취소 결과를 무시하는 셸 경로를 소스에서 본 기억이 있었는데, 다시 열어 보니 그건 `set-app-links-user-selection` 쪽 코드였다. `set-app-links`는 `DomainVerificationService`의 상태 기록 경로를 타고, 새 상태가 검증된 상태(`STATE_APPROVED`도 여기에 든다)이면서 그 도메인이 전에는 검증되지 않았다면 상태를 쓴 다음 `removeUserStatesForDomain`을 부른다. 주석에 이유가 있다. 승인된 도메인에서는 사용자 선택을 취소하는 SystemApi 동작을 그대로 따른다고 적혀 있다.
 
 ![AOSP android-13.0.0_r84 DomainVerificationService.java 429~455행. DomainVerificationState.isVerified(state)이면 이전에 검증되지 않은 도메인을 newlyVerifiedDomains에 모으고, setDomainVerificationStatusInternal 뒤 "Mirror SystemApi behavior of revoking user selection for approved domains" 주석 아래 각 도메인에 removeUserStatesForDomain(pkgState, domain)을 호출하는 코드](/assets/img/android-mastery/p1c20/08-src-a13-approve-revokes-selection.png)
 
-([DomainVerificationService.java L429-455](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/verify/domain/DomainVerificationService.java#429)) 그러니 위 캡처의 `Disabled`는 소스가 의도한 결과다. 방어하는 쪽에서 보면 반가운 동작이다. 도메인 검증이 성공하는 순간 다른 앱이 사용자에게 받아 둔 선택은 그 도메인에서 사라진다. 거꾸로 말하면 검증이 실패한 채로 배포된 앱은 사용자가 공격자 앱의 "지원되는 링크 열기"를 켜는 것만으로 링크를 넘겨준다.
+[DomainVerificationService.java L429-455](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/verify/domain/DomainVerificationService.java#429)를 보면 위 캡처의 `Disabled`는 소스가 의도한 결과다. 방어하는 쪽에서 보면 반가운 동작이다. 도메인 검증이 성공하는 순간 다른 앱이 사용자에게 받아 둔 선택은 그 도메인에서 사라진다. 거꾸로 말하면 검증이 실패한 채로 배포된 앱은 사용자가 공격자 앱의 "지원되는 링크 열기"를 켜는 것만으로 링크를 넘겨준다.
 
 강제 승인에 `STATE_SUCCESS` 대신 `STATE_APPROVED`를 쓴 이유도 소스에 있다. 셸 명령 도움말이 SUCCESS는 검증 에이전트가 덮어쓸 수 있고 APPROVED는 그렇지 않다고 적는다([DomainVerificationShell.java L79-93](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/services/core/java/com/android/server/pm/verify/domain/DomainVerificationShell.java#79)). 여기서 본 `approved`는 셸로 만든 상태이고, assetlinks.json을 실제로 검증받은 결과는 아니다.
 
@@ -341,7 +353,7 @@ I/LINKLAB : onPageFinished http://10.0.2.2:8720/app/frame.html
 
 ![AOSP android-13.0.0_r84 WebView.java 1892~1925행 addJavascriptInterface javadoc의 IMPORTANT 목록. JELLY_BEAN 이하 대상 앱과 4.2 미만 기기에서 리플렉션 위험, JavaScript가 WebView의 private background thread에서 Java 객체와 상호작용, "Because the object is exposed to all the frames" 호출 프레임 origin을 알 수 없다는 문단, LOLLIPOP 이상에서 메서드가 열거 가능하다는 항목](/assets/img/android-mastery/p1c20/05-src-a13-webview-bridge-frames.png)
 
-([WebView.java L1892-1925](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/webkit/WebView.java#1892)) 열거 가능하다는 항목은 앞 실험의 `enumerable=getToken,log`로, 백그라운드 스레드 항목은 `thread=JavaBridge`로 확인됐다. 브리지가 꼭 필요하면 노출 대상 origin을 정할 수 있는 androidx.webkit의 `addWebMessageListener` 같은 API로 옮기는 편이 낫다. 이번 실습에서 그 API를 돌려 보지는 않았다.
+[WebView.java L1892-1925](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/webkit/WebView.java#1892)의 목록 중 열거 가능하다는 항목은 앞 실험의 `enumerable=getToken,log`로, 백그라운드 스레드 항목은 `thread=JavaBridge`로 확인됐다. 브리지가 꼭 필요하면 노출 대상 origin을 정할 수 있는 androidx.webkit의 `addWebMessageListener` 같은 API로 옮기는 편이 낫다. 이번 실습에서 그 API를 돌려 보지는 않았다.
 
 ## intent: 링크 하나로 export하지 않은 화면이 열렸다
 
@@ -373,7 +385,7 @@ adb -s $S logcat -d -v tag -s LINKLAB LINKTHIEF
 
 ![LinkThief가 WebActivity에 intent.html을 넣자 console intent.html loaded, navigating to intent:#Intent;component=io.seika.linklab/.InternalActivity;S.note=from-evil-page;end, shouldOverrideUrlLoading mainFrame=true, intent: parsed -> Intent act=VIEW cmp=io.seika.linklab/.InternalActivity startActivity as LinkLab, LinkLab InternalActivity (exported=false) reached, note=from-evil-page, referrer=android-app://io.seika.linklab가 찍힌 터미널](/assets/img/android-mastery/p1c20/44-device-intent.png)
 
-사용자 터치 없이 스크립트 이동만으로도 `shouldOverrideUrlLoading`이 불렸고, LinkLab이 자기 이름으로 `startActivity`를 해서 `InternalActivity (exported=false) reached`, `note=from-evil-page`가 찍혔다. referrer는 LinkLab 자신(`android-app://io.seika.linklab`)이다. 앞에서 LinkThief가 같은 컴포넌트를 직접 부르다 `uid=10180`으로 거부당한 것과 나란히 놓으면 차이가 분명하다. 웹 페이지가 앱을 대리인으로 세워, 앱 자신만 열 수 있는 화면에 공격자가 고른 extra를 넣었다. 공격자는 `InternalActivity`가 받는 extra를 마음대로 정할 수 있다.
+사용자 터치 없이 스크립트 이동만으로도 `shouldOverrideUrlLoading`이 불렸고, LinkLab이 자기 이름으로 `startActivity`를 해서 `InternalActivity (exported=false) reached`, `note=from-evil-page`가 찍혔다. referrer는 LinkLab 자신(`android-app://io.seika.linklab`)이다. 앞에서 LinkThief가 같은 컴포넌트를 직접 부르다 `uid=10180`으로 거부당했는데, 이번에는 웹 페이지가 LinkLab을 대리인으로 세워 앱 자신만 열 수 있는 화면에 공격자가 고른 extra를 넣었다.
 
 ## file:// 접근과 targetSdk에 따라 바뀌는 기본값
 
@@ -391,7 +403,7 @@ adb -s $S logcat -d -v tag -s LINKLAB
 
 ![LinkLab 제목 아래 WebView에 refresh_token=LAB-REFRESH-0c55e2 (private file of io.seika.linklab) 한 줄이 표시된 화면](/assets/img/android-mastery/p1c20/47-device-file-secret.png)
 
-이번 경로에서는 화면에 띄우는 데서 끝났다. 이 파일을 공격자 서버로 보내려면 `file://` 문서 안의 스크립트가 다른 파일이나 다른 origin을 읽어야 하는데, 그건 `allowFileAccessFromFileURLs`와 `allowUniversalAccessFromFileURLs`가 막는다. 두 값은 targetSdk가 JELLY_BEAN(16) 이상이면 기본 `false`이고 LinkLab도 건드리지 않았다(로그의 `false`). 공격자가 기기에 HTML 파일을 심어 둘 수 있거나 앱이 이 두 플래그까지 켰다면 이야기가 달라진다. 이번 실습에서는 그 조합을 돌리지 않았다.
+이번 경로에서는 화면에 띄우는 데서 끝났다. 이 파일을 공격자 서버로 보내려면 `file://` 문서 안의 스크립트가 다른 파일이나 다른 origin을 읽어야 하는데, 그건 `allowFileAccessFromFileURLs`와 `allowUniversalAccessFromFileURLs`가 막는다. 두 값은 targetSdk가 JELLY_BEAN(16) 이상이면 기본 `false`이고([WebSettings.java L1026 이하](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/webkit/WebSettings.java#1026)) LinkLab도 건드리지 않았다(로그의 `false`). 공격자가 기기에 HTML 파일을 심어 둘 수 있거나 앱이 이 두 플래그까지 켰다면 이야기가 달라진다. 이번 실습에서는 그 조합을 돌리지 않았다.
 
 `setAllowFileAccess`의 기본값은 앱의 targetSdk에 따라 갈린다. 같은 코드를 targetSdk 29로 빌드한 `linklab-t29.apk`로 바꿔 깔아 기본값 로그를 비교했다.
 
@@ -410,15 +422,15 @@ adb -s $S install -r out/linklab.apk
 
 ![같은 기기에서 targetSdk 33 빌드는 defaults 줄이 allowFileAccess=false targetSdk=33, adb install -r out/linklab-t29.apk 뒤에는 allowFileAccess=true targetSdk=29로 바뀌고, 마지막에 out/linklab.apk를 다시 설치해 Success가 나온 터미널](/assets/img/android-mastery/p1c20/48-device-file-default.png)
 
-targetSdk 33에서는 `allowFileAccess=false`, 29에서는 `true`였다. 문서도 Q(29) 이하를 대상으로 하면 `true`, R(30) 이상이면 `false`라고 적는다. 오래된 targetSdk를 유지하는 앱은 코드 한 줄 안 써도 파일 접근이 켜져 있다는 뜻이다. 다만 이번 `WebActivity`처럼 코드에서 `true`로 켜 버리면 targetSdk와 상관없이 열린다.
+targetSdk 33에서는 `allowFileAccess=false`, 29에서는 `true`였다. 문서도 Q(29) 이하를 대상으로 하면 `true`, R(30) 이상이면 `false`라고 적는다. 오래된 targetSdk를 유지하는 앱은 코드 한 줄 안 써도 파일 접근이 켜진다. 다만 이번 `WebActivity`처럼 코드에서 `true`로 켜 버리면 targetSdk와 상관없이 열린다.
 
 ![AOSP android-13.0.0_r84 WebSettings.java 393~410행 setAllowFileAccess javadoc. 외부에서 받은 file:// URL을 열지 말라는 Note, WebViewAssetLoader 권장, Q 이하 대상 앱은 명시적으로 false로 두라는 문장, The default value is true for apps targeting Q and below, and false when targeting R and above](/assets/img/android-mastery/p1c20/06-src-a13-allowfileaccess-default.png)
 
-([WebSettings.java L393-410](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/webkit/WebSettings.java#393)) `setJavaScriptEnabled`의 기본값이 `false`라는 것도 같은 파일에 있고([L1005-1010](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/webkit/WebSettings.java#1005)), 모든 로그의 `javaScriptEnabled=false`가 그 값이다.
+이 javadoc은 [WebSettings.java L393-410](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/webkit/WebSettings.java#393)이다. `setJavaScriptEnabled`의 기본값이 `false`라는 것도 같은 파일에 있고([L1005-1010](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/webkit/WebSettings.java#1005)), 모든 로그의 `javaScriptEnabled=false`가 그 값이다.
 
 ## 고친 WebView에서 다시 돌려 본 결과
 
-`SafeWebActivity`는 위에서 문제가 된 설정을 하나씩 닫았다. 초기 URL과 모든 메인 프레임 이동을 자기 origin 하나(실습에서는 `http://10.0.2.2:8720`, 실서비스라면 자기 https 도메인)로 묶고, 브리지를 붙이지 않고, 파일·content 접근을 targetSdk 기본값에 맡기지 않고 명시적으로 끈다. `intent:`는 Chrome이 하는 방식을 따라 BROWSABLE 카테고리를 강제하고 컴포넌트와 selector를 지운 뒤에만 실행한다.
+`SafeWebActivity`는 위에서 문제가 된 설정을 하나씩 닫았다. 초기 URL과 모든 메인 프레임 이동을 자기 origin 하나(실습에서는 `http://10.0.2.2:8720`, 실서비스라면 자기 https 도메인)로 묶고, 브리지를 붙이지 않고, 파일·content 접근을 targetSdk 기본값에 맡기지 않고 명시적으로 끈다. `intent:`는 Chrome과 비슷하게 BROWSABLE을 강제하고 컴포넌트·selector를 지우고 플래그도 비운 뒤에만 실행한다. Chrome은 플래그를 0으로 만들지 않고 허용 목록으로 걸러 내니 똑같지는 않다.
 
 ```java
 // apps/linklab/src/io/seika/linklab/SafeWebActivity.java 발췌
@@ -484,17 +496,30 @@ adb -s $S logcat -d -v tag -s LINKLAB
 
 같은 모양(VIEW + BROWSABLE, data 없음)으로 질의하면 이 이미지에서는 Google Play 서비스의 액티비티들이 걸렸다.
 
-```
-$ pm query-activities --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE
-5 activities found:
-  ... isDefault=true  com.google.android.gms/.adsidentity.settings.AdsIdentitySettingsActivity
-  ... isDefault=true  com.google.android.gms/.backup.component.BackupSettingsCollapsingActivity
-  ... isDefault=true  com.google.android.gms/.backup.component.BackupSettingsActivity
-  ... isDefault=false com.android.cts.ctsshim/.InstallPriority
-  ... isDefault=false com.android.cts.priv.ctsshim/.InstallPriority
+```bash
+adb -s $S shell pm query-activities --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE
 ```
 
-선택창에는 Backup 두 개만 보였고, 광고 ID 설정 액티비티가 빠진 이유는 따로 확인하지 않았다. 소독은 비공개 컴포넌트를 지켰지만, 웹 페이지가 BROWSABLE을 연 다른 앱의 화면을 띄우는 길은 남는다. Chrome이 일반 웹에 허용하는 것과 같은 범위다. 앱 안의 WebView에 그 정도도 필요 없다면 `intent:`는 아예 거부하거나, 이동할 패키지를 허용 목록으로 묶는 편이 깔끔하다.
+```
+5 activities found:
+  Activity #0:
+    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+    com.google.android.gms/.adsidentity.settings.AdsIdentitySettingsActivity
+  Activity #1:
+    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+    com.google.android.gms/.backup.component.BackupSettingsCollapsingActivity
+  Activity #2:
+    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+    com.google.android.gms/.backup.component.BackupSettingsActivity
+  Activity #3:
+    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false
+    com.android.cts.ctsshim/.InstallPriority
+  Activity #4:
+    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false
+    com.android.cts.priv.ctsshim/.InstallPriority
+```
+
+선택창에는 Backup 두 개만 보였고, 광고 ID 설정 액티비티가 빠진 이유는 따로 확인하지 않았다. 소독은 비공개 컴포넌트를 지켰지만, 웹 페이지가 BROWSABLE을 연 다른 앱의 화면을 띄우는 길은 남는다. 사용자 제스처 없이 스크립트가 시작한 이동이었는데도 확인 단계 없이 바로 선택창이 떴다. 앱 안의 WebView에 그 정도도 필요 없다면 `intent:`는 아예 거부하거나, 이동할 패키지를 허용 목록으로 묶는 편이 깔끔하다.
 
 ## 방어를 확인하는 명령들
 
