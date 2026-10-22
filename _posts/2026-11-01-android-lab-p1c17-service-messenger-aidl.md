@@ -5,7 +5,7 @@ date: 2026-11-01 21:00:00 +0900
 category: 블로그/기술문서
 author: SeiKa
 tags: [Android, AndroidSecurity, 모바일보안, Service, AIDL, Messenger, Binder, getCallingUid, RaceCondition]
-excerpt: "Android 13 에뮬레이터에서 다른 키로 서명한 앱이 Messenger 서비스의 관리 기능을 실행했다. handleMessage에서 읽은 getCallingUid()가 서비스 자신의 UID였고, msg.sendingUid로 바꾸자 막혔다. check-then-act 쿠폰 메서드는 4~8개 스레드로 동시에 부른 실험 11번 모두에서 호출이 전부 통과했다."
+excerpt: "Android 13 에뮬레이터에서 다른 키로 서명한 앱이 Messenger 서비스의 관리 기능을 실행했다. handleMessage에서 읽은 getCallingUid()가 서비스 자신의 UID였기 때문이고, msg.sendingUid로 바꾸자 막혔으며, 검사와 기록이 떨어진 쿠폰 메서드는 동시 호출을 매번 전부 통과시켰다."
 ---
 
 [브로드캐스트](/posts/android-lab-p1c16-broadcastreceiver-ordered-broadcast/)는 보낸 쪽이 누구인지 리시버가 알기 어려운 채널이었다. 서비스는 사정이 다르다. 바인드한 앱과 서비스 사이에는 Binder 연결이 생기고, 트랜잭션마다 커널이 보낸 프로세스의 UID를 찍어 넘긴다. 서비스는 그 값을 `Binder.getCallingUid()`로 읽어 "이 호출자에게 관리 기능을 열어 줘도 되나"를 판단하면 된다. 그런데 그 값은 언제, 어느 스레드에서 읽느냐에 따라 전혀 다른 숫자가 된다. Messenger를 쓰는 서비스에서 이걸 잘못 읽으면 서명 검사가 공격자 앱에게 "같은 서명"이라고 답한다.
@@ -85,7 +85,7 @@ Messenger 서비스는 `Handler` 하나를 감싼 `Messenger`의 binder를 `onBi
     }
 ```
 
-클라이언트는 WHOAMI 메시지에 Bundle로 `uid=1000`을 넣고, `msg.sendingUid`도 일부러 1000으로 채워 보낸다. `sendingUid`는 [Message.java 648~649행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/os/Message.java#648)에서 Parcel에 그대로 쓰이는 필드라 보내는 쪽이 값을 정할 수 있다. 공격자 키의 svcclient로 돌렸다. 캡처에서는 `am start`와 `logcat -d` 사이에 3초를 기다렸는데, 막 부팅한 에뮬레이터에서는 첫 실행이 10초 남짓 걸려(다시 돌렸을 때 `Displayed ... +11s30ms`) 3~4초 뒤의 덤프에 SVCLAB 줄이 하나도 없었다. 줄이 비어 있으면 더 기다렸다가 `logcat -d`를 다시 치면 된다.
+클라이언트는 WHOAMI 메시지에 Bundle로 `uid=1000`을 넣고, `msg.sendingUid`도 일부러 1000으로 채워 보낸다. `sendingUid`는 [Message.java 648행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/os/Message.java#648)(writeToParcel)에서 Parcel에 그대로 쓰이고 662행(readFromParcel)에서 그대로 읽히는 필드라 보내는 쪽이 값을 정할 수 있다. 공격자 키의 svcclient로 돌렸다. 캡처에서는 `am start`와 `logcat -d` 사이에 3초를 기다렸는데, 막 부팅한 에뮬레이터에서는 첫 실행이 10초 남짓 걸려(다시 돌렸을 때 `Displayed ... +11s30ms`) 3~4초 뒤의 덤프에 SVCLAB 줄이 하나도 없었다. 줄이 비어 있으면 더 기다렸다가 `logcat -d`를 다시 치면 된다.
 
 ![adb install로 svclab, svcclient, svcfriend 설치 Success 세 번, pm list packages -U io.seika 결과 svcclient uid:10180, svcfriend uid:10181, svclab uid:10179. am start -S -n io.seika.svcclient/.Main --es mode msgr 후 logcat -d -v tag -s SVCLAB:I SVCCLI:I. AdminMessengerService onBind thread=main getCallingUid=10179, sent WHOAMI (payload uid=1000, msg.sendingUid=1000 set by client), 서비스 쪽 WHOAMI thread=main payloadUid=1000 msg.sendingUid=10180, WHOAMI getCallingUid()=10179 getCallingPid()=4143 myUid=10179 myPid=4143, getCallingUidOrThrow() -> IllegalStateException: Thread is not in a binder transcation, checkCallingPermission(INTERNET)=-1 checkCallingOrSelfPermission(INTERNET)=0, ADMIN_VULN caller from Binder.getCallingUid()=10179 (sender 10180) checkSignatures=0 -> EXECUTED, ADMIN_SAFE caller from msg.sendingUid=10180 (sender 10180) checkSignatures=-3 -> DENIED, 클라이언트 reply what=2 -> EXECUTED, reply what=3 -> DENIED](/assets/img/android-mastery/p1c17/05-device-messenger.png)
 
@@ -101,7 +101,7 @@ Messenger 서비스는 `Handler` 하나를 감싼 `Messenger`의 binder를 `onBi
 
 [Binder.java 332~340행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/os/Binder.java#332) 주석대로, 트랜잭션을 처리 중이 아닌 스레드에서는 자기 UID가 나온다. 시스템 서비스라면 그 값이 1000(system)이겠지만 일반 앱에서는 앱 자신의 10xxx UID다. API 29에 들어온 `getCallingUidOrThrow()`([358~361행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/os/Binder.java#358))는 이 상황에서 조용히 자기 UID를 주는 대신 예외를 던진다. Messenger 핸들러에서 실수로 호출자를 읽는 코드를 잡아내는 데 쓸 만하다.
 
-권한 도우미 두 개의 차이는 [ContextImpl.java 2197~2217행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/app/ContextImpl.java#2197)에 그대로 있다. `checkCallingPermission`은 `getCallingPid()`가 자기 PID와 같으면 무조건 `PERMISSION_DENIED`를 돌려주고, `checkCallingOrSelfPermission`은 지금 보이는 PID·UID를 그대로 검사한다. 트랜잭션 밖에서는 그게 서비스 자신이니 서비스가 가진 권한이 호출자 권한처럼 보인다. 이번 랩에서 INTERNET이 없는 svcclient가 OrSelf로는 0을 받은 게 그 결과다.
+권한 도우미 두 개의 차이는 [ContextImpl.java 2197~2217행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r84/core/java/android/app/ContextImpl.java#2197)에 그대로 있다. `checkCallingPermission`은 `getCallingPid()`가 자기 PID와 같으면 무조건 `PERMISSION_DENIED`를 돌려주고, `checkCallingOrSelfPermission`은 지금 보이는 PID·UID를 그대로 검사한다. 트랜잭션 밖에서는 그게 서비스 자신이니 서비스가 가진 권한이 호출자 권한처럼 보인다.
 
 ## AIDL 메서드는 바인더 스레드에서만 호출자를 본다
 
@@ -209,9 +209,9 @@ AIDL에서도 Messenger와 같은 실수가 나온다. `clearCallingIdentity()` 
 
 ![am start -S ... --es mode race 후 mode msgrace, logcat grep. AdminAidlService redeem GIFT-71904가 binder:4143_1, _4, _2, _3 네 스레드에서 모두 caller=10180 -> OK, redeem(GIFT-71904): 4 concurrent calls, true=4. redeemAtomic GIFT-71904A는 세 번 already used, binder:4143_3에서 한 번 OK, true=1. Messenger는 sent 4 x REDEEM(GIFT-76396M) from 4 threads 후 REDEEM GIFT-76396M thread=main caller=10180 -> OK 한 번, thread=main -> already used 세 번. ps -T -p $(pidof io.seika.svclab) 결과 u0_a179 PID 4143의 binder:4143_1부터 binder:4143_6까지 binder_wait_for_work 상태](/assets/img/android-mastery/p1c17/09-device-race.png)
 
-같은 쿠폰이 서로 다른 바인더 스레드 네 개에서 네 번 다 OK가 났다. 처음에는 50 ms 창이면 두세 개쯤 새어 나갈 거라고 예상했는데, 네 개가 전부 통과했다. 우연인지 보려고 같은 실험을 스크립트로 반복했다. 동시 호출 4개로 캡처한 실행을 포함해 6번, 8개로 5번 돌렸고, `redeem`은 11번 모두 보낸 호출이 하나도 빠짐없이 통과했다(8개일 때는 서로 다른 바인더 스레드 8개를 썼다). `redeemAtomic`은 11번 모두 정확히 하나만 통과했다. 이 숫자는 랩에 넣은 50 ms 지연과 에뮬레이터 스케줄링에 기대고 있어서 실제 앱에서 같은 비율이 나온다는 뜻은 아니다.
+같은 쿠폰이 서로 다른 바인더 스레드 네 개에서 네 번 다 OK가 났다. 처음에는 50 ms 창이면 두세 개쯤 새어 나갈 거라고 예상했는데, 네 개가 전부 통과했다. 우연인지 보려고 같은 실험을 스크립트로 반복했다. 동시 호출 4개로 캡처한 실행을 포함해 6번, 8개로 5번 돌렸고, `redeem`은 11번 모두 보낸 호출이 하나도 빠짐없이 통과했다(8개일 때는 서로 다른 바인더 스레드 8개를 썼다). `redeemAtomic`은 11번 모두 정확히 하나만 통과했다. 며칠 뒤 새로 부팅한 에뮬레이터에서 동시 호출 4개로 네 번 더 돌렸을 때도 `true=4`와 `true=1`이 그대로 나왔다. 이 숫자는 랩에 넣은 50 ms 지연과 에뮬레이터 스케줄링에 기대고 있어서 실제 앱에서 같은 비율이 나온다는 뜻은 아니다.
 
-Messenger 쪽은 클라이언트 스레드 네 개가 동시에 보냈는데도 캡처한 실행에서 모든 REDEEM이 `thread=main`에서 하나씩 처리돼 OK는 한 번뿐이었다. OK가 한 번뿐인 것은 11번 반복에서도 매번 같았다(반복 로그에는 스레드 이름을 남기지 않았지만, 핸들러가 `Handler(Looper.getMainLooper())`라 코드상 메인 스레드다). Messenger는 요청을 한 스레드에서 하나씩 처리하니 이 경쟁이 생기지 않는다. 다만 핸들러를 메인 Looper에 묶은 대가로 무거운 작업을 하면 앱의 UI 스레드가 막힌다. `ps -T`의 `binder:4143_1`…`_6`은 같은 시점 서비스 프로세스에 떠 있던 바인더 스레드들이다. 기본 최대치는 [ProcessState.cpp 48행](https://android.googlesource.com/platform/frameworks/native/+/refs/tags/android-13.0.0_r84/libs/binder/ProcessState.cpp#48)의 `DEFAULT_MAX_BINDER_THREADS 15`다.
+Messenger 쪽은 클라이언트 스레드 네 개가 동시에 보냈는데도 캡처한 실행에서 모든 REDEEM이 `thread=main`에서 하나씩 처리돼 OK는 한 번뿐이었다. OK가 한 번뿐인 것은 앞의 반복 실행 전부에서 같았다(반복 로그에는 스레드 이름을 남기지 않았지만, 핸들러가 `Handler(Looper.getMainLooper())`라 코드상 메인 스레드다). 메인 Looper에 묶었으니 경쟁은 없지만, 대신 핸들러에서 무거운 작업을 하면 앱의 UI 스레드가 막힌다. `ps -T`의 `binder:4143_1`…`_6`은 같은 시점 서비스 프로세스에 떠 있던 바인더 스레드들이다. 기본 최대치는 [ProcessState.cpp 48행](https://android.googlesource.com/platform/frameworks/native/+/refs/tags/android-13.0.0_r84/libs/binder/ProcessState.cpp#48)의 `DEFAULT_MAX_BINDER_THREADS 15`다.
 
 ## 매니페스트의 signature 권한은 서비스 코드보다 먼저 막는다
 
@@ -225,7 +225,7 @@ svcclient는 ADMIN 권한을 요청했지만 서명이 달라 `granted=false`였
 
 ![svcfriend로 mode aidl과 mode msgr 실행 후 logcat grep admin 또는 ADMIN_. adminNoCheck caller=10181 EXECUTED, adminTrustPayload claimedUid=1000 realCaller=10181 EXECUTED, adminChecked caller=10181 checkSignatures=0 -> EXECUTED, adminAfterClear before=10181 afterClear getCallingUid=10179 checkSignatures=0 EXECUTED, adminOnExecutor binderThread getCallingUid=10181 worker pool-5-thread-1 getCallingUid=10179 EXECUTED, ADMIN_VULN caller from Binder.getCallingUid()=10179 (sender 10181) EXECUTED, ADMIN_SAFE caller from msg.sendingUid=10181 (sender 10181) checkSignatures=0 -> EXECUTED](/assets/img/android-mastery/p1c17/11-device-friend.png)
 
-관리 경로 일곱 개가 모두 EXECUTED로 끝났다(adminAfterClear는 로그가 두 줄로 나뉘어 있다). 고친 검사(`adminChecked`, ADMIN_SAFE)는 10181을 보고 통과시켰고, 취약한 검사들은 10179를 보고 통과시켰다. 결과만 보면 구분이 안 된다.
+관리 경로 일곱 개가 모두 EXECUTED로 끝났다(adminAfterClear는 로그가 두 줄로 나뉘어 있다). 고친 검사(`adminChecked`, ADMIN_SAFE)는 10181을 보고 통과시켰다. clear 뒤·작업 스레드·handleMessage에서 읽은 검사(`adminAfterClear`, `adminOnExecutor`, ADMIN_VULN)는 서비스 자신의 10179를 보고 통과시켰고, `adminNoCheck`는 검사가 없었고 `adminTrustPayload`는 인자 1000을 믿었다.
 
 ## "아무 앱이나 바인드한다"의 조건
 
