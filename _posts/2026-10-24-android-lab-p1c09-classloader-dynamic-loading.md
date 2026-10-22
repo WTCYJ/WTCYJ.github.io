@@ -10,7 +10,7 @@ excerpt: "직접 만든 2단 패커의 dex 두 개를 spawn으로 DexFile 네이
 
 [지난 글](/posts/android-lab-p1c08-frida-spawn-attach-java-hook/)에서 Frida를 spawn과 attach로 붙여 Java 메서드를 바꿔 끼웠다. 이번에는 그 도구를 패커에 댄다. 패커가 걸린 APK를 jadx로 열면 복호화하고 로더를 만드는 스텁만 보인다. 진짜 dex는 실행 중에 풀려 `InMemoryDexClassLoader`나 `DexClassLoader`를 거쳐 ART로 들어간다. 그 들어가는 문이 생각보다 좁아서 거기에 후킹을 걸어 두면 어느 로더를 쓰든 바이트가 지나가는 순간 복사할 수 있다. 로더 계층과 리플렉션의 기본은 [Atlas C14](/posts/android-concept-atlas-c14-classloader-reflection/)에 있다.
 
-상용 패커를 뜯는 대신 2단짜리 패커 `io.seika.dcl`을 직접 만들었다. 1단 페이로드 `io.seika.payload.Core`는 XOR로 감싸 `assets/s1.bin`에 넣었다. 스텁이 이걸 풀어 direct `ByteBuffer`에 담은 뒤 `InMemoryDexClassLoader`에 넘긴다. 1단은 실행되면서 `assets/s2.bin`을 풀어 `files/s2/stage2.dex`로 쓰고 `DexClassLoader`로 2단 `io.seika.payload2.Beacon`을 올린 다음 파일을 지운다. 메모리에서만 사는 dex와 디스크에 잠깐 있다 사라지는 dex를 한 앱에서 같이 보려고 단을 나눴다. 페이로드에 든 주소는 전부 `example.invalid`다. [4장](/posts/android-lab-p1c04-jadx-static-analysis/)의 한 겹짜리 패커를 두 단으로 늘린 것이다.
+상용 패커를 뜯는 대신 [4장](/posts/android-lab-p1c04-jadx-static-analysis/)의 한 겹짜리 패커를 두 단으로 늘린 `io.seika.dcl`을 직접 만들었다. 1단 페이로드 `io.seika.payload.Core`는 XOR로 감싸 `assets/s1.bin`에 넣었다. 스텁이 이걸 풀어 direct `ByteBuffer`에 담은 뒤 `InMemoryDexClassLoader`에 넘긴다. 1단은 실행되면서 `assets/s2.bin`을 풀어 `files/s2/stage2.dex`로 쓰고 `DexClassLoader`로 2단 `io.seika.payload2.Beacon`을 올린 다음 파일을 지운다. 메모리에서만 사는 dex와 디스크에 잠깐 있다 사라지는 dex를 한 앱에서 같이 보려고 단을 나눴다. 페이로드에 든 주소는 전부 `example.invalid`다.
 
 기기는 `codex-atlas-api33` 에뮬레이터(Android 13, API 33, google_apis x86_64 userdebug, 보안 패치 2024-03-01, ART 모듈 versionCode 331711080)를 썼다. 호스트 쪽은 Frida 17.17.0(frida-tools 14.8.1)과 jadx 1.5.5다. Android 14의 읽기 전용 규칙을 볼 때만 `sec-36-std`(Android 16, API 36, ART 모듈 versionCode 360527520)를 따로 띄웠다. 앱은 debuggable 플래그 없이 빌드했다. Java 디버깅이 가능한 프로세스에서는 ART가 동적으로 올린 dex의 백그라운드 검증을 건너뛰게 짜여 있어서 아래에서 볼 익명 vdex가 생기지 않는다.
 
@@ -181,7 +181,7 @@ frida -D $S -f io.seika.dcl -l frida/dcl-trace.js -l frida/dcl-dump.js -q -t 10
 
 ![frida -D $S -f io.seika.dcl -l frida/dcl-trace.js -l frida/dcl-dump.js -q -t 10 실행 결과. dcl-dump hooks installed 뒤로 InMemoryDexClassLoader 생성자 세 오버로드(ByteBuffer, ByteBuffer 배열, ByteBuffer 배열과 String), DexFile.openInMemoryDexFiles 1 buffer(s) isDirect=true, openInMemoryDexFilesNative buf 0 direct 0부터 4888 magic=dex\n038\0 이 files/dumps/mem-1-4888.dex 로 저장, loadClass io.seika.payload.Core via InMemoryDexClassLoader, Method.invoke Core.run, DexClassLoader 생성자 files/s2/stage2.dex, openDexFileNative stage2.dex 1200 bytes 가 file-2-1200.dex 로 저장, loadClass Beacon via DexClassLoader, Method.invoke Beacon.ping 이 차례로 찍힌 터미널](/assets/img/android-mastery/p1c09/03-spawn-dump.png)
 
-예상과 다르게 나온 건 Java 쪽이다. 생성자 오버로드 셋이 공개 단일 버퍼, 배열, 배열과 `librarySearchPath` 순서로 모두 찍혀 위임 사슬이 드러났고 Java 래퍼 `DexFile.openInMemoryDexFiles`의 후킹도 걸렸다. 이 이미지에서는 부트 이미지 코드가 후킹을 비켜 가지 않아서 대비해 둔 `Java.deoptimizeBootImage()` 스크립트를 꺼낼 일도 없었다. 1단 덤프는 네이티브 입구에서 direct 버퍼의 `[0,4888)` 범위로 나왔고, 앞 8바이트는 `dex\n038\0`이다. 트레이스는 그 뒤로 `MainActivity`가 `InMemoryDexClassLoader`에서 `Core`를 찾아 `run`을 리플렉션으로 부르고, 1단이 `stage2.dex`로 `DexClassLoader`를 만들고, `openDexFileNative`가 1200바이트 파일을 연 다음 `Beacon.ping`이 불리는 순서로 이어졌다.
+부트 이미지 인라인 때문에 빗나갈 줄 알았던 Java 쪽 후킹이 전부 걸렸다. 생성자 오버로드 셋이 공개 단일 버퍼, 배열, 배열과 `librarySearchPath` 순서로 모두 찍혀 위임 사슬이 드러났고 Java 래퍼 `DexFile.openInMemoryDexFiles`의 후킹도 걸렸다. 이 이미지에서는 부트 이미지 코드가 후킹을 비켜 가지 않아서 대비해 둔 `Java.deoptimizeBootImage()` 스크립트를 꺼낼 일도 없었다. 1단 덤프는 네이티브 입구에서 direct 버퍼의 `[0,4888)` 범위로 나왔고, 앞 8바이트는 `dex\n038\0`이다. 트레이스는 그 뒤로 `MainActivity`가 `InMemoryDexClassLoader`에서 `Core`를 찾아 `run`을 리플렉션으로 부르고, 1단이 `stage2.dex`로 `DexClassLoader`를 만들고, `openDexFileNative`가 1200바이트 파일을 연 다음 `Beacon.ping`이 불리는 순서로 이어졌다.
 
 같은 프로세스의 logcat에서 앱 줄만 추리면 이렇다(시각, pid, tid 열은 지웠다).
 
@@ -277,14 +277,14 @@ Error: position(): argument types do not match any of:
 	.overload('int')
 ```
 
-Frida가 만든 `java.nio.ByteBuffer` 래퍼에는 ByteBuffer가 다시 선언한 `position(int)`(Buffer를 돌려주는 선언과 [`@CovariantReturnType`으로 합성된 ByteBuffer 반환 사본](https://android.googlesource.com/platform/libcore/+/refs/tags/android-13.0.0_r1/ojluni/src/main/java/java/nio/ByteBuffer.java#811))만 있다. 인자 없는 getter인 `position()`과 `limit()`은 부모 `java.nio.Buffer`에 선언돼 있어서 `java.nio.Buffer`로 캐스팅해 읽게 고쳤다. 고치기 전 실패에서도 볼 것이 있었다. 후킹 함수가 원래 생성자를 부르기 전에 예외로 끝나자 Frida가 오류를 찍은 뒤 생성자는 아무 일도 하지 않은 채 정상 반환했다. 스텁은 평소처럼 성공 로그를 남겼고 첫 `loadClass`에서 앱이 NullPointerException으로 넘어졌다(logcat은 150자에서 잘랐다).
+Frida가 만든 `java.nio.ByteBuffer` 래퍼에는 ByteBuffer가 다시 선언한 `position(int)`(Buffer를 돌려주는 선언과 [`@CovariantReturnType`으로 합성된 ByteBuffer 반환 사본](https://android.googlesource.com/platform/libcore/+/refs/tags/android-13.0.0_r1/ojluni/src/main/java/java/nio/ByteBuffer.java#811))만 있다. 인자 없는 getter인 `position()`과 `limit()`은 부모 `java.nio.Buffer`에 선언돼 있어서 `java.nio.Buffer`로 캐스팅해 읽게 고쳤다. 고치기 전 실패에서도 볼 것이 있었다. 후킹 함수가 원래 생성자를 부르기 전에 예외로 끝나자 Frida가 오류를 찍은 뒤 생성자는 아무 일도 하지 않은 채 정상 반환했다. 스텁은 평소처럼 성공 로그를 남겼고 첫 `loadClass`가 NullPointerException을 던졌고 MainActivity는 그걸 잡아 `payload failed`로 적었다(logcat은 150자에서 잘랐다).
 
 ```text
 I/dcl     : stage1 loaded from a 4888-byte direct buffer
 I/dcl     : result: payload failed: java.lang.NullPointerException: Attempt to invoke virtual method 'java.lang.Class dalvik.system.DexPathList.findCl
 ```
 
-`DexPathList`에 대고 부른 메서드가 null에서 터진 것으로 보아 로더의 `pathList`가 채워지지 않은 채 남은 것이다. 후킹 스크립트가 원본 호출 전에 던지면 앱은 예외 없이 반쯤 만들어진 로더를 받는다. 고친 스크립트로 다시 돌린 결과가 아래다.
+`DexPathList`에 대고 부른 메서드가 null에서 터진 것으로 보아 로더의 `pathList`가 채워지지 않은 채 남은 것이다. 생성자는 예외 없이 반환했으니 스텁이 성공 로그를 남긴 것도 그래서다. 고친 스크립트로 다시 돌린 결과가 아래다.
 
 ```bash
 adb -s $S shell am force-stop io.seika.dcl; adb -s $S logcat -c
@@ -320,7 +320,7 @@ E System  : 	at dalvik.system.InMemoryDexClassLoader.<init>(Native Method)
 E System  : 	at io.seika.dcl.StubApp.attachBaseContext(StubApp.java:29)
 ```
 
-줄 번호가 android-13.0.0_r1 소스와 맞고 위임 사슬 63, 52, 40행이 기기 스택으로도 확인된다. `(Native Method)`로 찍힌 생성자가 Frida가 바꿔 끼운 자리다. naive 실행에서 읽은 4888바이트도 매직이 맞았으니, 꺼낸 바이트만 검사해서는 앱이 로드에 실패했다는 걸 알 수 없고 logcat의 `Bad range` 줄을 같이 봐야 한다.
+줄 번호가 android-13.0.0_r1 소스와 맞고 위임 사슬 63, 52, 40행이 기기 스택으로도 확인된다. `(Native Method)`로 찍힌 생성자가 Frida가 바꿔 끼운 자리다. naive 실행에서 읽은 4888바이트도 매직이 맞았으니 꺼낸 바이트만으로는 로드 실패가 드러나지 않았고, 실패는 logcat의 `Bad range` 줄에만 남았다.
 
 ## 늦게 붙었을 때는 로더를 찾아가야 한다
 
@@ -420,7 +420,7 @@ a15c99b46de4fa484c51728a9d1ebe56374059d9093f2fba3f76b7a6763abf4c *memdump/memdex
 a15c99b46de4fa484c51728a9d1ebe56374059d9093f2fba3f76b7a6763abf4c *out/stage1.dex
 ```
 
-2단 파일은 사정이 다르다. 숨은 API 실험에서 `hiddenapi.js`로 마지막에 spawn한 프로세스(Frida가 붙은 채 뜬 지 16초쯤)의 maps를 떠 보니 지워진 파일이 아직 매핑돼 있었다.
+2단 파일은 사정이 다르다. 숨은 API 실험에서 `hiddenapi.js`로 마지막에 spawn한 프로세스(spawn한 지 16초쯤, Frida는 4초 뒤 떨어졌다)의 maps를 떠 보니 지워진 파일이 아직 매핑돼 있었다.
 
 ```text
 752c7d864000-752c7d865000 r--p 00000000 fe:22 148675                     /data/data/io.seika.dcl/files/s2/stage2.dex (deleted)
@@ -449,7 +449,7 @@ python -c "import struct; print(struct.unpack('<I', open('out/stage1.dex','rb').
 
 ![android-13.0.0_r1 art oat_file_assistant.cc 467~500행. 473행 OatFileAssistant::AnonymousDexVdexLocation 이 강조돼 있고, 477~482행이 각 dex 헤더의 checksum_ 을 adler32_combine 으로 합치며, 489행 StringPrintf 로 data_dir 아래에 kAnonymousDexPrefix 와 checksum 을 붙인 .jar 위치를 만들고, 498행 GetVdexFilename 으로 vdex 이름을 얻는 소스 화면](/assets/img/android-mastery/p1c09/15-src-anonymous-vdex.png)
 
-dex 헤더의 checksum들을 `adler32_combine`으로 합친 값에 [`Anonymous-DexFile@` 접두사](https://android.googlesource.com/platform/art/+/refs/tags/android-13.0.0_r1/runtime/oat_file_assistant.cc#55)를 붙여 데이터 디렉터리 아래 가상의 `.jar` 위치를 만들고 거기서 vdex 이름을 뽑는다. dex가 하나면 그 dex의 헤더 checksum이 그대로 이름이 된다. 호스트에서 `stage1.dex`의 8~12바이트를 읽으면 1733560294이고 vdex의 0x3c에 리틀 엔디언으로 박힌 `e607 5467`도 같은 값(0x675407e6)이다. 덤프를 손에 넣었다면 이 이름과 맞춰 볼 수 있다.
+dex 헤더의 checksum들을 `adler32_combine`으로 합친 값에 [`Anonymous-DexFile@` 접두사](https://android.googlesource.com/platform/art/+/refs/tags/android-13.0.0_r1/runtime/oat_file_assistant.cc#55)를 붙여 데이터 디렉터리 아래 가상의 `.jar` 위치를 만들고 거기서 vdex 이름을 뽑는다. dex가 하나면 그 dex의 헤더 checksum이 그대로 이름이 된다. 호스트에서 `stage1.dex`의 헤더 0x8부터 4바이트(checksum)를 읽으면 1733560294이고 vdex의 0x3c에 리틀 엔디언으로 박힌 `e607 5467`도 같은 값(0x675407e6)이다. 덤프를 손에 넣었다면 이 이름과 맞춰 볼 수 있다.
 
 내용물에 dex는 없다. [`VdexFile::WriteToDisk`](https://android.googlesource.com/platform/art/+/refs/tags/android-13.0.0_r1/runtime/vdex_file.cc#267)는 `has_dex_section=false`로 헤더를 만들고 dex 섹션의 오프셋과 크기를 0으로 둔다. 두 vdex를 호스트로 가져와 섹션 헤더를 풀었다. [vdex 027 헤더](https://android.googlesource.com/platform/art/+/refs/tags/android-13.0.0_r1/runtime/vdex_file.h#123)는 매직과 버전 다음 0x8에 섹션 수를 두고(123~131행), 0xc부터 섹션마다 종류, 오프셋, 크기를 u32 세 개로 적는다(92~95행). [섹션 종류](https://android.googlesource.com/platform/art/+/refs/tags/android-13.0.0_r1/runtime/vdex_file.h#80) 0은 dex마다 checksum 하나, 1은 dex 자체, 2는 검증 의존성, 3은 타입 조회 테이블이다.
 
@@ -505,7 +505,7 @@ adb -s $S shell dumpsys package dexopt | grep -A5 'io.seika.dcl\]'
 
 `dumpsys package dexopt`는 지워진 `stage2.dex`를 `known secondary dex files`로 들고 있고 `class loader context: PCL[];PCL[.../base.apk]`까지 적었다. 1단은 목록에 없다. 파일 경로를 받는 `BaseDexClassLoader` 생성자는 끝에서 `reportClassLoaderChain()`을 부르고([168행](https://android.googlesource.com/platform/libcore/+/refs/tags/android-13.0.0_r1/dalvik/src/main/java/dalvik/system/BaseDexClassLoader.java#168)) ByteBuffer 생성자에는 그 호출이 없다([221~229행](https://android.googlesource.com/platform/libcore/+/refs/tags/android-13.0.0_r1/dalvik/src/main/java/dalvik/system/BaseDexClassLoader.java#221)).
 
-보고를 받는 쪽은 [`LoadedApk`가 앱 프로세스에 설치한](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/core/java/android/app/LoadedApk.java#1013) `DexLoadReporter`다. 이 클래스는 PackageManager에 알리고([97행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/core/java/android/app/DexLoadReporter.java#97)) `dalvik.vm.dexopt.secondary`가 켜져 있으면 dex 옆 `oat/` 아래에 `<이름>.cur.prof`를 만든다([114~157행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/core/java/android/app/DexLoadReporter.java#114)). 이 이미지는 그 속성이 `true`였고 0바이트 `.cur.prof`가 그 결과다. dumpsys 출력은 [`PackageDexOptimizer` 762~773행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/services/core/java/com/android/server/pm/PackageDexOptimizer.java#762)이 찍는다. `DexManager`는 같은 보고를 `DynamicCodeLogger`에도 넘기는데([267~271행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/services/core/java/com/android/server/pm/dex/DexManager.java#267)) 그 기록까지 꺼내 보지는 않았다.
+보고를 받는 쪽은 [`LoadedApk`가 앱 프로세스에 설치한](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/core/java/android/app/LoadedApk.java#1014) `DexLoadReporter`다. 이 클래스는 PackageManager에 알리고([97행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/core/java/android/app/DexLoadReporter.java#97)) `dalvik.vm.dexopt.secondary`가 켜져 있으면 dex 옆 `oat/` 아래에 `<이름>.cur.prof`를 만든다([114~157행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/core/java/android/app/DexLoadReporter.java#114)). 이 이미지는 그 속성이 `true`였고 0바이트 `.cur.prof`가 그 결과다. dumpsys 출력은 [`PackageDexOptimizer` 762~773행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/services/core/java/com/android/server/pm/PackageDexOptimizer.java#762)이 찍는다. `DexManager`는 같은 보고를 `DynamicCodeLogger`에도 넘기는데([267~271행](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-13.0.0_r1/services/core/java/com/android/server/pm/dex/DexManager.java#267)) 그 기록까지 꺼내 보지는 않았다.
 
 `DexClassLoader`의 두 번째 인자 `optimizedDirectory`는 API 26부터 효과가 없다([DexClassLoader.java 47행](https://android.googlesource.com/platform/libcore/+/refs/tags/android-13.0.0_r1/dalvik/src/main/java/dalvik/system/DexClassLoader.java#47), 생성자는 55행에서 null을 넘긴다). 1단도 null을 넘겼고 vdex는 dex 옆 `oat/x86_64/`에 생겼다.
 
@@ -540,7 +540,7 @@ adb -s $S logcat -d -v tag | grep -E 'Accessing hidden|hidden api lookup'
 
 그냥 실행하면 ART가 `blocked,core-platform-api` 목록의 멤버를 `reflection`으로 접근하려 했다며 `denied`를 찍는다. 앱 쪽에서는 그런 메서드가 없다는 듯 `NoSuchMethodException`이 난다. Frida를 붙이기만 한 `noop.js` 실행도 똑같았다. 예외를 건 실행에서는 조회가 성공했고 logcat에도 ART 쪽 줄이 하나도 남지 않았다.
 
-[`hidden_api.cc`](https://android.googlesource.com/platform/art/+/refs/tags/android-13.0.0_r1/runtime/hidden_api.cc#71)를 보면 접근 방법은 리플렉션, JNI, 링킹으로 나뉘고(71~86행) 예외 접두사에 걸린 멤버는 공개 API처럼 취급하며 경고도 남기지 않는다(582~589행). 거부된 접근은 항상 로그를 남긴다(614~621행). `setHiddenApiExemptions`는 [`@hide`이면서 `@SystemApi(client = MODULE_LIBRARIES)`](https://android.googlesource.com/platform/libcore/+/refs/tags/android-13.0.0_r1/libart/src/main/java/dalvik/system/VMRuntime.java#506)라 앱이 쓰는 SDK에 들어 있지 않고, 로그에 찍힌 대로 `blocked` 목록에 올라 있다. 그래서 앱이 리플렉션으로 찾으면 첫 실행처럼 거부된다. Frida는 같은 프로세스 안에서 브리지로 이 메서드를 불렀고 통했다. 반대로 보면 `Accessing hidden` 줄이 없다고 숨은 API 접근이 없었던 것도 아니다. 예외에 걸린 접근은 위에서 본 대로 조용히 지나가고, 거부되지 않은 접근도 디버깅 가능한 앱이 아니면 로그를 남기지 않는다(619행).
+[`hidden_api.cc`](https://android.googlesource.com/platform/art/+/refs/tags/android-13.0.0_r1/runtime/hidden_api.cc#71)를 보면 접근 방법은 리플렉션, JNI, 링킹으로 나뉘고(71~86행) 예외 접두사에 걸린 멤버는 공개 API처럼 취급하며 경고도 남기지 않는다(582~589행). 거부된 접근은 항상 로그를 남긴다(614~621행). `setHiddenApiExemptions`는 [`@hide`이면서 `@SystemApi(client = MODULE_LIBRARIES)`](https://android.googlesource.com/platform/libcore/+/refs/tags/android-13.0.0_r1/libart/src/main/java/dalvik/system/VMRuntime.java#516)라 앱이 쓰는 SDK에 들어 있지 않고, 로그에 찍힌 대로 `blocked` 목록에 올라 있다. 그래서 앱이 리플렉션으로 찾으면 첫 실행처럼 거부된다. Frida는 같은 프로세스 안에서 브리지로 이 메서드를 불렀고 통했다. 반대로 보면 `Accessing hidden` 줄이 없다고 숨은 API 접근이 없었던 것도 아니다. 예외에 걸린 접근은 위에서 본 대로 조용히 지나가고, 거부되지 않은 접근도 디버깅 가능한 앱이 아니면 로그를 남기지 않는다(619행).
 
 ## Android 14 읽기 전용 규칙이 보는 곳
 
@@ -601,6 +601,6 @@ targetSdk 34 빌드는 파일이 쓰기 가능하면 ERROR 줄 다음에 `Securi
 
 동적 로딩을 직접 써야 하는 앱이라면 targetSdk를 올리기 전에 지금 빌드를 API 34 이상 기기에서 돌려 본다. targetSdk 33이어도 `Attempt to load writable dex file`이 ERROR로 찍히니 이 줄만 찾으면 된다. 자기 앱이 로드하는 파일은 QA 때 `dumpsys package dexopt`의 secondary dex 목록으로 확인할 수 있다. 메모리 로드는 거기 잡히지 않고, 디버그 빌드로 QA를 하면 익명 vdex도 생기지 않는다(이 부분은 소스로만 확인했다).
 
-파일은 앱 전용 디렉터리에 두고 쓰기 전에 `setReadOnly()`를 부르되, 처음부터 바꿔치기된 바이트는 이 표시로 걸러지지 않으니 로드 전에 서명이나 해시를 따로 확인한다. Google Play는 [기기 및 네트워크 악용 정책](https://support.google.com/googleplay/android-developer/answer/9888379)에서 Play 밖에서 dex, JAR, .so 같은 실행 코드를 내려받는 것을 금지한다.
+Play로 배포하는 앱은 [기기 및 네트워크 악용 정책](https://support.google.com/googleplay/android-developer/answer/9888379)상 Play 밖에서 dex, JAR, .so 같은 실행 코드를 내려받을 수 없으니, 동적 로딩은 APK에 든 자산을 푸는 경우로 한정된다. 그 파일은 앱 전용 디렉터리에 두고 쓰기 전에 `setReadOnly()`를 부르되, 처음부터 바꿔치기된 바이트는 이 표시로 걸러지지 않으니 로드 전에 서명이나 해시를 따로 확인한다.
 
 *다음 글: [JNI·native 함수 동적 관찰](/posts/android-lab-p1c10-jni-native-observation/)*
