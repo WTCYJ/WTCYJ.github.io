@@ -241,7 +241,7 @@ p1c01-x86
 
 `src/hwprobe.c`는 `probe()`를 불러 결과를 표준 출력에 찍는 `main()` 하나가 든 세 줄짜리 파일이고, `src/jni.c`는 같은 결과를 logcat에 쓰고 Java 문자열로 돌려주는 JNI 함수 하나다.
 
-빌드는 NDK 27.3 clang으로 했다. 아래는 Git Bash에서 작업 폴더를 기준으로 돌린 순서다. Java 쪽 APK는 랩의 작은 빌드 스크립트(`mkapk`)로 만들었는데, 그 스크립트가 하는 javac, d8, aapt 단계를 블록 머리에 풀어 적었다(스크립트는 이 APK를 한 번 정렬·서명까지 하지만 아래에서 어차피 다시 하므로 뺐다). `javac`는 Android Studio에 든 JBR 21, `d8`·`aapt`·`zipalign`·`apksigner`는 build-tools 36.0.0에 든 것을 PATH에 넣고 썼다.
+빌드는 NDK 27.3 clang으로 했다. 아래는 Git Bash에서 작업 폴더를 기준으로 쓴 명령이다. 측정에 쓴 APK는 랩의 작은 빌드 스크립트(`mkapk`)로 만들었고, 그 스크립트가 하는 javac, d8, aapt 단계를 아래 블록에 그대로 풀어 적었다(스크립트는 이 APK를 한 번 정렬·서명까지 하지만 아래에서 어차피 다시 하므로 뺐다). 풀어 쓴 블록을 따로 처음부터 돌려 봐도 `classes.dex`와 `lib/arm64-v8a/libprobe.so`가 든 같은 구성의 APK가 나오고 `apksigner verify`를 통과했다. `javac`는 Android Studio에 든 JBR 21, `d8`·`aapt`·`zipalign`·`apksigner`는 build-tools 36.0.0에 든 것을 PATH에 넣고 썼다.
 
 ```bash
 NDK_BIN="$ANDROID_HOME/ndk/27.3.13750724/toolchains/llvm/prebuilt/windows-x86_64/bin"
@@ -273,9 +273,9 @@ apksigner sign --ks "$(cygpath -w ~/.android/debug.keystore)" --ks-key-alias and
 
 ![API 33 x86_64 기기의 abilist x86_64, native.bridge 0, grep -c mte /proc/cpuinfo 0, hwprobe-x86_64 의 AT_HWCAP 0x78bfbff 와 tagged-addr prctl 두 번의 -1 (Invalid argument), hwprobe-arm64 실행이 not executable: 64-bit ELF file, abiprobe-arm64.apk 설치가 INSTALL_FAILED_NO_MATCHING_ABIS res=-113 으로 실패하는 터미널](/assets/img/android-mastery/p1c01/09-arm64-avd-api33-abi.png)
 
-이 이미지의 `ro.product.cpu.abilist`는 `x86_64` 하나이고 `ro.dalvik.vm.native.bridge`는 `0`이다. MTE 안내 문서가 확인법으로 드는 `grep mte /proc/cpuinfo`는 0줄이다. x86_64 프로브의 `AT_HWCAP` `0x78bfbff`는 x86 CPUID 기능 비트다. tagged address prctl은 두 번 다 `Invalid argument`였다. arm64 실행 파일은 셸이 `not executable: 64-bit ELF file`로 거부했고 arm64 라이브러리만 든 APK는 `INSTALL_FAILED_NO_MATCHING_ABIS`(res=-113)로 설치조차 되지 않았다. 이 이미지에서 arm64 전용 네이티브 코드는 돌지 않는다.
+이 이미지의 `ro.product.cpu.abilist`는 `x86_64` 하나이고 `ro.dalvik.vm.native.bridge`는 `0`이다. MTE 안내 문서가 확인법으로 드는 `grep mte /proc/cpuinfo`는 0줄이다. x86_64 프로브의 `AT_HWCAP` `0x78bfbff`는 x86 CPUID 기능 비트다. tagged address prctl은 두 번 다 `Invalid argument`였다. arm64 실행 파일은 셸이 `not executable: 64-bit ELF file`로 거부했고 arm64 라이브러리만 든 APK는 `INSTALL_FAILED_NO_MATCHING_ABIS`(res=-113)로 설치조차 되지 않았다. 캡처에서 `| tail -1`을 붙인 `adb push` 줄 아래에 파일별 줄이 더 찍힌 것은 그 진행 표시가 stderr로 나가 파이프를 거치지 않기 때문이다.
 
-ARM 번역이 실려 있는지는 이미지마다 달랐다. Google은 [Android 11 시스템 이미지부터](https://android-developers.googleblog.com/2020/03/run-arm-apps-on-android-emulator.html) ARM 명령을 x86으로 번역해 실행할 수 있다고 발표하면서, 이 기능은 Google APIs와 Play Store 이미지에만 들어간다고 했다. 이 PC의 이미지를 열어 보면 API 33 google_apis x86_64(rev 17)와 API 33 Play 이미지(rev 9)는 vendor `ro.vendor.product.cpu.abilist`가 `x86_64` 하나뿐이고 native bridge가 `0`이다. API 36 google_apis x86_64(rev 7)는 `x86_64,arm64-v8a`에 `libndk_translation.so`가 걸려 있다. 오래된 API 28 google_apis x86(rev 12)은 `x86,armeabi-v7a,armeabi`로 32비트 ARM을 내건다. ARM 네이티브 코드를 돌려야 한다면 이미지를 고를 때 abilist와 native bridge 두 속성부터 본다.
+ARM 번역이 실려 있는지는 이미지마다 달랐다. Google은 ARM 명령을 x86으로 번역해 실행하는 기능을 [Android 11 시스템 이미지에 처음 넣으면서](https://android-developers.googleblog.com/2020/03/run-arm-apps-on-android-emulator.html) 이 기능은 Google APIs와 Play Store 이미지에만 들어간다고 했다. 이 PC의 이미지를 열어 보면 API 33 google_apis x86_64(rev 17)와 API 33 Play 이미지(rev 9)는 vendor `ro.vendor.product.cpu.abilist`가 `x86_64` 하나뿐이고 native bridge가 `0`이다. API 36 google_apis x86_64(rev 7)는 `x86_64,arm64-v8a`에 `libndk_translation.so`가 걸려 있다. 오래된 API 28 google_apis x86(rev 12)은 `x86,armeabi-v7a,armeabi`로 32비트 ARM을 내건다. ARM 네이티브 코드를 돌려야 한다면 이미지를 고를 때 abilist와 native bridge 두 속성부터 본다.
 
 ## API 36 번역 환경에서 arm64 프로세스가 본 CPU
 
@@ -380,7 +380,7 @@ emulator -avd codex-atlas-api33 -read-only -no-window -no-audio -no-boot-anim -n
 
 ![쓰기 가능한 p1c01-x86 에서 adb emu avd snapshot save clean 이 OK, p1c01-dirty 생성, snapshot load clean 이 OK, sleep 30 뒤 adb devices 에 emulator-5620 device, emu avd status 가 virtual device is running, 로드 뒤 ls /data/local/tmp/ 가 빈 출력인 터미널](/assets/img/android-mastery/p1c01/17-snapshot-load-restore.png)
 
-다만 이 호스트에서 스냅샷 로드는 믿을 만하지 않았다. 로드를 네 번 해서 두 번은 위처럼 복원됐다(save→load 세 번에 한 번, 이미 저장된 스냅샷을 load만 한 실험에서 한 번). 나머지 두 번은 로드 직후 adb가 `offline`에 머물렀다(첫 번째는 5분 넘게 지켜봤고, 두 번째는 세션 제한 4분이 지나고 `avd stop`·`avd start`까지 해 본 뒤 껐다). 그동안 콘솔의 `avd status`는 `virtual device is running`이었다. 첫 번째 실패 때 콘솔로 찍은 화면의 시계는 스냅샷 시각에 멈춰 있었다. `adb reconnect`, 한 번 더 load, `avd stop`과 `avd start`로도 풀리지 않았다. 로드 직후 adb를 너무 일찍 건드려서라고 의심하고 5초 뒤 바로 `wait-for-device`를 걸어 봤는데, 그때는 8초 만에 정상으로 붙었다. 원인은 찾지 못했다.
+다만 이 호스트에서 스냅샷 로드는 믿을 만하지 않았다. 로드를 네 번 해서 두 번은 위처럼 복원됐다(save→load 세 번에 한 번, 이미 저장된 스냅샷을 load만 한 실험에서 한 번). 나머지 두 번은 로드 직후 adb가 `offline`에 머물렀다(첫 번째는 5분 넘게 지켜봤고, 두 번째는 4분을 기다린 뒤 `avd stop`·`avd start`까지 해 보고 껐다). 그동안 콘솔의 `avd status`는 `virtual device is running`이었다. 첫 번째 실패 때 콘솔로 찍은 화면의 시계는 스냅샷 시각에 멈춰 있었다. `adb reconnect`, 한 번 더 load, `avd stop`과 `avd start`로도 풀리지 않았다. 로드 직후 adb를 너무 일찍 건드려서라고 의심하고 5초 뒤 바로 `wait-for-device`를 걸어 봤는데, 그때는 8초 만에 정상으로 붙었다. 원인은 찾지 못했다.
 
 ## 실험 전에 받아 두는 환경 값
 
